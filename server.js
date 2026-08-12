@@ -13,8 +13,34 @@ const GAMES = ['sudoku', 'scramble', 'memory', 'proverb'];
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'trungthu2026';
 const JOIN_WINDOW_MS = 2 * 60 * 1000;
 
-// playerId -> { name, scores: { sudoku, scramble, memory, proverb }, updatedAt }
+// Lifetime attempt cap per game. Games not listed here are unlimited.
+const MAX_ATTEMPTS = { sudoku: 3 };
+
+// playerId -> { name, scores: { sudoku, scramble, memory, proverb }, attempts: { ... }, updatedAt }
 const players = new Map();
+
+// Recent anti-cheat flags (tab-switch disqualifications, brute-force/impossible-speed
+// suspicions), newest last. Visible only to the admin panel, not the public leaderboard.
+const cheatFlags = [];
+const MAX_CHEAT_FLAGS = 200;
+let nextFlagId = 1;
+const adminSocketIds = new Set();
+
+function recordCheatFlag({ playerId, name, game, reason, detail }) {
+  const flag = {
+    id: nextFlagId++,
+    playerId,
+    name: sanitizeName(name),
+    game: GAMES.includes(game) ? game : 'unknown',
+    reason: String(reason || 'unknown').slice(0, 60),
+    detail: String(detail || '').slice(0, 200),
+    at: Date.now(),
+  };
+  cheatFlags.push(flag);
+  if (cheatFlags.length > MAX_CHEAT_FLAGS) cheatFlags.shift();
+  adminSocketIds.forEach((id) => io.to(id).emit('admin:cheat-flag', flag));
+  return flag;
+}
 
 // Per-game gate controlling whether players may start that specific game.
 // Each game is closed by default; admin opens one at a time, and it
@@ -60,7 +86,7 @@ function closeGameWindowNow(game) {
 function clampScore(n) {
   const num = Number(n);
   if (!Number.isFinite(num)) return 0;
-  return Math.max(0, Math.min(100, Math.round(num)));
+  return Math.max(0, Math.min(1500, Math.round(num)));
 }
 
 function sanitizeName(name) {
@@ -89,6 +115,7 @@ function getOrCreatePlayer(playerId) {
     player = {
       name: 'Player',
       scores: { sudoku: 0, scramble: 0, memory: 0, proverb: 0 },
+      attempts: { sudoku: 0, scramble: 0, memory: 0, proverb: 0 },
       updatedAt: 0,
     };
     players.set(playerId, player);
@@ -102,9 +129,17 @@ io.on('connection', (socket) => {
 
   socket.on('admin:login', ({ password }, callback) => {
     const ok = typeof password === 'string' && password === ADMIN_PASSWORD;
-    if (ok) socket.isAdmin = true;
+    if (ok) {
+      socket.isAdmin = true;
+      adminSocketIds.add(socket.id);
+    }
     if (typeof callback === 'function') {
-      callback({ ok, state: ok ? allGameWindowsSnapshot() : undefined, playerCount: ok ? players.size : undefined });
+      callback({
+        ok,
+        state: ok ? allGameWindowsSnapshot() : undefined,
+        playerCount: ok ? players.size : undefined,
+        flags: ok ? cheatFlags.slice(-50).reverse() : undefined,
+      });
     }
   });
 
@@ -152,6 +187,38 @@ io.on('connection', (socket) => {
     player.updatedAt = Date.now();
 
     io.emit('leaderboard', leaderboardSnapshot());
+  });
+
+  // Reserves one of the player's lifetime attempts for a game before they're
+  // allowed to see the board. Consumed on request, not on completion, so a
+  // disqualified (tab-switch) run still costs an attempt like a normal one.
+  socket.on('game:start-attempt', ({ playerId, name, game }, callback) => {
+    if (typeof playerId !== 'string' || !playerId || !GAMES.includes(game)) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'invalid request' });
+      return;
+    }
+    const player = getOrCreatePlayer(playerId);
+    if (name) player.name = sanitizeName(name);
+    const max = MAX_ATTEMPTS[game] || null;
+    const used = player.attempts[game] || 0;
+    if (max && used >= max) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'max-attempts', attemptsUsed: used, attemptsMax: max });
+      return;
+    }
+    player.attempts[game] = used + 1;
+    if (typeof callback === 'function') callback({ ok: true, attemptsUsed: player.attempts[game], attemptsMax: max });
+  });
+
+  // Anti-cheat signal from a game page (tab-switch disqualification, brute-force
+  // guess pattern, implausible solve speed, ...). Never blocks play server-side —
+  // it's surfaced to the admin panel for a human to judge.
+  socket.on('cheat:flag', ({ playerId, name, game, reason, detail }) => {
+    if (typeof playerId !== 'string' || !playerId) return;
+    recordCheatFlag({ playerId, name, game, reason, detail });
+  });
+
+  socket.on('disconnect', () => {
+    adminSocketIds.delete(socket.id);
   });
 });
 

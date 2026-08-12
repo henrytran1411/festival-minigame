@@ -7,6 +7,40 @@ const loginBtn = document.getElementById('login-btn');
 const loginError = document.getElementById('login-error');
 const playerCountEl = document.getElementById('player-count');
 const gameControlsEl = document.getElementById('game-controls');
+const flagsListEl = document.getElementById('flags-list');
+const flagsEmptyEl = document.getElementById('flags-empty');
+
+const REASON_LABELS = {
+  'tab-switch': '🚫 Left tab/window',
+  'brute-force': '🎲 Brute-force guessing',
+  'impossible-speed': '⚡ Implausible solve speed',
+};
+
+function renderFlag(flag) {
+  const li = document.createElement('li');
+  li.style.padding = '8px 0';
+  li.style.borderBottom = '1px solid var(--border, #333)';
+  li.style.fontSize = '13px';
+  const time = new Date(flag.at).toLocaleTimeString();
+  li.innerHTML = `<b>${flag.name}</b> · ${flag.game} · ${REASON_LABELS[flag.reason] || flag.reason} <span style="color: var(--muted);">(${time})</span>` +
+    (flag.detail ? `<div style="color: var(--muted); margin-top:2px;">${flag.detail}</div>` : '');
+  return li;
+}
+
+function addFlag(flag) {
+  flagsEmptyEl.classList.add('hidden');
+  flagsListEl.prepend(renderFlag(flag));
+}
+
+function setFlags(flags) {
+  flagsListEl.innerHTML = '';
+  if (!flags || flags.length === 0) {
+    flagsEmptyEl.classList.remove('hidden');
+    return;
+  }
+  flagsEmptyEl.classList.add('hidden');
+  flags.forEach((flag) => flagsListEl.appendChild(renderFlag(flag)));
+}
 
 const socket = Festival.connect();
 const gameWindowStates = {};
@@ -33,6 +67,7 @@ function attemptLogin(password) {
           gameWindowStates[state.game] = state;
         });
       }
+      setFlags(res.flags);
       showPanel();
       renderAll();
       refreshTicking();
@@ -140,6 +175,7 @@ socket.on('game-window-all', (all) => {
 socket.on('leaderboard', (entries) => {
   playerCountEl.textContent = `${entries.length} player${entries.length === 1 ? '' : 's'} registered`;
 });
+socket.on('admin:cheat-flag', (flag) => addFlag(flag));
 
 const savedPassword = localStorage.getItem(PASSWORD_KEY);
 if (savedPassword) {

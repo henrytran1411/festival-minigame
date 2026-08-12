@@ -110,7 +110,8 @@ if (me) {
     clearInterval(timerHandle);
     const seconds = Math.floor((performance.now() - startTime) / 1000);
     const extraMoves = Math.max(0, moves - ICONS.length);
-    const score = Math.max(0, Math.min(100, 100 - extraMoves * 3 - Math.floor(seconds / 5)));
+    const speedBonus = Math.max(0, 300 - seconds);
+    const score = Math.max(0, Math.min(1500, 1200 + speedBonus - extraMoves * 15));
     finalScoreEl.textContent = score;
     resultDetailEl.textContent = `${seconds}s · ${moves} moves`;
     playScreen.classList.add('hidden');

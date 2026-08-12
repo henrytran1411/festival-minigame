@@ -47,6 +47,21 @@ window.Festival = (function () {
     s.emit('score:submit', { playerId: id, name, game, score });
   }
 
+  // Reserves one lifetime attempt for `game` before the caller may start play.
+  // Resolves { ok:true, attemptsUsed, attemptsMax } or { ok:false, error, ... }.
+  function requestAttempt(s, game) {
+    const { id, name } = getPlayer();
+    return new Promise((resolve) => {
+      s.emit('game:start-attempt', { playerId: id, name, game }, (res) => resolve(res || { ok: false, error: 'no response' }));
+    });
+  }
+
+  // Fire-and-forget anti-cheat signal for the admin panel — never blocks play.
+  function reportCheat(s, game, reason, detail) {
+    const { id, name } = getPlayer();
+    s.emit('cheat:flag', { playerId: id, name, game, reason, detail });
+  }
+
   function medalClass(rank) {
     if (rank === 0) return 'gold';
     if (rank === 1) return 'silver';
@@ -205,6 +220,8 @@ window.Festival = (function () {
     connect,
     register,
     submitScore,
+    requestAttempt,
+    reportCheat,
     renderLeaderboard,
     renderGameLeaderboard,
     formatCountdown,

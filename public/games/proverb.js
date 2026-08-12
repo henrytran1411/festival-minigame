@@ -9,6 +9,9 @@ if (me) {
   const OPTIONS_REVEAL_AT = 40; // seconds elapsed in the round
   const MAX_HINTS = 3; // total for the whole game, not per round
   const ROUNDS_PER_GAME = 15;
+  const ROUND_POINTS = 80;
+  const WRONG_PENALTY = 25;
+  const MAX_SPEED_BONUS = 300;
 
   // Well-known Vietnamese ca dao / tục ngữ, each represented as an emoji
   // rebus. Answers are matched leniently (accents/case/punctuation-insensitive)
@@ -222,7 +225,7 @@ if (me) {
     if (!guess) return;
 
     if (guess === normalizeAnswer(rounds[index].answer)) {
-      score += 10;
+      score += ROUND_POINTS;
       solvedCount += 1;
       savedTime += Math.max(0, roundTimeLeft);
       liveScoreEl.textContent = String(score);
@@ -235,14 +238,14 @@ if (me) {
         advance(600);
       }
     } else if (fromOption) {
-      score -= 2;
+      score -= WRONG_PENALTY;
       liveScoreEl.textContent = String(score);
       clearInterval(roundTimerHandle);
       flash('Not quite!', 'bad');
       revealAnswer();
       advance(3000);
     } else {
-      score -= 2;
+      score -= WRONG_PENALTY;
       liveScoreEl.textContent = String(score);
       flash('Not quite, try again', 'bad');
       answerInput.value = '';
@@ -270,8 +273,8 @@ if (me) {
     skipBtn.disabled = true;
     hintBtn.disabled = true;
     const totalPossibleTime = ROUND_SECONDS * rounds.length;
-    const bonus = Math.round(20 * (savedTime / totalPossibleTime));
-    const finalScore = Math.max(0, Math.min(100, score + bonus));
+    const bonus = Math.round(MAX_SPEED_BONUS * (savedTime / totalPossibleTime));
+    const finalScore = Math.max(0, Math.min(1500, score + bonus));
     finalScoreEl.textContent = finalScore;
     resultDetailEl.textContent = `${solvedCount} of ${rounds.length} proverbs solved`;
     playScreen.classList.add('hidden');

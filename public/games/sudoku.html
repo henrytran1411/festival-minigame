@@ -17,16 +17,27 @@
       <div class="status-bar">
         <div>Time: <b id="timer">0s</b></div>
         <div>Mistakes: <b id="mistakes">0</b></div>
+        <div>Attempt: <b id="attempt-info">1/3</b></div>
       </div>
       <div id="board" class="board"></div>
     </div>
 
     <div id="result-screen" class="card result-card hidden">
-      <div>Solved! 🎉</div>
+      <div id="result-title">Solved! 🎉</div>
       <div class="score-big" id="final-score">0</div>
       <div style="color:var(--muted); font-size:13px;" id="result-detail"></div>
       <div class="actions">
         <button id="play-again-btn">Play Again</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+
+    <div id="exhausted-screen" class="card result-card hidden">
+      <div>🔒 No attempts left</div>
+      <div style="color:var(--muted); font-size:13px; margin-top:8px;">
+        You've used all 3 of your Sudoku attempts for this event.
+      </div>
+      <div class="actions">
         <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
       </div>
     </div>
