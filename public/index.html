@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Autumn Festival Tournament</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div id="name-screen" class="card hidden" style="max-width:360px; margin:60px auto; text-align:center;">
+      <h1>🍁 Autumn Festival Tournament</h1>
+      <p style="color:var(--muted); font-size:14px;">Play all 4 games. Every point counts toward the overall leaderboard.</p>
+      <input id="name-input" type="text" maxlength="20" placeholder="Your name" autocomplete="off" style="margin:16px 0;" />
+      <button id="join-btn" style="width:100%;">Let's play</button>
+    </div>
+
+    <div id="hub-screen" class="hidden">
+      <div class="top-bar">
+        <h1>🍁 Autumn Festival Tournament</h1>
+        <div class="who">
+          <span id="who-name"></span> ·
+          <a href="#" id="change-name">change name</a>
+        </div>
+      </div>
+
+      <div id="game-grid" class="game-grid"></div>
+
+      <div class="card">
+        <div class="top-bar" style="margin-bottom:10px;">
+          <h2 style="font-size:16px; margin:0;">Leaderboard</h2>
+          <a href="leaderboard.html">Full screen view →</a>
+        </div>
+        <ul id="leaderboard-list" class="leaderboard-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 id="rules-title"></h2>
+      <ol id="rules-body"></ol>
+      <button class="modal-close secondary">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="rules.js"></script>
+  <script src="common.js"></script>
+  <script src="index.js"></script>
+</body>
+</html>

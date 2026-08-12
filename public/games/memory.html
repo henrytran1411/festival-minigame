@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Memory Match — Autumn Festival</title>
+  <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="top-bar">
+      <h1>🍁 Memory Match</h1>
+      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+    </div>
+
+    <div id="play-screen">
+      <div class="status-bar">
+        <div>Time: <b id="timer">0s</b></div>
+        <div>Moves: <b id="moves">0</b></div>
+      </div>
+      <div id="grid" class="memory-grid"></div>
+    </div>
+
+    <div id="result-screen" class="card result-card hidden">
+      <div>All matched! 🎉</div>
+      <div class="score-big" id="final-score">0</div>
+      <div style="color:var(--muted); font-size:13px;" id="result-detail"></div>
+      <div class="actions">
+        <button id="play-again-btn">Play Again</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>🍁 Memory Match</h2>
+      <ol id="rules-body"></ol>
+      <button class="modal-close secondary">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../rules.js"></script>
+  <script src="../common.js"></script>
+  <script src="memory.js"></script>
+</body>
+</html>

@@ -1,0 +1,264 @@
+:root {
+  --bg: #1c1f26;
+  --panel: #262b36;
+  --border: #3a4152;
+  --text: #eef1f6;
+  --muted: #9aa4b8;
+  --accent: #5b8cff;
+  --good: #3ac47d;
+  --bad: #e6194b;
+  --gold: #ffd166;
+  --silver: #c7cedb;
+  --bronze: #e0a45b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+a { color: var(--accent); }
+
+.hidden { display: none !important; }
+
+button {
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: white;
+  font-size: 15px;
+  cursor: pointer;
+}
+button:hover { filter: brightness(1.1); }
+button:disabled { opacity: 0.5; cursor: default; filter: none; }
+button.secondary { background: var(--panel); border: 1px solid var(--border); color: var(--text); }
+button.danger { background: var(--bad); }
+
+input[type="text"] {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #1a1d24;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px 16px 60px;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.top-bar h1 { font-size: 20px; margin: 0; }
+.top-bar .who { color: var(--muted); font-size: 13px; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.game-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 20px 0;
+}
+@media (max-width: 480px) {
+  .game-grid { grid-template-columns: 1fr; }
+}
+
+.game-tile {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+}
+.game-tile .icon { font-size: 32px; }
+.game-tile h3 { margin: 8px 0 4px; font-size: 16px; }
+.game-tile p { color: var(--muted); font-size: 12px; margin: 0 0 12px; min-height: 32px; }
+.game-tile .actions { display: flex; gap: 8px; justify-content: center; }
+.game-tile .best { font-size: 12px; color: var(--good); margin-top: 8px; }
+
+.leaderboard-list { list-style: none; margin: 0; padding: 0; }
+.leaderboard-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.leaderboard-list li:last-child { border-bottom: none; }
+.leaderboard-list .rank { width: 24px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.leaderboard-list .rank.gold { color: var(--gold); font-weight: 700; }
+.leaderboard-list .rank.silver { color: var(--silver); font-weight: 700; }
+.leaderboard-list .rank.bronze { color: var(--bronze); font-weight: 700; }
+.leaderboard-list .name { flex: 1; }
+.leaderboard-list .total { font-weight: 700; font-variant-numeric: tabular-nums; }
+.leaderboard-list .breakdown { color: var(--muted); font-size: 11px; }
+.leaderboard-list li.me { background: rgba(91, 140, 255, 0.12); border-radius: 8px; }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+.modal-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal-card h2 { margin-top: 0; }
+.modal-card ol, .modal-card ul { padding-left: 20px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.modal-card .modal-close { margin-top: 12px; width: 100%; }
+
+.status-bar {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.status-bar b { color: var(--text); }
+
+.result-card {
+  text-align: center;
+  padding: 32px 20px;
+}
+.result-card .score-big { font-size: 48px; font-weight: 800; color: var(--good); margin: 8px 0; }
+.result-card .actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+
+/* Sudoku board */
+.board {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  grid-template-rows: repeat(9, 1fr);
+  width: min(396px, 92vw);
+  aspect-ratio: 1 / 1;
+  background: var(--border);
+  gap: 1px;
+  border: 3px solid var(--border);
+  border-radius: 4px;
+  margin: 0 auto;
+}
+.board .cell {
+  background: #1a1d24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(14px, 3.5vw, 18px);
+  color: var(--text);
+  border: none;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  text-align: center;
+}
+.board .cell.clue { background: #2b3040; color: var(--muted); font-weight: 600; }
+.board .cell.filled { font-weight: 600; }
+.board .cell.wrong { animation: flash-red 0.4s ease; }
+@keyframes flash-red { 0%, 100% { background: #1a1d24; } 50% { background: #7a1f2b; } }
+.board .cell:nth-child(3n) { border-right: 2px solid var(--border); }
+.board .cell:nth-child(9n) { border-right: none; }
+.board .cell:nth-child(n+19):nth-child(-n+27),
+.board .cell:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid var(--border); }
+
+/* Word scramble */
+.scramble-word {
+  font-size: clamp(20px, 6vw, 34px);
+  letter-spacing: 3px;
+  font-weight: 800;
+  text-align: center;
+  margin: 24px 0;
+  word-spacing: 12px;
+  overflow-wrap: break-word;
+}
+.scramble-progress { text-align: center; color: var(--muted); margin-bottom: 8px; }
+.scramble-hint { text-align: center; color: var(--gold); font-size: 13px; font-style: italic; min-height: 18px; margin-bottom: 8px; }
+.scramble-input-row { display: flex; gap: 8px; }
+.scramble-flash { text-align: center; min-height: 24px; font-weight: 600; margin-top: 8px; }
+.scramble-flash.good { color: var(--good); }
+.scramble-flash.bad { color: var(--bad); }
+
+/* Memory match */
+.memory-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  width: min(360px, 92vw);
+  margin: 0 auto;
+}
+.memory-card {
+  aspect-ratio: 1 / 1;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(20px, 6vw, 28px);
+  cursor: pointer;
+  user-select: none;
+}
+.memory-card.hidden-face { background: #2b3040; }
+.memory-card.matched { background: rgba(58, 196, 125, 0.15); border-color: var(--good); cursor: default; }
+
+/* Proverb emoji clue */
+.proverb-emoji {
+  font-size: clamp(32px, 10vw, 56px);
+  text-align: center;
+  margin: 24px 0;
+  line-height: 1.3;
+}
+.mc-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+.mc-options button {
+  width: 100%;
+  font-size: 13px;
+  padding: 10px 8px;
+  white-space: normal;
+  line-height: 1.3;
+}
+.answer-reveal {
+  text-align: center;
+  color: var(--text);
+  background: rgba(230, 25, 75, 0.12);
+  border: 1px solid var(--bad);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 10px;
+  font-weight: 600;
+  font-size: 14px;
+}

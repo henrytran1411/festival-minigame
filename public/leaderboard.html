@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leaderboard — Autumn Festival Tournament</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body { padding: 40px; }
+    .lb-wrap { max-width: 1200px; margin: 0 auto; }
+    .lb-wrap h1 { text-align: center; font-size: 36px; }
+    .lb-wrap h2 { text-align: center; margin-top: 0; }
+    .leaderboard-list li { font-size: 22px; padding: 14px 8px; }
+    .leaderboard-list .rank { width: 50px; font-size: 26px; }
+    .leaderboard-list .breakdown { font-size: 14px; margin-top: 4px; }
+    .empty { text-align: center; color: var(--muted); margin-top: 40px; }
+    .lb-game-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-top: 24px;
+    }
+    @media (min-width: 900px) {
+      .lb-game-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    .lb-game-grid h3 { text-align: center; margin: 0 0 8px; font-size: 17px; }
+    .lb-game-grid .leaderboard-list li { font-size: 14px; padding: 6px 4px; }
+    .lb-game-grid .leaderboard-list .rank { width: 22px; font-size: 15px; }
+  </style>
+</head>
+<body>
+  <div class="lb-wrap">
+    <h1>🍁 Autumn Festival Tournament — Leaderboard</h1>
+
+    <div class="card">
+      <h2>🏆 Overall (All 4 Games)</h2>
+      <ul id="leaderboard-list" class="leaderboard-list"></ul>
+      <p id="empty-msg" class="empty hidden">No scores yet — go play a game!</p>
+    </div>
+
+    <div id="game-boards" class="lb-game-grid"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="rules.js"></script>
+  <script src="common.js"></script>
+  <script src="leaderboard.js"></script>
+</body>
+</html>
