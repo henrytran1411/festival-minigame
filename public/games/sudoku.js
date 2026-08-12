@@ -103,6 +103,12 @@ if (me) {
     Festival.submitScore(socket, 'sudoku', score);
   }
 
-  document.getElementById('play-again-btn').addEventListener('click', startGame);
-  startGame();
+  const gate = Festival.gateGame(socket, 'sudoku', startGame);
+  document.getElementById('play-again-btn').addEventListener('click', () => {
+    if (gate.isOpen()) {
+      startGame();
+    } else {
+      gate.block();
+    }
+  });
 }

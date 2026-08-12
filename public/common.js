@@ -115,5 +115,100 @@ window.Festival = (function () {
     });
   }
 
-  return { getPlayer, setName, requireNameOrRedirect, connect, register, submitScore, renderLeaderboard, renderGameLeaderboard, GAME_LABELS };
+  function formatCountdown(ms) {
+    const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  // Blocks a game page behind an overlay until the admin opens THAT game's
+  // join window, then calls onOpen(). Gameplay already in progress is never
+  // interrupted if the window later closes — the overlay only reappears
+  // if the caller explicitly asks via the returned block() (e.g. a
+  // "Play Again" click after the window has closed). Whenever the overlay
+  // is showing and the window opens (initially, or after a later re-open),
+  // onOpen() fires again automatically. Assumes it's called from a page one
+  // directory below the site root (public/games/*.html), matching the
+  // "../index.html" link below.
+  function gateGame(s, game, onOpen) {
+    let blocking = false;
+    let overlay = null;
+    let latestState = { isOpen: false, openedAt: null, closesAt: null };
+
+    function render() {
+      if (!overlay) return;
+      const title = overlay.querySelector('.gate-title');
+      const sub = overlay.querySelector('.gate-sub');
+      if (latestState.openedAt && !latestState.isOpen) {
+        title.textContent = 'Joining window has closed';
+        sub.textContent = 'Ask the admin to open a new round.';
+      } else {
+        title.textContent = 'Waiting for the admin to open this game...';
+        sub.textContent = "You'll be let in automatically — no need to refresh.";
+      }
+    }
+
+    function showOverlay() {
+      blocking = true;
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'gate-overlay';
+        overlay.innerHTML =
+          '<div class="gate-card">' +
+          '<div class="gate-icon">🔒</div>' +
+          '<h2 class="gate-title"></h2>' +
+          '<p class="gate-sub"></p>' +
+          '<a href="../index.html" class="gate-back">← Back to Hub</a>' +
+          '</div>';
+        document.body.appendChild(overlay);
+      }
+      render();
+    }
+
+    function hideOverlay() {
+      blocking = false;
+      if (overlay) {
+        overlay.remove();
+        overlay = null;
+      }
+    }
+
+    function handleState(state) {
+      latestState = state;
+      if (blocking) render();
+      if (state.isOpen && blocking) {
+        hideOverlay();
+        onOpen();
+      }
+    }
+
+    s.on('game-window', (state) => {
+      if (state.game === game) handleState(state);
+    });
+    s.on('game-window-all', (all) => {
+      if (all[game]) handleState(all[game]);
+    });
+
+    showOverlay();
+
+    return {
+      isOpen: () => latestState.isOpen,
+      block: () => showOverlay(),
+    };
+  }
+
+  return {
+    getPlayer,
+    setName,
+    requireNameOrRedirect,
+    connect,
+    register,
+    submitScore,
+    renderLeaderboard,
+    renderGameLeaderboard,
+    formatCountdown,
+    gateGame,
+    GAME_LABELS,
+  };
 })();

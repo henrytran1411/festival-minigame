@@ -296,7 +296,12 @@ if (me) {
     updateHintButton();
     hintEl.textContent = `Hint: ${rounds[index].hint}`;
   });
-  document.getElementById('play-again-btn').addEventListener('click', startGame);
-
-  startGame();
+  const gate = Festival.gateGame(socket, 'proverb', startGame);
+  document.getElementById('play-again-btn').addEventListener('click', () => {
+    if (gate.isOpen()) {
+      startGame();
+    } else {
+      gate.block();
+    }
+  });
 }

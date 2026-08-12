@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Autumn Festival Tournament</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrap" style="max-width: 720px;">
+    <div id="login-screen" class="card" style="max-width: 360px; margin: 60px auto; text-align: center;">
+      <h1>🔑 Admin Login</h1>
+      <input id="password-input" type="password" placeholder="Admin password" autocomplete="off" style="margin: 16px 0;" />
+      <button id="login-btn" style="width: 100%;">Log in</button>
+      <p id="login-error" class="hidden" style="color: var(--bad); font-size: 13px; margin-top: 10px;">Wrong password.</p>
+    </div>
+
+    <div id="panel-screen" class="hidden">
+      <div class="top-bar">
+        <h1>🔑 Admin Panel</h1>
+        <a href="index.html">Hub →</a>
+      </div>
+
+      <p class="admin-meta" id="player-count" style="margin-bottom: 16px;"></p>
+
+      <div id="game-controls" class="game-grid"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="rules.js"></script>
+  <script src="common.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

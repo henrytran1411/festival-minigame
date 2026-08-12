@@ -13,6 +13,36 @@ const rulesBody = document.getElementById('rules-body');
 let latestLeaderboard = [];
 let me = Festival.getPlayer();
 
+const gameWindowStates = {};
+window.FESTIVAL_GAMES.forEach((g) => {
+  gameWindowStates[g.key] = { isOpen: false, openedAt: null, closesAt: null };
+});
+let windowTickHandle = null;
+
+function isGameOpen(key) {
+  const state = gameWindowStates[key];
+  return !!state && state.closesAt !== null && Date.now() < state.closesAt;
+}
+
+function anyGameOpen() {
+  return window.FESTIVAL_GAMES.some((g) => isGameOpen(g.key));
+}
+
+function renderGridIfVisible() {
+  if (!hubScreen.classList.contains('hidden')) buildGameGrid();
+}
+
+function refreshTicking() {
+  clearInterval(windowTickHandle);
+  if (anyGameOpen()) windowTickHandle = setInterval(renderGridIfVisible, 1000);
+}
+
+function applyGameWindowState(state) {
+  gameWindowStates[state.game] = state;
+  renderGridIfVisible();
+  refreshTicking();
+}
+
 function showHub() {
   me = Festival.getPlayer();
   nameScreen.classList.add('hidden');
@@ -36,17 +66,29 @@ function buildGameGrid() {
     tile.className = 'game-tile';
 
     const best = myEntry ? myEntry.scores[g.key] || 0 : 0;
+    const open = isGameOpen(g.key);
+    const state = gameWindowStates[g.key];
+    let statusText;
+    if (open) {
+      statusText = `🔓 Closes in ${Festival.formatCountdown(state.closesAt - Date.now())}`;
+    } else if (state.openedAt) {
+      statusText = '🔒 Closed';
+    } else {
+      statusText = '🔒 Not open yet';
+    }
     tile.innerHTML = `
       <div class="icon">${g.icon}</div>
       <h3>${g.title}</h3>
       <p>${g.blurb}</p>
+      <div class="tile-status ${open ? 'open' : 'closed'}">${statusText}</div>
       <div class="actions">
-        <button class="play-btn">Play</button>
+        <button class="play-btn" ${open ? '' : 'disabled'}>${open ? 'Play' : 'Locked'}</button>
         <button class="secondary rules-btn">Rules</button>
       </div>
       <div class="best">${best ? 'Your best: ' + best : ''}</div>
     `;
     tile.querySelector('.play-btn').addEventListener('click', () => {
+      if (!isGameOpen(g.key)) return;
       window.location.href = g.page;
     });
     tile.querySelector('.rules-btn').addEventListener('click', () => openRules(g));
@@ -89,6 +131,14 @@ socket.on('leaderboard', (entries) => {
   latestLeaderboard = entries;
   Festival.renderLeaderboard(leaderboardList, entries, { myId: me.id, limit: 5 });
   if (!hubScreen.classList.contains('hidden')) buildGameGrid();
+});
+socket.on('game-window', (state) => applyGameWindowState(state));
+socket.on('game-window-all', (all) => {
+  Object.values(all).forEach((state) => {
+    gameWindowStates[state.game] = state;
+  });
+  renderGridIfVisible();
+  refreshTicking();
 });
 
 if (me.name) {

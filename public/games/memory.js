@@ -118,6 +118,12 @@ if (me) {
     Festival.submitScore(socket, 'memory', score);
   }
 
-  document.getElementById('play-again-btn').addEventListener('click', startGame);
-  startGame();
+  const gate = Festival.gateGame(socket, 'memory', startGame);
+  document.getElementById('play-again-btn').addEventListener('click', () => {
+    if (gate.isOpen()) {
+      startGame();
+    } else {
+      gate.block();
+    }
+  });
 }

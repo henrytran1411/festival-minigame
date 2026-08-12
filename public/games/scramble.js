@@ -197,7 +197,12 @@ if (me) {
     updateHintButton();
     hintEl.textContent = `Hint: ${words[index].hint}`;
   });
-  document.getElementById('play-again-btn').addEventListener('click', startGame);
-
-  startGame();
+  const gate = Festival.gateGame(socket, 'scramble', startGame);
+  document.getElementById('play-again-btn').addEventListener('click', () => {
+    if (gate.isOpen()) {
+      startGame();
+    } else {
+      gate.block();
+    }
+  });
 }
