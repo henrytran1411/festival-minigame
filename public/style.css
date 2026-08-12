@@ -214,12 +214,13 @@ input[type="text"] {
 /* Memory match */
 .memory-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  width: min(360px, 92vw);
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  width: min(720px, 96vw);
   margin: 0 auto;
 }
 .memory-card {
+  position: relative;
   aspect-ratio: 1 / 1;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -227,12 +228,24 @@ input[type="text"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(20px, 6vw, 28px);
+  font-size: clamp(12px, 3.2vw, 22px);
   cursor: pointer;
   user-select: none;
 }
 .memory-card.hidden-face { background: #2b3040; }
 .memory-card.matched { background: rgba(58, 196, 125, 0.15); border-color: var(--good); cursor: default; }
+.card-open-badge {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 0 3px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--muted);
+}
 
 /* Proverb emoji clue */
 .proverb-emoji {
