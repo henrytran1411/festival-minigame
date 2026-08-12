@@ -68,7 +68,7 @@ if (me) {
     document.getElementById('rules-modal').classList.add('hidden');
   });
 
-  let words, index, score, solvedCount, savedTime, roundTimeLeft, roundTimerHandle,
+  let words, index, score, solvedCount, savedTime, startTime, roundTimeLeft, roundTimerHandle,
     finished, hintsLeft, hintBonusesGranted, noHintStreak, hintUsedThisWord, transitioning;
 
   function shuffleArray(arr) {
@@ -115,6 +115,7 @@ if (me) {
     score = 0;
     solvedCount = 0;
     savedTime = 0;
+    startTime = performance.now();
     hintsLeft = MAX_HINTS;
     hintBonusesGranted = 0;
     noHintStreak = 0;
@@ -245,10 +246,12 @@ if (me) {
     const bonus = Math.round(MAX_SPEED_BONUS * (savedTime / TOTAL_GAME_SECONDS));
     const finalScore = Math.max(0, Math.min(1500, score + bonus));
     finalScoreEl.textContent = finalScore;
-    resultDetailEl.textContent = `${solvedCount} of ${words.length} words solved`;
+    const seconds = Math.floor((performance.now() - startTime) / 1000);
+    const detail = `${seconds}s · ${solvedCount} of ${words.length} words solved`;
+    resultDetailEl.textContent = detail;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
-    Festival.submitScore(socket, 'scramble', finalScore);
+    Festival.submitScore(socket, 'scramble', finalScore, detail);
   }
 
   submitBtn.addEventListener('click', submitAnswer);

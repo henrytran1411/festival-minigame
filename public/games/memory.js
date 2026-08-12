@@ -205,10 +205,11 @@ if (me) {
     const score = Math.max(0, Math.min(1500, matchPoints));
     finalScoreEl.textContent = score;
     liveScoreEl.textContent = String(score);
-    resultDetailEl.textContent = `Time's up · ${matchedCount}/${ICONS.length} pairs matched · ${moves} moves`;
+    const detail = `Time's up · ${matchedCount}/${ICONS.length} pairs matched · ${moves} moves`;
+    resultDetailEl.textContent = detail;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
-    Festival.submitScore(socket, 'memory', score);
+    Festival.submitScore(socket, 'memory', score, detail);
   }
 
   function finishGame() {
@@ -218,10 +219,11 @@ if (me) {
     const score = computeScore(seconds);
     finalScoreEl.textContent = score;
     liveScoreEl.textContent = String(score);
-    resultDetailEl.textContent = `${seconds}s · ${moves} moves`;
+    const detail = `${seconds}s · ${moves} moves`;
+    resultDetailEl.textContent = detail;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
-    Festival.submitScore(socket, 'memory', score);
+    Festival.submitScore(socket, 'memory', score, detail);
   }
 
   const gate = Festival.gateGame(socket, 'memory', startGame);

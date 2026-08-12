@@ -88,7 +88,7 @@ if (me) {
     document.getElementById('rules-modal').classList.add('hidden');
   });
 
-  let rounds, index, score, solvedCount, savedTime, roundTimeLeft, roundTimerHandle, finished, hintsLeft, optionsShown, transitioning;
+  let rounds, index, score, solvedCount, savedTime, startTime, roundTimeLeft, roundTimerHandle, finished, hintsLeft, optionsShown, transitioning;
 
   function shuffleArray(arr) {
     const a = [...arr];
@@ -121,6 +121,7 @@ if (me) {
     score = 0;
     solvedCount = 0;
     savedTime = 0;
+    startTime = performance.now();
     hintsLeft = MAX_HINTS;
     finished = false;
     liveScoreEl.textContent = '0';
@@ -276,10 +277,12 @@ if (me) {
     const bonus = Math.round(MAX_SPEED_BONUS * (savedTime / totalPossibleTime));
     const finalScore = Math.max(0, Math.min(1500, score + bonus));
     finalScoreEl.textContent = finalScore;
-    resultDetailEl.textContent = `${solvedCount} of ${rounds.length} proverbs solved`;
+    const seconds = Math.floor((performance.now() - startTime) / 1000);
+    const detail = `${seconds}s · ${solvedCount} of ${rounds.length} proverbs solved`;
+    resultDetailEl.textContent = detail;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
-    Festival.submitScore(socket, 'proverb', finalScore);
+    Festival.submitScore(socket, 'proverb', finalScore, detail);
   }
 
   submitBtn.addEventListener('click', () => attempt(answerInput.value));

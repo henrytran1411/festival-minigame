@@ -42,9 +42,9 @@ window.Festival = (function () {
     s.emit('register', { playerId: id, name });
   }
 
-  function submitScore(s, game, score) {
+  function submitScore(s, game, score, detail) {
     const { id, name } = getPlayer();
-    s.emit('score:submit', { playerId: id, name, game, score });
+    s.emit('score:submit', { playerId: id, name, game, score, detail });
   }
 
   // Reserves one lifetime attempt for `game` before the caller may start play.
@@ -87,7 +87,11 @@ window.Festival = (function () {
         const breakdown = document.createElement('div');
         breakdown.className = 'breakdown';
         breakdown.textContent = Object.keys(GAME_LABELS)
-          .map((g) => `${GAME_LABELS[g]}: ${p.scores[g] || 0}`)
+          .map((g) => {
+            const detail = p.details?.[g];
+            const suffix = detail ? ' (' + detail + ')' : '';
+            return `${GAME_LABELS[g]}: ${p.scores[g] || 0}${suffix}`;
+          })
           .join(' · ');
         name.appendChild(breakdown);
       }
@@ -120,6 +124,13 @@ window.Festival = (function () {
       const name = document.createElement('span');
       name.className = 'name';
       name.textContent = p.name;
+      const detail = p.details?.[gameKey];
+      if (detail) {
+        const breakdown = document.createElement('div');
+        breakdown.className = 'breakdown';
+        breakdown.textContent = detail;
+        name.appendChild(breakdown);
+      }
 
       const score = document.createElement('span');
       score.className = 'total';

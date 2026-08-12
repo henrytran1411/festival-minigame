@@ -94,6 +94,10 @@ function sanitizeName(name) {
   return clean || 'Player';
 }
 
+function sanitizeDetail(detail) {
+  return String(detail || '').trim().slice(0, 80);
+}
+
 function totalFor(player) {
   return GAMES.reduce((sum, g) => sum + (player.scores[g] || 0), 0);
 }
@@ -104,6 +108,7 @@ function leaderboardSnapshot() {
       id,
       name: p.name,
       scores: p.scores,
+      details: p.details,
       total: totalFor(p),
     }))
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
@@ -115,12 +120,67 @@ function getOrCreatePlayer(playerId) {
     player = {
       name: 'Player',
       scores: { sudoku: 0, scramble: 0, memory: 0, proverb: 0 },
+      details: { sudoku: '', scramble: '', memory: '', proverb: '' },
       attempts: { sudoku: 0, scramble: 0, memory: 0, proverb: 0 },
       updatedAt: 0,
     };
     players.set(playerId, player);
   }
   return player;
+}
+
+// Fake players for previewing the leaderboard UI — never runs automatically
+// against real event data (see admin:seed-demo-data / SEED_DEMO_DATA below).
+// IDs are prefixed "demo_" so they're easy to find and remove as a group.
+const DEMO_PLAYERS = [
+  { name: 'Lan Nguyễn', scores: { sudoku: 1500, scramble: 1120, memory: 1400, proverb: 1350 },
+    details: { sudoku: '48s · 0 mistakes', scramble: '140s · 12 of 12 words solved', memory: '300s · 150 moves', proverb: '500s · 15 of 15 proverbs solved' } },
+  { name: 'Hoa Đỗ', scores: { sudoku: 1490, scramble: 1080, memory: 1350, proverb: 1300 },
+    details: { sudoku: '55s · 0 mistakes', scramble: '145s · 12 of 12 words solved', memory: '350s · 160 moves', proverb: '510s · 15 of 15 proverbs solved' } },
+  { name: 'Minh Trần', scores: { sudoku: 1420, scramble: 980, memory: 1250, proverb: 1180 },
+    details: { sudoku: '52s · 1 mistake', scramble: '150s · 10 of 12 words solved', memory: '410s · 210 moves', proverb: '620s · 13 of 15 proverbs solved' } },
+  { name: 'Linh Cao', scores: { sudoku: 1400, scramble: 1000, memory: 1300, proverb: 1150 },
+    details: { sudoku: '70s · 1 mistake', scramble: '155s · 11 of 12 words solved', memory: '380s · 180 moves', proverb: '550s · 13 of 15 proverbs solved' } },
+  { name: 'Trang Lê', scores: { sudoku: 1350, scramble: 1040, memory: 1150, proverb: 1000 },
+    details: { sudoku: '90s · 2 mistakes', scramble: '160s · 11 of 12 words solved', memory: '500s · 240 moves', proverb: '680s · 12 of 15 proverbs solved' } },
+  { name: 'Đức Vũ', scores: { sudoku: 1180, scramble: 0, memory: 1480, proverb: 1220 },
+    details: { sudoku: '140s · 3 mistakes', scramble: '', memory: '190s · 70 moves', proverb: '560s · 14 of 15 proverbs solved' } },
+  { name: 'Thảo Vương', scores: { sudoku: 1250, scramble: 950, memory: 1100, proverb: 1080 },
+    details: { sudoku: '120s · 2 mistakes', scramble: '165s · 10 of 12 words solved', memory: '520s · 260 moves', proverb: '600s · 13 of 15 proverbs solved' } },
+  { name: 'Tuấn Bùi', scores: { sudoku: 1050, scramble: 1000, memory: 1020, proverb: 0 },
+    details: { sudoku: '180s · 4 mistakes', scramble: '170s · 10 of 12 words solved', memory: '600s · 280 moves', proverb: '' } },
+  { name: 'Mai Đặng', scores: { sudoku: 0, scramble: 890, memory: 0, proverb: 960 },
+    details: { sudoku: '', scramble: '180s · 9 of 12 words solved', memory: '', proverb: "Time's up · 11 of 15 proverbs solved" } },
+  { name: 'Hùng Phạm', scores: { sudoku: 980, scramble: 760, memory: 900, proverb: 850 },
+    details: { sudoku: '210s · 5 mistakes', scramble: '200s · 8 of 12 words solved', memory: '700s · 320 moves', proverb: '750s · 10 of 15 proverbs solved' } },
+  { name: 'Nam Hoàng', scores: { sudoku: 800, scramble: 700, memory: 850, proverb: 780 },
+    details: { sudoku: '250s · 6 mistakes', scramble: '210s · 7 of 12 words solved', memory: "Time's up · 51/64 pairs matched · 350 moves", proverb: '800s · 9 of 15 proverbs solved' } },
+  { name: 'Khánh Đinh', scores: { sudoku: 600, scramble: 500, memory: 600, proverb: 550 },
+    details: { sudoku: '300s · 8 mistakes', scramble: '220s · 6 of 12 words solved', memory: "Time's up · 40/64 pairs matched · 400 moves", proverb: '850s · 7 of 15 proverbs solved' } },
+];
+
+function seedDemoData() {
+  DEMO_PLAYERS.forEach((demo, i) => {
+    players.set(`demo_${i + 1}`, {
+      name: demo.name,
+      scores: { sudoku: 0, scramble: 0, memory: 0, proverb: 0, ...demo.scores },
+      details: { sudoku: '', scramble: '', memory: '', proverb: '', ...demo.details },
+      attempts: { sudoku: 0, scramble: 0, memory: 0, proverb: 0 },
+      updatedAt: Date.now(),
+    });
+  });
+  return DEMO_PLAYERS.length;
+}
+
+function clearDemoData() {
+  let removed = 0;
+  [...players.keys()].forEach((id) => {
+    if (id.startsWith('demo_')) {
+      players.delete(id);
+      removed += 1;
+    }
+  });
+  return removed;
 }
 
 io.on('connection', (socket) => {
@@ -176,13 +236,19 @@ io.on('connection', (socket) => {
     io.emit('leaderboard', leaderboardSnapshot());
   });
 
-  socket.on('score:submit', ({ playerId, name, game, score }) => {
+  socket.on('score:submit', ({ playerId, name, game, score, detail }) => {
     if (typeof playerId !== 'string' || !playerId) return;
     if (!GAMES.includes(game)) return;
 
     const player = getOrCreatePlayer(playerId);
     if (name) player.name = sanitizeName(name);
     const incoming = clampScore(score);
+    // Only replace the stored detail (time/moves/etc.) when this run matches
+    // or beats the recorded best, so it always describes THAT score, not
+    // whatever run happened to submit most recently.
+    if (incoming >= (player.scores[game] || 0)) {
+      player.details[game] = sanitizeDetail(detail);
+    }
     player.scores[game] = Math.max(player.scores[game] || 0, incoming);
     player.updatedAt = Date.now();
 
@@ -217,10 +283,60 @@ io.on('connection', (socket) => {
     recordCheatFlag({ playerId, name, game, reason, detail });
   });
 
+  // Clears everyone's used-attempt count for one game (or all games), without
+  // touching scores — for undoing lockouts during testing or between rounds.
+  socket.on('admin:reset-attempts', ({ game }, callback) => {
+    if (!socket.isAdmin) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'not authorized' });
+      return;
+    }
+    if (game && !GAMES.includes(game)) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'invalid game' });
+      return;
+    }
+    const gamesToReset = game ? [game] : GAMES;
+    let playerCount = 0;
+    players.forEach((player) => {
+      gamesToReset.forEach((g) => { player.attempts[g] = 0; });
+      playerCount += 1;
+    });
+    if (typeof callback === 'function') callback({ ok: true, playerCount, games: gamesToReset });
+  });
+
+  // Populates (or clears) the fake players above for previewing the leaderboard
+  // UI. Admin-only, and never runs on its own — see SEED_DEMO_DATA below for
+  // the opt-in startup version.
+  socket.on('admin:seed-demo-data', (payload, callback) => {
+    if (!socket.isAdmin) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'not authorized' });
+      return;
+    }
+    const count = seedDemoData();
+    io.emit('leaderboard', leaderboardSnapshot());
+    if (typeof callback === 'function') callback({ ok: true, count });
+  });
+
+  socket.on('admin:clear-demo-data', (payload, callback) => {
+    if (!socket.isAdmin) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'not authorized' });
+      return;
+    }
+    const removed = clearDemoData();
+    io.emit('leaderboard', leaderboardSnapshot());
+    if (typeof callback === 'function') callback({ ok: true, removed });
+  });
+
   socket.on('disconnect', () => {
     adminSocketIds.delete(socket.id);
   });
 });
+
+// Opt-in only (never fires by default) — set SEED_DEMO_DATA=1 to preview the
+// leaderboard with fake players without needing to log into the admin panel.
+if (process.env.SEED_DEMO_DATA) {
+  const count = seedDemoData();
+  console.log(`Seeded ${count} demo players onto the leaderboard (SEED_DEMO_DATA is set).`);
+}
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, '0.0.0.0', () => {

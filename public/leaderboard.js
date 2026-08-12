@@ -15,7 +15,7 @@ const socket = Festival.connect();
 socket.on('leaderboard', (entries) => {
   const withScores = entries.filter((p) => p.total > 0);
   emptyMsg.classList.toggle('hidden', withScores.length > 0);
-  Festival.renderLeaderboard(leaderboardList, withScores, { showBreakdown: true });
+  Festival.renderLeaderboard(leaderboardList, withScores, { showBreakdown: true, limit: 10 });
 
   window.FESTIVAL_GAMES.forEach((g) => {
     Festival.renderGameLeaderboard(gameListEls[g.key], entries, g.key, { limit: 10 });

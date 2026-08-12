@@ -9,11 +9,15 @@ const playerCountEl = document.getElementById('player-count');
 const gameControlsEl = document.getElementById('game-controls');
 const flagsListEl = document.getElementById('flags-list');
 const flagsEmptyEl = document.getElementById('flags-empty');
+const seedDemoBtn = document.getElementById('seed-demo-btn');
+const clearDemoBtn = document.getElementById('clear-demo-btn');
+const demoStatusEl = document.getElementById('demo-status');
 
 const REASON_LABELS = {
   'tab-switch': '🚫 Left tab/window',
   'brute-force': '🎲 Brute-force guessing',
   'impossible-speed': '⚡ Implausible solve speed',
+  'ai-assist-suspected': '🤖 Suspected outside help',
 };
 
 function renderFlag(flag) {
@@ -102,6 +106,7 @@ function buildGameCards() {
       <div class="admin-actions">
         <button data-role="open">▶ Open (2 min)</button>
         <button data-role="close" class="danger" disabled>■ Close Now</button>
+        <button data-role="reset-attempts" class="secondary">↺ Reset Attempts</button>
       </div>
     `;
     card.querySelector('[data-role="open"]').addEventListener('click', () => {
@@ -112,6 +117,11 @@ function buildGameCards() {
     card.querySelector('[data-role="close"]').addEventListener('click', () => {
       socket.emit('admin:close', { game: g.key }, (res) => {
         if (res && res.ok) applyState(res.state);
+      });
+    });
+    card.querySelector('[data-role="reset-attempts"]').addEventListener('click', () => {
+      socket.emit('admin:reset-attempts', { game: g.key }, (res) => {
+        if (res && res.ok) showResetNote(g.key, res.playerCount);
       });
     });
     cardEls[g.key] = card;
@@ -140,6 +150,14 @@ function renderCard(game) {
   }
 }
 
+function showResetNote(game, playerCount) {
+  const card = cardEls[game];
+  if (!card) return;
+  const statusEl = card.querySelector('[data-role="status"]');
+  statusEl.textContent = `↺ Attempts reset for ${playerCount} player${playerCount === 1 ? '' : 's'}`;
+  setTimeout(() => renderCard(game), 2500);
+}
+
 function renderAll() {
   window.FESTIVAL_GAMES.forEach((g) => renderCard(g.key));
 }
@@ -161,6 +179,17 @@ function applyState(state) {
   renderCard(state.game);
   refreshTicking();
 }
+
+seedDemoBtn.addEventListener('click', () => {
+  socket.emit('admin:seed-demo-data', {}, (res) => {
+    demoStatusEl.textContent = res && res.ok ? `Seeded ${res.count} demo players.` : 'Failed to seed demo data.';
+  });
+});
+clearDemoBtn.addEventListener('click', () => {
+  socket.emit('admin:clear-demo-data', {}, (res) => {
+    demoStatusEl.textContent = res && res.ok ? `Removed ${res.removed} demo players.` : 'Failed to clear demo data.';
+  });
+});
 
 buildGameCards();
 
