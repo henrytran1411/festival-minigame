@@ -13,7 +13,8 @@ window.FESTIVAL_GAMES = [
       'Finishing the puzzle earns 1,200 base points, plus up to 300 speed-bonus points that fade the longer you take (gone after 10 minutes). Maximum possible score: 1,500.',
       'You get 3 attempts total for this game — choose when to play them wisely.',
       'Switching to another tab or app during play ends that attempt immediately with no score, so keep this tab focused until you finish.',
-      'Entering more than 2 correct numbers in a row that couldn\'t be narrowed down by that row, column, or box alone also ends the attempt with no score — it\'s a sign of getting answers from outside the game.',
+      'Entering more than 5 correct numbers in a row that couldn\'t be narrowed down by that row, column, or box alone also ends the attempt with no score — it\'s a sign of getting answers from outside the game.',
+      'Can\'t finish? Click Give Up to end the attempt early — you\'ll score 15 points for every box you filled in correctly, instead of nothing.',
     ],
   },
   {

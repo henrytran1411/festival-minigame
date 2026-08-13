@@ -7,6 +7,8 @@ if (me) {
   const boardEl = document.getElementById('board');
   const timerEl = document.getElementById('timer');
   const mistakesEl = document.getElementById('mistakes');
+  const timeScoreEl = document.getElementById('time-score');
+  const inputScoreEl = document.getElementById('input-score');
   const attemptInfoEl = document.getElementById('attempt-info');
   const playScreen = document.getElementById('play-screen');
   const resultScreen = document.getElementById('result-screen');
@@ -22,10 +24,11 @@ if (me) {
   // false-positive risk (see checkLowProbabilityGuess for why that one still is).
   const BRUTE_FORCE_WINDOW_MS = 8000; // wrong guesses on one cell within this window...
   const BRUTE_FORCE_COUNT = 4; // ...at or above this count looks like scripted guessing
-  const IMPOSSIBLE_SPEED_SECONDS = 25; // this puzzle always has 51 blanks; even a fast
+  const IMPOSSIBLE_SPEED_SECONDS = 27; // this puzzle always has 56 blanks; even a fast
   // human needs longer than this to read, click, and type each one from memory
   const LOW_PROB_CANDIDATE_THRESHOLD = 3; // >=3 remaining candidates means <50% odds of a lucky guess
-  const LOW_PROB_STREAK_THRESHOLD = 2; // more than 2 such correct entries in a row disqualifies
+  const LOW_PROB_STREAK_THRESHOLD = 5; // more than 5 such correct entries in a row disqualifies
+  const GIVE_UP_POINTS_PER_BOX = 15; // partial-credit rate when a puzzle is abandoned unfinished
 
   const meta = window.FESTIVAL_GAMES.find((g) => g.key === 'sudoku');
   document.getElementById('rules-body').innerHTML = meta.rules.map((r) => `<li>${r}</li>`).join('');
@@ -37,7 +40,7 @@ if (me) {
     document.getElementById('rules-modal').classList.add('hidden');
   });
 
-  let puzzle, solution, board, cells, mistakes, startTime, timerHandle, finished, gameActive;
+  let puzzle, solution, board, cells, mistakes, correctInputs, startTime, timerHandle, finished, gameActive;
   let attemptsUsed = 0, attemptsMax = null;
   let cellWrongLog, flaggedBruteForceCells;
   let lowProbStreak;
@@ -65,6 +68,7 @@ if (me) {
     solution = generated.solution;
     board = [...puzzle];
     mistakes = 0;
+    correctInputs = 0;
     cellWrongLog = new Map();
     flaggedBruteForceCells = new Set();
     lowProbStreak = 0;
@@ -73,6 +77,8 @@ if (me) {
     gameActive = true;
     mistakesEl.textContent = '0';
     timerEl.textContent = '0s';
+    timeScoreEl.textContent = String(speedBonusFor(0));
+    inputScoreEl.textContent = String(inputScoreFor());
     if (attemptsMax) attemptInfoEl.textContent = `${attemptsUsed}/${attemptsMax}`;
     exhaustedScreen.classList.add('hidden');
     resultScreen.classList.add('hidden');
@@ -117,6 +123,25 @@ if (me) {
 
   function updateTimer() {
     timerEl.textContent = Math.floor((performance.now() - startTime) / 1000) + 's';
+    updateLiveScore();
+  }
+
+  function speedBonusFor(seconds) {
+    return Math.max(0, 300 - Math.floor(seconds / 2));
+  }
+
+  function inputScoreFor() {
+    return Math.max(0, Math.min(1200, correctInputs * 25 - mistakes * 20));
+  }
+
+  function computeScore(seconds) {
+    return Math.max(0, Math.min(1500, inputScoreFor() + speedBonusFor(seconds)));
+  }
+
+  function updateLiveScore() {
+    const seconds = Math.floor((performance.now() - startTime) / 1000);
+    timeScoreEl.textContent = String(speedBonusFor(seconds));
+    inputScoreEl.textContent = String(inputScoreFor());
   }
 
   function buildBoard() {
@@ -155,15 +180,18 @@ if (me) {
       cell.classList.add('wrong');
       logWrongGuess(index);
       lowProbStreak = 0;
+      updateLiveScore();
       return;
     }
 
     checkLowProbabilityGuess(index);
     if (finished) return;
 
+    correctInputs += 1;
     board[index] = digit;
     cell.readOnly = true;
     cell.classList.add('filled');
+    updateLiveScore();
 
     if (board.every((v, i) => v === solution[i])) {
       finishGame();
@@ -235,10 +263,9 @@ if (me) {
     const seconds = Math.floor((performance.now() - startTime) / 1000);
     if (seconds < IMPOSSIBLE_SPEED_SECONDS && mistakes === 0) {
       Festival.reportCheat(socket, 'sudoku', 'impossible-speed',
-        `Solved all 51 blanks in ${seconds}s with 0 mistakes`);
+        `Solved all 56 blanks in ${seconds}s with 0 mistakes`);
     }
-    const speedBonus = Math.max(0, 300 - Math.floor(seconds / 2));
-    const score = Math.max(0, Math.min(1500, 1200 + speedBonus - mistakes * 20));
+    const score = computeScore(seconds);
     finalScoreEl.textContent = score;
     resultTitleEl.textContent = 'Solved! 🎉';
     const detail = `${seconds}s · ${mistakes} mistake${mistakes === 1 ? '' : 's'}`;
@@ -247,6 +274,28 @@ if (me) {
     resultScreen.classList.remove('hidden');
     Festival.submitScore(socket, 'sudoku', score, detail);
   }
+
+  // Lets a player end a puzzle they can't finish instead of being stuck with
+  // nothing — worth less than solving it (15 pts/box vs. up to 1,500 total
+  // for a full clean solve), but still credits the boxes they got right.
+  function giveUp() {
+    if (!gameActive) return;
+    gameActive = false;
+    finished = true;
+    clearInterval(timerHandle);
+    const correctCount = board.reduce((sum, v, i) => sum + (puzzle[i] === 0 && v !== 0 ? 1 : 0), 0);
+    const totalBlanks = puzzle.filter((v) => v === 0).length;
+    const score = Math.max(0, Math.min(1500, correctCount * GIVE_UP_POINTS_PER_BOX));
+    finalScoreEl.textContent = score;
+    resultTitleEl.textContent = 'Attempt ended';
+    const detail = `Gave up · ${correctCount} of ${totalBlanks} boxes filled correctly`;
+    resultDetailEl.textContent = detail;
+    playScreen.classList.add('hidden');
+    resultScreen.classList.remove('hidden');
+    Festival.submitScore(socket, 'sudoku', score, detail);
+  }
+
+  document.getElementById('give-up-btn').addEventListener('click', giveUp);
 
   const gate = Festival.gateGame(socket, 'sudoku', tryStartGame);
   document.getElementById('play-again-btn').addEventListener('click', () => {
