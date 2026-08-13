@@ -114,6 +114,16 @@ function leaderboardSnapshot() {
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
 }
 
+// Top N players for one game's score alone, in rank order — used only for
+// the admin-triggered reveal ceremony snapshot (see admin:reveal-results).
+function topForGame(gameKey, limit) {
+  return [...players.values()]
+    .filter((p) => (p.scores[gameKey] || 0) > 0)
+    .map((p) => ({ name: p.name, total: p.scores[gameKey] }))
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+    .slice(0, limit);
+}
+
 function getOrCreatePlayer(playerId) {
   let player = players.get(playerId);
   if (!player) {
@@ -324,6 +334,29 @@ io.on('connection', (socket) => {
     const removed = clearDemoData();
     io.emit('leaderboard', leaderboardSnapshot());
     if (typeof callback === 'function') callback({ ok: true, removed });
+  });
+
+  // Snapshots the current top 10 for ONE board ('overall' or a game key) in
+  // rank order and broadcasts it so the big-screen leaderboard can run that
+  // board's reveal ceremony. The client freezes on this snapshot for the
+  // animation — it does not reflect scores that come in mid-ceremony. Each
+  // of the 5 boards is revealed independently, on its own admin button.
+  socket.on('admin:reveal-results', ({ board }, callback) => {
+    if (!socket.isAdmin) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'not authorized' });
+      return;
+    }
+    let top10;
+    if (board === 'overall') {
+      top10 = leaderboardSnapshot().filter((p) => p.total > 0).slice(0, 10);
+    } else if (GAMES.includes(board)) {
+      top10 = topForGame(board, 10);
+    } else {
+      if (typeof callback === 'function') callback({ ok: false, error: 'invalid board' });
+      return;
+    }
+    io.emit('reveal-results', { board, top10 });
+    if (typeof callback === 'function') callback({ ok: true, count: top10.length });
   });
 
   socket.on('disconnect', () => {

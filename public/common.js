@@ -141,6 +141,41 @@ window.Festival = (function () {
     });
   }
 
+  // Shows who's currently in the top N without revealing their rank or score —
+  // names only, alphabetical (so list order itself can't leak standings).
+  // Expects entries shaped like { id, name, total } (a real leaderboard row,
+  // or a { name, total: scores[game] } projection for a single game's board).
+  function renderBlindTop(listEl, entries, { limit = 10, myId = null } = {}) {
+    const top = entries
+      .filter((p) => (p.total || 0) > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, limit)
+      .map((p) => ({ id: p.id, name: p.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    listEl.innerHTML = '';
+    top.forEach((p) => {
+      const li = document.createElement('li');
+      li.className = 'blind-row';
+      if (myId != null && p.id === myId) li.classList.add('me');
+
+      const rank = document.createElement('span');
+      rank.className = 'rank';
+      rank.textContent = '❔';
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'name';
+      nameEl.textContent = p.name;
+
+      const total = document.createElement('span');
+      total.className = 'total';
+      total.textContent = '???';
+
+      li.append(rank, nameEl, total);
+      listEl.appendChild(li);
+    });
+  }
+
   function formatCountdown(ms) {
     const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
     const m = Math.floor(totalSeconds / 60);
@@ -235,6 +270,7 @@ window.Festival = (function () {
     reportCheat,
     renderLeaderboard,
     renderGameLeaderboard,
+    renderBlindTop,
     formatCountdown,
     gateGame,
     GAME_LABELS,

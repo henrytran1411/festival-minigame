@@ -27,16 +27,56 @@
     .lb-game-grid .leaderboard-list li { font-size: 14px; padding: 6px 4px; }
     .lb-game-grid .leaderboard-list .rank { width: 22px; font-size: 15px; }
     .lb-game-grid .leaderboard-list .breakdown { font-size: 10px; }
+
+    /* Blind (pre-reveal) rows: names only, no rank/score leaked */
+    .blind-row .total { color: var(--muted); letter-spacing: 1px; }
+
+    /* Reveal ceremony */
+    .lb-card { position: relative; overflow: hidden; }
+    .fireworks-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
+    .firework-particle { position: absolute; width: 6px; height: 6px; border-radius: 50%; pointer-events: none; }
+    .festival-emoji { position: absolute; bottom: 6%; font-size: 22px; pointer-events: none; }
+    .champion-badge {
+      position: absolute; left: 50%; top: 38%; pointer-events: none;
+      text-shadow: 0 0 30px rgba(255, 209, 102, 0.9);
+    }
+    .cheer-emoji { position: absolute; bottom: 8%; font-size: 26px; pointer-events: none; }
+    .money-emoji { position: absolute; top: -5%; font-size: 24px; pointer-events: none; }
+    .name-callout {
+      position: absolute; left: 50%; top: 18%; pointer-events: none;
+      font-weight: 800; white-space: nowrap; color: var(--text);
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+      font-size: 20px;
+    }
+    .name-callout.podium { font-size: 26px; color: var(--gold); }
+    .name-callout.champion {
+      font-size: 34px; color: var(--gold);
+      text-shadow: 0 0 20px rgba(255, 209, 102, 0.85);
+    }
+    .reveal-banner { text-align: center; color: var(--gold); font-weight: 700; margin: 4px 0 12px; }
+    .leaderboard-list li.reveal-row {
+      opacity: 0;
+      transform: scale(0.7) translateY(12px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+    .leaderboard-list li.reveal-row.shown { opacity: 1; transform: scale(1) translateY(0); }
+    .leaderboard-list li.reveal-row.podium { background: rgba(255, 209, 102, 0.10); border-radius: 8px; }
+    .leaderboard-list li.reveal-row.champion { background: rgba(255, 209, 102, 0.22); border-radius: 10px; }
+    .leaderboard-list li.reveal-row.champion .rank,
+    .leaderboard-list li.reveal-row.champion .name,
+    .leaderboard-list li.reveal-row.champion .total { font-weight: 800; font-size: 1.15em; }
   </style>
 </head>
 <body>
   <div class="lb-wrap">
     <h1>🍁 Autumn Festival Tournament — Leaderboard</h1>
 
-    <div class="card">
+    <div id="overall-card" class="card lb-card">
       <h2>🏆 Overall (All 4 Games) — Top 10</h2>
+      <p id="overall-reveal-banner" class="reveal-banner hidden">🎉 Revealing the results...</p>
       <ul id="leaderboard-list" class="leaderboard-list"></ul>
       <p id="empty-msg" class="empty hidden">No scores yet — go play a game!</p>
+      <div class="fireworks-layer"></div>
     </div>
 
     <div id="game-boards" class="lb-game-grid"></div>

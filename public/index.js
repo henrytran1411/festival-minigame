@@ -129,7 +129,7 @@ changeNameLink.addEventListener('click', (e) => {
 const socket = Festival.connect();
 socket.on('leaderboard', (entries) => {
   latestLeaderboard = entries;
-  Festival.renderLeaderboard(leaderboardList, entries, { myId: me.id, limit: 5 });
+  Festival.renderBlindTop(leaderboardList, entries, { myId: me.id, limit: 5 });
   if (!hubScreen.classList.contains('hidden')) buildGameGrid();
 });
 socket.on('game-window', (state) => applyGameWindowState(state));

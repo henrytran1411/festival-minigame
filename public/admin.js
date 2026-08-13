@@ -12,6 +12,8 @@ const flagsEmptyEl = document.getElementById('flags-empty');
 const seedDemoBtn = document.getElementById('seed-demo-btn');
 const clearDemoBtn = document.getElementById('clear-demo-btn');
 const demoStatusEl = document.getElementById('demo-status');
+const revealButtonsEl = document.getElementById('reveal-buttons');
+const revealStatusEl = document.getElementById('reveal-status');
 
 const REASON_LABELS = {
   'tab-switch': '🚫 Left tab/window',
@@ -191,6 +193,31 @@ clearDemoBtn.addEventListener('click', () => {
   });
 });
 
+function triggerReveal(board, label) {
+  socket.emit('admin:reveal-results', { board }, (res) => {
+    revealStatusEl.textContent = res && res.ok
+      ? `Revealing ${label} now on the big-screen leaderboard...`
+      : `Failed to reveal ${label}.`;
+  });
+}
+
+function buildRevealButtons() {
+  revealButtonsEl.innerHTML = '';
+  window.FESTIVAL_GAMES.forEach((g) => {
+    const btn = document.createElement('button');
+    btn.className = 'secondary';
+    btn.textContent = `${g.icon} ${g.title}`;
+    btn.addEventListener('click', () => triggerReveal(g.key, g.title));
+    revealButtonsEl.appendChild(btn);
+  });
+
+  const overallBtn = document.createElement('button');
+  overallBtn.textContent = '🏆 Overall';
+  overallBtn.addEventListener('click', () => triggerReveal('overall', 'Overall'));
+  revealButtonsEl.appendChild(overallBtn);
+}
+
+buildRevealButtons();
 buildGameCards();
 
 socket.on('game-window', (state) => applyState(state));
