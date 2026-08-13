@@ -370,7 +370,7 @@ socket.on('leaderboard', (entries) => {
   if (boards.overall.revealed) {
     Festival.renderLeaderboard(leaderboardList, withScores, { showBreakdown: true, limit: 10 });
   } else if (!boards.overall.revealing) {
-    Festival.renderBlindTop(leaderboardList, withScores, { limit: 10 });
+    Festival.renderBlindTop(leaderboardList, withScores, { limit: 10, orderBy: 'recent' });
   }
 
   window.FESTIVAL_GAMES.forEach((g) => {
@@ -378,8 +378,8 @@ socket.on('leaderboard', (entries) => {
     if (board.revealed) {
       Festival.renderGameLeaderboard(board.listEl, entries, g.key, { limit: 10 });
     } else if (!board.revealing) {
-      const projected = entries.map((p) => ({ name: p.name, total: p.scores[g.key] || 0 }));
-      Festival.renderBlindTop(board.listEl, projected, { limit: 10 });
+      const projected = entries.map((p) => ({ id: p.id, name: p.name, total: p.scores[g.key] || 0, updatedAt: p.gameUpdatedAt?.[g.key] || 0 }));
+      Festival.renderBlindTop(board.listEl, projected, { limit: 10, orderBy: 'recent' });
     }
   });
 });

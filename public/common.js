@@ -69,9 +69,25 @@ window.Festival = (function () {
     return '';
   }
 
+  // A 'leaderboard' broadcast fires on every score submission for every
+  // player, but each board (overall + 4 per-game) should only actually
+  // repaint when ITS OWN visible content changed — otherwise a Memory Match
+  // submission would needlessly rebuild the Sudoku board's DOM too. Callers
+  // pass a signature string describing exactly what's about to be shown;
+  // if it matches what's already rendered on this listEl, skip the rebuild.
+  function skipIfUnchanged(listEl, signature) {
+    if (listEl.dataset.renderSig === signature) return true;
+    listEl.dataset.renderSig = signature;
+    return false;
+  }
+
   function renderLeaderboard(listEl, entries, { myId = null, showBreakdown = false, limit = null } = {}) {
-    listEl.innerHTML = '';
     const rows = limit ? entries.slice(0, limit) : entries;
+    const signature = 'full:' + rows
+      .map((p) => `${p.id}:${p.total}:${showBreakdown ? JSON.stringify(p.scores) + JSON.stringify(p.details) : ''}`)
+      .join('|');
+    if (skipIfUnchanged(listEl, signature)) return;
+    listEl.innerHTML = '';
     rows.forEach((p, i) => {
       const li = document.createElement('li');
       if (p.id === myId) li.classList.add('me');
@@ -112,6 +128,8 @@ window.Festival = (function () {
       .sort((a, b) => (b.scores[gameKey] || 0) - (a.scores[gameKey] || 0) || a.name.localeCompare(b.name))
       .slice(0, limit);
 
+    const signature = 'game:' + rows.map((p) => `${p.id}:${p.scores[gameKey]}:${p.details?.[gameKey] || ''}`).join('|');
+    if (skipIfUnchanged(listEl, signature)) return;
     listEl.innerHTML = '';
     rows.forEach((p, i) => {
       const li = document.createElement('li');
@@ -142,16 +160,29 @@ window.Festival = (function () {
   }
 
   // Shows who's currently in the top N without revealing their rank or score —
-  // names only, alphabetical (so list order itself can't leak standings).
-  // Expects entries shaped like { id, name, total } (a real leaderboard row,
-  // or a { name, total: scores[game] } projection for a single game's board).
-  function renderBlindTop(listEl, entries, { limit = 10, myId = null } = {}) {
+  // names only, so list order itself can't leak standings. Membership (who's
+  // in the top N) is always by total score; orderBy only controls the DISPLAY
+  // order of that same set: 'name' (default, alphabetical) or 'recent' (most
+  // recently submitted a result first — needs entries to include updatedAt).
+  // Expects entries shaped like { id, name, total, updatedAt } (a real
+  // leaderboard row, or a { name, total: scores[game] } game projection).
+  function renderBlindTop(listEl, entries, { limit = 10, myId = null, orderBy = 'name' } = {}) {
     const top = entries
       .filter((p) => (p.total || 0) > 0)
       .sort((a, b) => b.total - a.total)
       .slice(0, limit)
-      .map((p) => ({ id: p.id, name: p.name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .map((p) => ({ id: p.id, name: p.name, updatedAt: p.updatedAt || 0 }));
+
+    if (orderBy === 'recent') {
+      top.sort((a, b) => b.updatedAt - a.updatedAt);
+    } else {
+      top.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    // Blind rows show no score, so only membership + display order matter —
+    // the signature is just the ordered id/name sequence.
+    const signature = 'blind:' + top.map((p) => p.id ?? p.name).join(',');
+    if (skipIfUnchanged(listEl, signature)) return;
 
     listEl.innerHTML = '';
     top.forEach((p) => {

@@ -110,6 +110,8 @@ function leaderboardSnapshot() {
       scores: p.scores,
       details: p.details,
       total: totalFor(p),
+      updatedAt: p.updatedAt,
+      gameUpdatedAt: p.gameUpdatedAt,
     }))
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
 }
@@ -132,6 +134,7 @@ function getOrCreatePlayer(playerId) {
       scores: { sudoku: 0, scramble: 0, memory: 0, proverb: 0 },
       details: { sudoku: '', scramble: '', memory: '', proverb: '' },
       attempts: { sudoku: 0, scramble: 0, memory: 0, proverb: 0 },
+      gameUpdatedAt: { sudoku: 0, scramble: 0, memory: 0, proverb: 0 },
       updatedAt: 0,
     };
     players.set(playerId, player);
@@ -170,13 +173,15 @@ const DEMO_PLAYERS = [
 ];
 
 function seedDemoData() {
+  const now = Date.now();
   DEMO_PLAYERS.forEach((demo, i) => {
     players.set(`demo_${i + 1}`, {
       name: demo.name,
       scores: { sudoku: 0, scramble: 0, memory: 0, proverb: 0, ...demo.scores },
       details: { sudoku: '', scramble: '', memory: '', proverb: '', ...demo.details },
       attempts: { sudoku: 0, scramble: 0, memory: 0, proverb: 0 },
-      updatedAt: Date.now(),
+      gameUpdatedAt: { sudoku: now, scramble: now, memory: now, proverb: now },
+      updatedAt: now,
     });
   });
   return DEMO_PLAYERS.length;
@@ -260,7 +265,9 @@ io.on('connection', (socket) => {
       player.details[game] = sanitizeDetail(detail);
     }
     player.scores[game] = Math.max(player.scores[game] || 0, incoming);
-    player.updatedAt = Date.now();
+    const now = Date.now();
+    player.updatedAt = now;
+    player.gameUpdatedAt[game] = now;
 
     io.emit('leaderboard', leaderboardSnapshot());
   });
