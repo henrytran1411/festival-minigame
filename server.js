@@ -119,7 +119,7 @@ function leaderboardSnapshot() {
 function topForGame(gameKey, limit) {
   return [...players.values()]
     .filter((p) => (p.scores[gameKey] || 0) > 0)
-    .map((p) => ({ name: p.name, total: p.scores[gameKey] }))
+    .map((p) => ({ name: p.name, total: p.scores[gameKey], detail: p.details[gameKey] || '' }))
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
     .slice(0, limit);
 }

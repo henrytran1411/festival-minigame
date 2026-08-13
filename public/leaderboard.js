@@ -178,21 +178,21 @@ function spawnChampionBadge(container, big) {
 
 // Calls out the revealed player's name as part of the effect itself, not
 // just the static list row — bigger and gold for the podium/champion tiers.
+// Always shown for exactly 2s, once per player (see revealRow / celebrateFor).
 function spawnNameCallout(container, name, tier) {
   const el = document.createElement('span');
   el.className = 'name-callout' + (tier !== 'normal' ? ' ' + tier : '');
   el.textContent = name;
   container.appendChild(el);
 
-  const duration = { champion: 2600, podium: 2000, normal: 1400 }[tier];
   const anim = el.animate(
     [
       { transform: 'translate(-50%, -50%) scale(0.5)', opacity: 0 },
-      { transform: 'translate(-50%, -50%) scale(1.1)', opacity: 1, offset: 0.25 },
-      { transform: 'translate(-50%, -50%) scale(1)', opacity: 1, offset: 0.75 },
+      { transform: 'translate(-50%, -50%) scale(1.1)', opacity: 1, offset: 0.2 },
+      { transform: 'translate(-50%, -50%) scale(1)', opacity: 1, offset: 0.8 },
       { transform: 'translate(-50%, -50%) scale(1)', opacity: 0 },
     ],
-    { duration, easing: 'ease-out' },
+    { duration: 2000, easing: 'ease-out' },
   );
   anim.onfinish = () => el.remove();
 }
@@ -221,18 +221,51 @@ function spawnCheerSquad(container, count) {
   }
 }
 
-// Keeps the celebration going for the whole spotlight duration on podium
-// finishes, instead of one burst followed by a long static pause.
+// Keeps the celebration going for the whole spotlight duration, instead of
+// one burst followed by a long static pause — every tier gets this now, just
+// at a pace that fits its spotlight length. The name callout re-fires on
+// every tick (each showing is still a fixed 2s, see spawnNameCallout) so it
+// keeps reappearing throughout, rather than showing only once.
 function celebrateFor(board, durationMs, tier, name) {
   const big = tier === 'champion';
+  const interval = { champion: 2200, podium: 2600, normal: 3000 }[tier];
   const handle = setInterval(() => {
     spawnFirework(board.fireworksEl);
-    spawnFestivalEmoji(board.fireworksEl);
-    spawnCheerSquad(board.fireworksEl, big ? 8 : 5);
-    if (Math.random() < 0.6) spawnChampionBadge(board.fireworksEl, big);
-    if (Math.random() < 0.5) spawnNameCallout(board.fireworksEl, name, tier);
-  }, big ? 2200 : 2600);
+    spawnNameCallout(board.fireworksEl, name, tier);
+    if (tier === 'normal') {
+      if (board.kind === 'overall') {
+        spawnFestivalEmoji(board.fireworksEl);
+        spawnMoneyRain(board.fireworksEl, 3);
+      } else {
+        spawnFestivalBurst(board.fireworksEl, 2);
+      }
+    } else {
+      spawnFestivalEmoji(board.fireworksEl);
+      spawnCheerSquad(board.fireworksEl, big ? 8 : 5);
+      if (Math.random() < 0.6) spawnChampionBadge(board.fireworksEl, big);
+    }
+  }, interval);
   return sleep(durationMs).then(() => clearInterval(handle));
+}
+
+// Full info for the revealed row, not just name + score — a per-game
+// time/moves/mistakes breakdown for the overall board (same shape Festival.
+// renderLeaderboard shows), or the single game's own detail string otherwise.
+// Stays visible after the celebration effect ends, since it's part of the
+// static row rather than a transient animation.
+function detailTextFor(board, entry) {
+  if (board.kind === 'overall') {
+    if (!entry.scores) return '';
+    return Object.keys(Festival.GAME_LABELS)
+      .map((g) => {
+        const score = entry.scores[g] || 0;
+        const detail = entry.details?.[g];
+        const suffix = detail ? ' (' + detail + ')' : '';
+        return `${Festival.GAME_LABELS[g]}: ${score}${suffix}`;
+      })
+      .join(' · ');
+  }
+  return entry.detail || '';
 }
 
 // Keeps the visible list sorted by rank (1 at top, 10 at bottom) even though
@@ -260,6 +293,14 @@ function revealRow(board, entry, rank, tier) {
     const nameEl = document.createElement('span');
     nameEl.className = 'name';
     nameEl.textContent = entry.name;
+
+    const detailText = detailTextFor(board, entry);
+    if (detailText) {
+      const breakdown = document.createElement('div');
+      breakdown.className = 'breakdown';
+      breakdown.textContent = detailText;
+      nameEl.appendChild(breakdown);
+    }
 
     const totalEl = document.createElement('span');
     totalEl.className = 'total';
@@ -307,11 +348,7 @@ async function runReveal(board, top10) {
     const rank = top10.indexOf(entry) + 1;
     const tier = tierForRank(rank);
     await revealRow(board, entry, rank, tier);
-    if (tier === 'podium') {
-      await celebrateFor(board, spotlightMsForTier(tier), tier, entry.name);
-    } else {
-      await sleep(spotlightMsForTier(tier));
-    }
+    await celebrateFor(board, spotlightMsForTier(tier), tier, entry.name);
   }
   if (champion) {
     await sleep(800);
