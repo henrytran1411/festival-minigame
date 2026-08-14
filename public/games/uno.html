@@ -247,13 +247,33 @@
 
     .uno-hand-row {
       display: flex;
-      gap: 10px;
+      gap: 0;
       overflow-x: auto;
-      padding: 10px 4px 14px;
+      overflow-y: visible;
+      padding: 30px 10px 20px;
       justify-content: flex-start;
+      align-items: flex-end;
+    }
+    /* Fan the hand out overlapping (like holding real cards) instead of
+       laying every card out edge-to-edge — each card behind the next only
+       shows its left sliver (corner number + a bit of art) until hovered.
+       The rotation/arc itself lives on this wrapper (set per-card from JS)
+       so it composes cleanly with the inner card's own hover-lift below. */
+    .hand-slot {
+      position: relative;
+      margin-left: -48px;
+      transform-origin: bottom center;
+      transition: transform 0.15s ease;
+    }
+    .hand-slot:first-child { margin-left: 0; }
+    .hand-slot:hover { z-index: 20; }
+
+    .uno-hand-row .uno-card {
+      border: 2px solid rgba(255,255,255,0.6);
+      box-shadow: -8px 4px 12px rgba(0,0,0,0.5), 0 5px 10px rgba(0,0,0,0.35);
     }
     .uno-card.playable { cursor: pointer; transform: translateY(0); transition: transform 0.15s ease; }
-    .uno-card.playable:hover { transform: translateY(-6px); }
+    .uno-card.playable:hover { transform: translateY(-20px) scale(1.04); }
     .uno-card:not(.playable) { opacity: 0.55; cursor: default; }
 
     .uno-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
@@ -277,8 +297,9 @@
   <div class="wrap uno-wrap">
     <div class="top-bar">
       <h1>🎴 UNO <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
-      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+      <div><button class="secondary" id="mute-btn" style="padding:4px 10px; font-size:13px;">🔊</button> · <a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
     </div>
+    <audio id="bgm-audio" src="sounds/bgm.mp3" loop preload="auto"></audio>
 
     <div id="lobby-screen" class="card">
       <h2 style="margin-top:0; text-align:center;">UNO Rooms</h2>
