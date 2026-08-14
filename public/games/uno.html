@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UNO — Autumn Festival</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .uno-wrap { max-width: 720px; }
+
+    .uno-log {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 14px;
+    }
+    .uno-log div { padding: 2px 0; }
+
+    /* Waiting room */
+    .uno-player-list { list-style: none; padding: 0; margin: 12px 0; }
+    .uno-player-list li {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    .uno-player-list li:last-child { border-bottom: none; }
+
+    /* Room lobby */
+    .room-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px;
+    }
+    .room-row .room-info { display: flex; flex-direction: column; }
+    .room-row .room-name { font-weight: 600; font-size: 14px; }
+    .room-row .room-meta { font-size: 12px; color: var(--muted); }
+    .room-row .room-meta.playing { color: var(--gold); }
+    .room-row button { padding: 6px 14px; font-size: 13px; }
+
+    #lobby-screen input, #create-room-screen input, #password-modal input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    /* Table layout */
+    .uno-others {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+    .uno-player-tile {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      text-align: center;
+      min-width: 84px;
+      position: relative;
+    }
+    .uno-player-tile.turn { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); }
+    .uno-player-tile.offline { opacity: 0.5; }
+    .uno-player-tile .name { font-size: 13px; font-weight: 600; }
+    .uno-player-tile .count { font-size: 12px; color: var(--muted); }
+    .uno-player-tile .uno-flag { color: var(--gold); font-weight: 800; font-size: 11px; margin-top: 2px; }
+    .uno-player-tile .catch-btn { margin-top: 6px; padding: 4px 8px; font-size: 11px; }
+
+    .uno-center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      margin: 10px 0 20px;
+    }
+    .uno-pile-label { text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    .uno-card {
+      position: relative;
+      width: 84px;
+      height: 123px;
+      border-radius: 10px;
+      border: 2px solid rgba(255,255,255,0.25);
+      box-shadow: 0 3px 7px rgba(0,0,0,0.35);
+      flex-shrink: 0;
+      user-select: none;
+      overflow: hidden;
+    }
+    .uno-card.small { width: 62px; height: 90px; }
+
+    /* Custom festival artwork — blank template cards per color; the
+       number/action symbol is stamped into the corners over each. */
+    .uno-card.red, .uno-card.yellow, .uno-card.green, .uno-card.blue {
+      background-size: cover;
+      background-position: center;
+    }
+    .uno-card.red { background-image: url('cards/red.png'); }
+    .uno-card.yellow { background-image: url('cards/yellow.png'); }
+    .uno-card.green { background-image: url('cards/green.png'); }
+    .uno-card.blue { background-image: url('cards/blue.png'); }
+
+    /* Card back — dark diagonal pattern with a festival maple leaf */
+    .uno-card.back {
+      background: repeating-linear-gradient(45deg, #1a1d24, #1a1d24 6px, #262b36 6px, #262b36 12px);
+      border-style: dashed;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+    }
+
+    /* Wild / Wild Draw Four — classic 4-color pie background */
+    .uno-card.wild-face {
+      background: conic-gradient(#ea5a5f 0deg 90deg, #f4cf5c 90deg 180deg, #3fd08c 180deg 270deg, #5c8ff0 270deg 360deg);
+    }
+    .uno-card .wild-badge {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(20, 20, 24, 0.82);
+      color: white;
+      font-weight: 800;
+      font-size: 20px;
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .uno-card.small .wild-badge { width: 32px; height: 32px; font-size: 16px; }
+
+    /* Number/action cards — white center oval with a colored symbol, plus
+       small corner symbols so cards read at a glance when fanned. */
+    .uno-oval {
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 74%; height: 48%;
+      background: #f6f4ee;
+      border-radius: 50%;
+      transform: translate(-50%, -50%) rotate(-25deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+    }
+    .uno-oval .big-symbol {
+      transform: rotate(25deg);
+      font-weight: 800;
+      font-size: 30px;
+    }
+    .uno-card.small .uno-oval .big-symbol { font-size: 22px; }
+    .uno-card.red .big-symbol { color: #d6413f; }
+    .uno-card.yellow .big-symbol { color: #c99700; }
+    .uno-card.green .big-symbol { color: #1f9e5c; }
+    .uno-card.blue .big-symbol { color: #2d5bb9; }
+
+    .uno-card .corner {
+      position: absolute;
+      font-size: 22px;
+      font-weight: 900;
+      color: white;
+      -webkit-text-stroke: 2px rgba(0,0,0,0.65);
+      paint-order: stroke fill;
+      text-shadow: 0 2px 3px rgba(0,0,0,0.5);
+    }
+    .uno-card.small .corner { font-size: 16px; -webkit-text-stroke: 1.5px rgba(0,0,0,0.65); }
+    .uno-card .corner.tl { top: 1px; left: 2px; }
+    .uno-card .corner.br { bottom: 1px; right: 2px; }
+
+    .uno-turn-banner {
+      text-align: center;
+      font-weight: 700;
+      margin-bottom: 10px;
+      min-height: 22px;
+    }
+    .uno-turn-banner.mine { color: var(--good); }
+
+    .uno-hand-row {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 10px 4px 14px;
+      justify-content: flex-start;
+    }
+    .uno-card.playable { cursor: pointer; transform: translateY(0); transition: transform 0.15s ease; }
+    .uno-card.playable:hover { transform: translateY(-6px); }
+    .uno-card:not(.playable) { opacity: 0.55; cursor: default; }
+
+    .uno-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
+
+    .uno-hand-row.shake { animation: uno-shake 0.3s ease; }
+    @keyframes uno-shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+
+    .uno-color-options { display: flex; gap: 10px; justify-content: center; margin-top: 12px; }
+    .uno-color-btn {
+      width: 56px; height: 56px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); cursor: pointer;
+    }
+
+    .uno-winner { font-size: 22px; font-weight: 800; color: var(--gold); margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap uno-wrap">
+    <div class="top-bar">
+      <h1>🎴 UNO <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
+      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+    </div>
+
+    <div id="lobby-screen" class="card">
+      <h2 style="margin-top:0; text-align:center;">UNO Rooms</h2>
+      <ul id="room-list" class="uno-player-list"></ul>
+      <p id="no-rooms-msg" style="color:var(--muted); font-size:13px; text-align:center; display:none;">No rooms yet — create one to get started.</p>
+      <div class="uno-actions" style="margin-top:14px;">
+        <button id="show-create-btn">+ Create Room</button>
+      </div>
+    </div>
+
+    <div id="create-room-screen" class="card hidden" style="text-align:center;">
+      <h2 style="margin-top:0;">Create a Room</h2>
+      <div style="display:flex; flex-direction:column; gap:10px; max-width:320px; margin:0 auto;">
+        <input type="text" id="room-name-input" maxlength="30" placeholder="Room name" autocomplete="off" />
+        <input type="password" id="room-password-input" maxlength="30" placeholder="Set a password" autocomplete="off" />
+      </div>
+      <p id="create-room-error" style="color:var(--bad); font-size:12px; margin-top:10px; display:none;"></p>
+      <div class="uno-actions" style="margin-top:14px;">
+        <button id="create-room-btn">Create &amp; Join</button>
+        <button class="secondary" id="cancel-create-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="waiting-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
+      <ul id="player-list" class="uno-player-list"></ul>
+      <div class="uno-actions">
+        <button class="secondary" id="add-bots-btn">🤖 Add 3 Bots</button>
+        <button id="start-btn" disabled>▶ Start Game</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center; margin-top:8px;">No one else around? Add bots and play solo.</p>
+      <div class="uno-actions">
+        <button class="danger" id="leave-waiting-btn">Leave Room</button>
+      </div>
+      <div id="waiting-log" class="uno-log"></div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+      <div class="uno-others" id="others-row"></div>
+
+      <div class="uno-center">
+        <div>
+          <div id="deck-el" class="uno-card back">🍁</div>
+          <div class="uno-pile-label">Deck: <span id="deck-count">0</span></div>
+        </div>
+        <div>
+          <div id="discard-el"></div>
+          <div class="uno-pile-label" id="color-label">—</div>
+        </div>
+        <div style="font-size:28px;" id="direction-el">↻</div>
+      </div>
+
+      <div class="uno-turn-banner" id="turn-banner"></div>
+
+      <div class="uno-hand-row" id="hand-row"></div>
+
+      <div class="uno-actions">
+        <button class="secondary" id="draw-btn">Draw Card</button>
+        <button class="secondary" id="pass-btn">Pass</button>
+        <button id="uno-btn">🎴 Call UNO!</button>
+        <button class="danger" id="leave-btn">Leave Room</button>
+      </div>
+
+      <div id="game-log" class="uno-log"></div>
+    </div>
+
+    <div id="finished-screen" class="card result-card hidden">
+      <div class="uno-winner" id="winner-text"></div>
+      <div class="actions">
+        <button id="new-game-btn">Play Again</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align:center;">
+      <h2 id="password-modal-title">Enter Room Password</h2>
+      <input type="password" id="join-password-input" maxlength="30" placeholder="Password" autocomplete="off" style="margin:12px 0;" />
+      <p id="password-error" style="color:var(--bad); font-size:12px; display:none;">Wrong password.</p>
+      <div class="uno-actions" style="margin-top:10px;">
+        <button id="password-submit-btn">Join</button>
+        <button class="secondary" id="password-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="color-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align:center;">
+      <h2>Choose a color</h2>
+      <div class="uno-color-options">
+        <button class="uno-color-btn" data-color="red" style="background:#d64545;"></button>
+        <button class="uno-color-btn" data-color="yellow" style="background:#e0b400;"></button>
+        <button class="uno-color-btn" data-color="green" style="background:#2fa96b;"></button>
+        <button class="uno-color-btn" data-color="blue" style="background:#3b6fd6;"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>🎴 UNO — How to Play</h2>
+      <ol>
+        <li>Match the top card of the discard pile by color or number/symbol, or play a Wild card at any time.</li>
+        <li>Skip, Reverse, and Draw Two affect the next player. Wild Draw Four also makes the next player draw 4 — you choose the new color for any Wild.</li>
+        <li>If you can't (or don't want to) play, click Draw Card, then either play the drawn card or click Pass.</li>
+        <li>Down to 1 card? Click "Call UNO!" — if you forget and someone else notices before your next turn, they can click Catch! and you'll draw 2 penalty cards.</li>
+        <li>First to empty their hand wins. This game is just for fun — it doesn't affect the tournament leaderboard.</li>
+      </ol>
+      <button class="modal-close secondary">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../common.js"></script>
+  <script src="uno.js"></script>
+</body>
+</html>
