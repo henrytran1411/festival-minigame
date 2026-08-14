@@ -39,6 +39,7 @@ if (me) {
   const colorLabelEl = document.getElementById('color-label');
   const directionEl = document.getElementById('direction-el');
   const turnBannerEl = document.getElementById('turn-banner');
+  const unoCountdownBannerEl = document.getElementById('uno-countdown-banner');
   const handRowEl = document.getElementById('hand-row');
   const drawBtn = document.getElementById('draw-btn');
   const passBtn = document.getElementById('pass-btn');
@@ -203,7 +204,37 @@ if (me) {
       // Web Audio unsupported/blocked — the sound is a nice-to-have, skip silently.
     }
   }
+
+  // A two-note descending "womp womp" buzzer for the auto UNO-penalty —
+  // distinct from the card-drop thump and the voice callouts.
+  function playPenaltySound() {
+    if (musicMuted) return;
+    try {
+      const ctx = getAudioCtx();
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+      [0, 0.18].forEach((offset, i) => {
+        const startFreq = i === 0 ? 220 : 180;
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(startFreq, now + offset);
+        osc.frequency.exponentialRampToValueAtTime(startFreq * 0.5, now + offset + 0.22);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.001, now + offset);
+        gain.gain.linearRampToValueAtTime(0.22, now + offset + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.24);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + offset);
+        osc.stop(now + offset + 0.25);
+      });
+    } catch (err) {
+      // Web Audio unsupported/blocked — nice-to-have, skip silently.
+    }
+  }
+
   let lastDiscardCardId = null;
+  let lastUnoPenaltyCounter = null;
+  let unoTickInterval = null;
 
   const ACTION_SYMBOL = { skip: '⊘', reverse: '⇄', draw2: '+2' };
   // Colors with real festival artwork (a blank card template) instead of the
@@ -351,6 +382,20 @@ if (me) {
     renderLog(waitingLogEl, state.log);
   }
 
+  // The server only pushes state on actual game events, but a countdown
+  // needs to visibly tick between them — so re-render on a short interval
+  // for exactly as long as there's an active UNO window, and stop otherwise.
+  function updateUnoTicking(shouldTick) {
+    if (shouldTick && !unoTickInterval) {
+      unoTickInterval = setInterval(() => {
+        if (latestState) renderGame(latestState);
+      }, 200);
+    } else if (!shouldTick && unoTickInterval) {
+      clearInterval(unoTickInterval);
+      unoTickInterval = null;
+    }
+  }
+
   function renderGame(state) {
     const newTopId = state.discardTop ? state.discardTop.id : null;
     if (lastDiscardCardId !== null && newTopId !== lastDiscardCardId) {
@@ -360,6 +405,14 @@ if (me) {
       if (calloutText) playCallout(calloutValue, calloutText);
     }
     lastDiscardCardId = newTopId;
+
+    if (lastUnoPenaltyCounter !== null && state.unoPenaltyCounter !== lastUnoPenaltyCounter) {
+      playPenaltySound();
+    }
+    lastUnoPenaltyCounter = state.unoPenaltyCounter;
+
+    const unoWindows = state.unoWindows || [];
+    updateUnoTicking(state.status === 'playing' && unoWindows.length > 0);
 
     othersRowEl.innerHTML = '';
     state.players
@@ -388,6 +441,15 @@ if (me) {
             catchBtn.textContent = 'Catch!';
             catchBtn.addEventListener('click', () => socket.emit('uno:catch', { targetId: p.id }));
             tile.appendChild(catchBtn);
+
+            const theirWindow = unoWindows.find((w) => w.playerId === p.id);
+            if (theirWindow) {
+              const countdown = document.createElement('div');
+              countdown.className = 'uno-countdown-mini';
+              const remaining = Math.max(0, theirWindow.deadline - Date.now());
+              countdown.textContent = `⏰ ${(remaining / 1000).toFixed(1)}s`;
+              tile.appendChild(countdown);
+            }
           }
         }
         othersRowEl.appendChild(tile);
@@ -405,6 +467,15 @@ if (me) {
     const other = state.players.find((p) => p.id === state.currentPlayerId);
     turnBannerEl.textContent = isMyTurn ? 'Your turn!' : other ? `${other.name}'s turn` : '';
     turnBannerEl.classList.toggle('mine', isMyTurn);
+
+    const myWindow = unoWindows.find((w) => w.playerId === state.yourId);
+    if (myWindow) {
+      const remaining = Math.max(0, myWindow.deadline - Date.now());
+      unoCountdownBannerEl.textContent = `⏰ Call UNO! ${(remaining / 1000).toFixed(1)}s left`;
+      unoCountdownBannerEl.classList.remove('hidden');
+    } else {
+      unoCountdownBannerEl.classList.add('hidden');
+    }
 
     handRowEl.innerHTML = '';
     const mid = (state.yourHand.length - 1) / 2;
@@ -506,6 +577,8 @@ if (me) {
     joined = false;
     latestState = null;
     lastDiscardCardId = null;
+    lastUnoPenaltyCounter = null;
+    updateUnoTicking(false);
     localStorage.removeItem(LAST_ROOM_KEY);
     createRoomScreen.classList.add('hidden');
     socket.emit('uno:listRooms', {}, (res) => {

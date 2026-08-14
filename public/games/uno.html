@@ -245,6 +245,25 @@
     }
     .uno-turn-banner.mine { color: var(--good); }
 
+    .uno-countdown-banner {
+      text-align: center;
+      font-weight: 800;
+      font-size: 15px;
+      color: #ff5c5c;
+      margin: -4px 0 8px;
+      animation: uno-countdown-pulse 0.5s infinite alternate;
+    }
+    @keyframes uno-countdown-pulse {
+      from { opacity: 1; transform: scale(1); }
+      to { opacity: 0.6; transform: scale(1.05); }
+    }
+    .uno-countdown-mini {
+      margin-top: 4px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #ff5c5c;
+    }
+
     .uno-hand-row {
       display: flex;
       gap: 0;
@@ -353,6 +372,7 @@
       </div>
 
       <div class="uno-turn-banner" id="turn-banner"></div>
+      <div class="uno-countdown-banner hidden" id="uno-countdown-banner"></div>
 
       <div class="uno-hand-row" id="hand-row"></div>
 

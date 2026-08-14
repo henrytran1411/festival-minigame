@@ -104,11 +104,56 @@ class UnoRoom {
     this.winnerId = null;
     this.botCounter = 0;
     this.botTimer = null;
+    // Keyed by playerId (a Map, not a single slot) because with 3+ human
+    // players it's possible for a second player to drop to 1 card while an
+    // earlier player's 3s window is still ticking — each needs its own
+    // independent deadline/timer rather than one clobbering the other.
+    this.unoWindows = new Map(); // playerId -> { deadline, timer }
+    this.unoPenaltyCounter = 0;
+    this.lastUnoPenaltyPlayerId = null;
   }
 
   pushLog(message) {
     this.log.push(message);
     if (this.log.length > 30) this.log.shift();
+  }
+
+  // Starts (or restarts) a 3-second "call UNO or pay for it" window for a
+  // player who just dropped to 1 card without calling it. Other players can
+  // still catch them manually before this fires (see uno:catch); if nobody
+  // does, the timeout below applies the same 2-card penalty automatically.
+  startUnoWindow(player, nsp) {
+    this.clearUnoWindow(player.id);
+    const timer = setTimeout(() => this.expireUnoWindow(player.id, nsp), 3000);
+    this.unoWindows.set(player.id, { deadline: Date.now() + 3000, timer });
+  }
+
+  clearUnoWindow(playerId) {
+    const w = this.unoWindows.get(playerId);
+    if (w) {
+      clearTimeout(w.timer);
+      this.unoWindows.delete(playerId);
+    }
+  }
+
+  clearAllUnoWindows() {
+    this.unoWindows.forEach((w) => clearTimeout(w.timer));
+    this.unoWindows.clear();
+  }
+
+  expireUnoWindow(playerId, nsp) {
+    this.unoWindows.delete(playerId);
+    const player = this.findPlayer(playerId);
+    // Re-check everything: by the time this fires, the game could have
+    // ended, the player could have called UNO, or already been caught —
+    // any of which makes the timeout a no-op instead of a double penalty.
+    if (!player || this.status !== 'playing' || player.hand.length !== 1 || player.calledUno) return;
+    this.drawCards(player, 2);
+    player.calledUno = false;
+    this.unoPenaltyCounter += 1;
+    this.lastUnoPenaltyPlayerId = player.id;
+    this.pushLog(`⏰ ${player.name} forgot to call UNO in time — drew 2 penalty cards.`);
+    this.broadcast(nsp);
   }
 
   findPlayer(playerId) {
@@ -307,6 +352,9 @@ class UnoRoom {
       })),
       yourId: forPlayerId || null,
       yourHand: me ? me.hand : [],
+      unoWindows: [...this.unoWindows.entries()].map(([playerId, w]) => ({ playerId, deadline: w.deadline })),
+      unoPenaltyCounter: this.unoPenaltyCounter,
+      lastUnoPenaltyPlayerId: this.lastUnoPenaltyPlayerId,
     };
   }
 
@@ -350,6 +398,7 @@ module.exports = function attachUno(io) {
   function deleteRoomIfEmpty(room) {
     if (room && room.isEmpty()) {
       clearTimeout(room.botTimer);
+      room.clearAllUnoWindows();
       rooms.delete(room.id);
     }
   }
@@ -527,6 +576,9 @@ module.exports = function attachUno(io) {
       }
       room.applyPlay(player, card, chosenColor);
       room.maybeAutoSkipDisconnected();
+      if (room.status === 'playing' && player.hand.length === 1 && !player.calledUno) {
+        room.startUnoWindow(player, nsp);
+      }
       if (typeof callback === 'function') callback({ ok: true });
       room.broadcast(nsp);
       room.scheduleBotTurnIfNeeded(nsp);
@@ -589,6 +641,7 @@ module.exports = function attachUno(io) {
         return;
       }
       player.calledUno = true;
+      room.clearUnoWindow(player.id);
       room.pushLog(`${player.name} called UNO!`);
       if (typeof callback === 'function') callback({ ok: true });
       room.broadcast(nsp);
@@ -608,6 +661,7 @@ module.exports = function attachUno(io) {
       }
       room.drawCards(target, 2);
       target.calledUno = false;
+      room.clearUnoWindow(target.id);
       room.pushLog(`${accuser.name} caught ${target.name} without UNO — ${target.name} drew 2 cards.`);
       if (typeof callback === 'function') callback({ ok: true });
       room.broadcast(nsp);
@@ -626,6 +680,7 @@ module.exports = function attachUno(io) {
       room.status = 'waiting';
       room.winnerId = null;
       room.log = [];
+      room.clearAllUnoWindows();
       room.pushLog('Ready for a new game — click Start when everyone is in.');
       if (typeof callback === 'function') callback({ ok: true });
       room.broadcast(nsp);
