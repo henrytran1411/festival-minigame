@@ -112,6 +112,34 @@
     .uno-card.green { background-image: url('cards/green.png'); }
     .uno-card.blue { background-image: url('cards/blue.png'); }
 
+    /* Draw Two — show the card's own artwork twice, stacked in the center,
+       instead of a single plain badge. */
+    .uno-card.draw2::before,
+    .uno-card.draw2::after {
+      content: '';
+      position: absolute;
+      width: 46%;
+      height: 36%;
+      border-radius: 6px;
+      border: 2px solid rgba(255,255,255,0.9);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.45);
+      background-image: inherit;
+      background-size: cover;
+      background-position: center;
+    }
+    .uno-card.draw2::before {
+      top: 34%;
+      left: 30%;
+      transform: translate(-50%, -50%) rotate(-10deg);
+      z-index: 1;
+    }
+    .uno-card.draw2::after {
+      top: 64%;
+      left: 66%;
+      transform: translate(-50%, -50%) rotate(10deg);
+      z-index: 2;
+    }
+
     /* Card back — dark diagonal pattern with a festival maple leaf */
     .uno-card.back {
       background: repeating-linear-gradient(45deg, #1a1d24, #1a1d24 6px, #262b36 6px, #262b36 12px);
@@ -122,9 +150,17 @@
       font-size: 30px;
     }
 
-    /* Wild / Wild Draw Four — classic 4-color pie background */
+    /* Wild / Wild Draw Four — classic 4-color pie background (fallback for
+       any wild variant without its own custom artwork) */
     .uno-card.wild-face {
       background: conic-gradient(#ea5a5f 0deg 90deg, #f4cf5c 90deg 180deg, #3fd08c 180deg 270deg, #5c8ff0 270deg 360deg);
+    }
+    /* Plain Wild — custom artwork with its own baked-in color-swatch
+       corners, so no extra overlay content is added on top. */
+    .uno-card.wild-plain {
+      background-image: url('cards/wildcard.png');
+      background-size: cover;
+      background-position: center;
     }
     .uno-card .wild-badge {
       position: absolute;
@@ -137,8 +173,30 @@
       width: 42px; height: 42px;
       border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
+      z-index: 5;
     }
     .uno-card.small .wild-badge { width: 32px; height: 32px; font-size: 16px; }
+
+    /* Wild Draw Four — show all 4 colors' artwork as mini swatches in the
+       center (the "+4" badge sits on top of them). */
+    .mini-swatch {
+      position: absolute;
+      width: 38%;
+      height: 30%;
+      border-radius: 5px;
+      border: 1.5px solid rgba(255,255,255,0.9);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      background-size: cover;
+      background-position: center;
+    }
+    .mini-swatch.red { background-image: url('cards/red.png'); }
+    .mini-swatch.yellow { background-image: url('cards/yellow.png'); }
+    .mini-swatch.green { background-image: url('cards/green.png'); }
+    .mini-swatch.blue { background-image: url('cards/blue.png'); }
+    .mini-swatch:nth-of-type(1) { top: 30%; left: 30%; transform: translate(-50%, -50%) rotate(-8deg); z-index: 1; }
+    .mini-swatch:nth-of-type(2) { top: 30%; left: 70%; transform: translate(-50%, -50%) rotate(8deg); z-index: 1; }
+    .mini-swatch:nth-of-type(3) { top: 70%; left: 30%; transform: translate(-50%, -50%) rotate(8deg); z-index: 2; }
+    .mini-swatch:nth-of-type(4) { top: 70%; left: 70%; transform: translate(-50%, -50%) rotate(-8deg); z-index: 2; }
 
     /* Number/action cards — white center oval with a colored symbol, plus
        small corner symbols so cards read at a glance when fanned. */
@@ -173,6 +231,7 @@
       -webkit-text-stroke: 2px rgba(0,0,0,0.65);
       paint-order: stroke fill;
       text-shadow: 0 2px 3px rgba(0,0,0,0.5);
+      z-index: 5;
     }
     .uno-card.small .corner { font-size: 16px; -webkit-text-stroke: 1.5px rgba(0,0,0,0.65); }
     .uno-card .corner.tl { top: 1px; left: 2px; }

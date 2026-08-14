@@ -99,15 +99,23 @@ if (me) {
     if (card.color === 'wild') {
       el.classList.add('wild-face');
       if (card.value === 'wild4') {
+        ['red', 'yellow', 'green', 'blue'].forEach((c) => {
+          const mini = document.createElement('div');
+          mini.className = 'mini-swatch ' + c;
+          el.appendChild(mini);
+        });
         const badge = document.createElement('span');
         badge.className = 'wild-badge';
         badge.textContent = '+4';
         el.appendChild(badge);
+      } else {
+        el.classList.add('wild-plain');
       }
       return el;
     }
 
     el.classList.add(card.color);
+    if (card.value === 'draw2') el.classList.add('draw2');
     const symbol = cardSymbol(card);
 
     const tl = document.createElement('span');
