@@ -9,9 +9,33 @@ if (me) {
   const OPTIONS_REVEAL_AT = 40; // seconds elapsed in the round
   const MAX_HINTS = 3; // total for the whole game, not per round
   const ROUNDS_PER_GAME = 15;
-  const ROUND_POINTS = 80;
-  const WRONG_PENALTY = 25;
+  const WRONG_PENALTY = 5;
   const MAX_SPEED_BONUS = 300;
+
+  // Correct-answer points decay the longer a round takes — answering
+  // instantly is worth much more than answering right before time runs out.
+  // Piecewise-linear between these (elapsed seconds, points) checkpoints:
+  // flat 40 through 10s -> 20 at 20s -> 10 at 40s -> 5 at 60s.
+  const CORRECT_POINT_CHECKPOINTS = [
+    { atSeconds: 0, points: 40 },
+    { atSeconds: 10, points: 40 },
+    { atSeconds: 20, points: 20 },
+    { atSeconds: 40, points: 10 },
+    { atSeconds: 60, points: 5 },
+  ];
+
+  function pointsForCorrectAnswer(elapsedSeconds) {
+    const t = Math.min(Math.max(elapsedSeconds, 0), ROUND_SECONDS);
+    for (let i = 0; i < CORRECT_POINT_CHECKPOINTS.length - 1; i++) {
+      const start = CORRECT_POINT_CHECKPOINTS[i];
+      const end = CORRECT_POINT_CHECKPOINTS[i + 1];
+      if (t <= end.atSeconds) {
+        const ratio = (t - start.atSeconds) / (end.atSeconds - start.atSeconds);
+        return Math.round(start.points + ratio * (end.points - start.points));
+      }
+    }
+    return CORRECT_POINT_CHECKPOINTS[CORRECT_POINT_CHECKPOINTS.length - 1].points;
+  }
 
   // Well-known Vietnamese ca dao / tục ngữ, each represented as an emoji
   // rebus. Answers are matched leniently (accents/case/punctuation-insensitive)
@@ -19,24 +43,24 @@ if (me) {
   // normalizeAnswer(). Each game draws ROUNDS_PER_GAME of these at random.
   const PROVERB_POOL = [
     { emoji: '🍎🙏🌳', answer: 'Ăn quả nhớ kẻ trồng cây', hint: 'Be grateful to whoever helped you succeed' },
-    { emoji: '⚒️➡️🪡', answer: 'Có công mài sắt, có ngày nên kim', hint: 'Effort and patience eventually pay off' },
+    { emoji: '⚒️➡️💉', answer: 'Có công mài sắt, có ngày nên kim', hint: 'Effort and patience eventually pay off' },
     { emoji: '🌳➕🌳🌳🌳➡️⛰️', answer: 'Một cây làm chẳng nên non, ba cây chụm lại nên hòn núi cao', hint: 'Teamwork achieves what one person alone cannot' },
     { emoji: '🖋️⚫➕💡✨', answer: 'Gần mực thì đen, gần đèn thì sáng', hint: 'The company you keep shapes who you become' },
     { emoji: '🚶📅➡️🧺🧠', answer: 'Đi một ngày đàng, học một sàng khôn', hint: 'Travel and experience teach you wisdom' },
     { emoji: '💧➡️🙏🏞️', answer: 'Uống nước nhớ nguồn', hint: 'Remember and honor where you came from' },
     { emoji: '🍃🤝🍂', answer: 'Lá lành đùm lá rách', hint: 'The fortunate should help those less fortunate' },
     { emoji: '❌➡️🏆', answer: 'Thất bại là mẹ thành công', hint: 'Every failure is a step toward eventual success' },
-    { emoji: '🪵❤️>🎨', answer: 'Tốt gỗ hơn tốt nước sơn', hint: 'Substance matters more than appearance' },
+    { emoji: '🌳>🎨', answer: 'Tốt gỗ hơn tốt nước sơn', hint: 'Substance matters more than appearance' },
     { emoji: '🍽️❌🧼➕👕✂️🌸', answer: 'Đói cho sạch, rách cho thơm', hint: 'Stay honest and dignified even when poor' },
     { emoji: '💪➡️✅', answer: 'Có chí thì nên', hint: "Where there's a will, there's a way" },
     { emoji: '🚧➡️💡', answer: 'Cái khó ló cái khôn', hint: 'Hardship sparks clever solutions' },
     { emoji: '👨‍🏫❌➡️🚫✅', answer: 'Không thầy đố mày làm nên', hint: "You can't succeed without a teacher's guidance" },
     { emoji: '👨‍🏫<👫📚', answer: 'Học thầy không tày học bạn', hint: 'Learning from peers can teach you as much as a teacher' },
-    { emoji: '💧➡️🪨➡️⏳', answer: 'Nước chảy đá mòn', hint: 'Persistence gradually wears down even the hardest obstacle' },
+    { emoji: '💧💧➡️🪨➡️🕳️', answer: 'Nước chảy đá mòn', hint: 'Persistence gradually wears down even the hardest obstacle' },
     { emoji: '🌬️➡️🌪️', answer: 'Gieo gió gặt bão', hint: 'Your actions come back to you, good or bad' },
     { emoji: '😇➡️🍀', answer: 'Ở hiền gặp lành', hint: 'Kindness is rewarded with good fortune' },
     { emoji: '🐛➡️🍲', answer: 'Con sâu làm rầu nồi canh', hint: 'One bad element spoils the whole group' },
-    { emoji: '🩸➡️❤️‍🩹', answer: 'Máu chảy ruột mềm', hint: "Family shares each other's pain" },
+    { emoji: '🧘🙏➡️🤰🔪', answer: 'Miệng nam mô, bụng bồ dao găm', hint: 'Sweet words can mask a harmful, deceitful heart' },
     { emoji: '🩸1️⃣>🏞️💧', answer: 'Một giọt máu đào hơn ao nước lã', hint: 'Blood relations matter more than mere acquaintances' },
     { emoji: '📏🟫=📏🥇', answer: 'Tấc đất tấc vàng', hint: 'Land is as precious as gold' },
     { emoji: '🌲🥇➕🌊🥈', answer: 'Rừng vàng biển bạc', hint: "Natural resources are a nation's treasure" },
@@ -44,8 +68,8 @@ if (me) {
     { emoji: '🙏1️⃣➡️📚2️⃣', answer: 'Tiên học lễ, hậu học văn', hint: 'Learn good manners before learning knowledge' },
     { emoji: '📄✂️➡️📏', answer: 'Giấy rách phải giữ lấy lề', hint: 'Keep your dignity even in hardship' },
     { emoji: '👧⬇️➕👦⬆️', answer: 'Chị ngã em nâng', hint: 'Siblings support each other when one falls' },
-    { emoji: '🍎🌳➡️🚧', answer: 'Ăn cây nào rào cây ấy', hint: 'Be loyal to whoever or wherever supports you' },
-    { emoji: '❤️➡️😬', answer: 'Yêu nhau lắm, cắn nhau đau', hint: 'The people we love most can hurt us the most' },
+    { emoji: '😋🍎🌳➡️🚧', answer: 'Ăn cây nào rào cây ấy', hint: 'Be loyal to whoever or wherever supports you' },
+    { emoji: '❤️➡️🦷➡️😣', answer: 'Yêu nhau lắm, cắn nhau đau', hint: 'The people we love most can hurt us the most' },
     { emoji: '👦>👨➡️🍀🏠', answer: 'Con hơn cha là nhà có phúc', hint: 'A family is blessed when children surpass their parents' },
     { emoji: '👪➡️👶➕⛅➡️🎭', answer: 'Cha mẹ sinh con, trời sinh tính', hint: 'Parents give life, but personality is inborn' },
     { emoji: '🍽️➡️🍳', answer: 'Muốn ăn phải lăn vào bếp', hint: 'You must work for what you want' },
@@ -54,10 +78,10 @@ if (me) {
     { emoji: '🔥➡️🥇➕🌪️➡️💪', answer: 'Lửa thử vàng, gian nan thử sức', hint: 'Hardship reveals true strength, like fire tests gold' },
     { emoji: '🍚💪➕👕🛡️', answer: 'Ăn chắc mặc bền', hint: 'Prefer solid and durable over flashy and fragile' },
     { emoji: '🗓️✅❌➡️🗓️➡️', answer: 'Việc hôm nay chớ để ngày mai', hint: "Don't put off today's work until tomorrow" },
-    { emoji: '🌳➡️😌', answer: 'Cây ngay không sợ chết đứng', hint: 'An honest person has nothing to fear' },
+    { emoji: '🌳➡️💀➡️😌', answer: 'Cây ngay không sợ chết đứng', hint: 'An honest person has nothing to fear' },
     { emoji: '⛰️👀➡️⛰️', answer: 'Đứng núi này trông núi nọ', hint: 'Never satisfied, always eyeing greener grass elsewhere' },
     { emoji: '🎯🛠️➡️🌟', answer: 'Nhất nghệ tinh, nhất thân vinh', hint: 'Master one skill deeply and you will prosper' },
-    { emoji: '🎃🤝🥒➡️🏠', answer: 'Bầu ơi thương lấy bí cùng, tuy rằng khác giống nhưng chung một giàn', hint: 'Compatriots should love each other despite their differences' },
+    { emoji: '🥒🤝🎃➡️🏠', answer: 'Bầu ơi thương lấy bí cùng, tuy rằng khác giống nhưng chung một giàn', hint: 'Compatriots should love each other despite their differences' },
   ];
 
   const timerEl = document.getElementById('timer');
@@ -226,7 +250,7 @@ if (me) {
     if (!guess) return;
 
     if (guess === normalizeAnswer(rounds[index].answer)) {
-      score += ROUND_POINTS;
+      score += pointsForCorrectAnswer(elapsedInRound());
       solvedCount += 1;
       savedTime += Math.max(0, roundTimeLeft);
       liveScoreEl.textContent = String(score);
@@ -277,12 +301,10 @@ if (me) {
     const bonus = Math.round(MAX_SPEED_BONUS * (savedTime / totalPossibleTime));
     const finalScore = Math.max(0, Math.min(1500, score + bonus));
     finalScoreEl.textContent = finalScore;
-    const seconds = Math.floor((performance.now() - startTime) / 1000);
-    const detail = `${seconds}s · ${solvedCount} of ${rounds.length} proverbs solved`;
-    resultDetailEl.textContent = detail;
+    resultDetailEl.textContent = `${solvedCount} of ${rounds.length} proverbs solved`;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
-    Festival.submitScore(socket, 'proverb', finalScore, detail);
+    Festival.submitScore(socket, 'proverb', finalScore);
   }
 
   submitBtn.addEventListener('click', () => attempt(answerInput.value));

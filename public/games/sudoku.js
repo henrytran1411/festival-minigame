@@ -43,7 +43,7 @@ if (me) {
   let puzzle, solution, board, cells, mistakes, correctInputs, startTime, timerHandle, finished, gameActive;
   let attemptsUsed = 0, attemptsMax = null;
   let cellWrongLog, flaggedBruteForceCells;
-  let lowProbStreak;
+  let lowProbStreak, flaggedLowProbStreak;
 
   async function tryStartGame() {
     const res = await Festival.requestAttempt(socket, 'sudoku');
@@ -72,6 +72,7 @@ if (me) {
     cellWrongLog = new Map();
     flaggedBruteForceCells = new Set();
     lowProbStreak = 0;
+    flaggedLowProbStreak = false;
     startTime = performance.now();
     finished = false;
     gameActive = true;
@@ -219,13 +220,15 @@ if (me) {
     return candidates;
   }
 
-  // Disqualifies a run of correct entries that row/column/box elimination alone
+  // Flags a run of correct entries that row/column/box elimination alone
   // couldn't have narrowed to better than a coin-flip — a real player without
   // outside help would need deeper technique or luck to keep landing those.
+  // Flag-only (like logWrongGuess's brute-force check): it doesn't end the
+  // attempt or touch the score, just surfaces on the admin panel for review,
+  // so players aren't abruptly disqualified over a false positive.
   // Real false-positive risk: skilled players do use techniques (pointing
   // pairs, hidden singles, etc.) this simple row/column/box check can't see,
-  // so a genuinely skilled human can trip this. It's a deliberate trade-off
-  // for a harder deterrent against reading answers off an AI/solver elsewhere.
+  // so a genuinely skilled human can trip this.
   function checkLowProbabilityGuess(index) {
     const candidateCount = remainingCandidates(index).length;
     if (candidateCount < LOW_PROB_CANDIDATE_THRESHOLD) {
@@ -233,11 +236,11 @@ if (me) {
       return;
     }
     lowProbStreak += 1;
-    if (lowProbStreak > LOW_PROB_STREAK_THRESHOLD) {
+    if (lowProbStreak > LOW_PROB_STREAK_THRESHOLD && !flaggedLowProbStreak) {
+      flaggedLowProbStreak = true;
       const probabilityPct = Math.round(100 / candidateCount);
-      disqualify('ai-assist-suspected',
-        `${lowProbStreak} correct entries in a row with no row/column/box elimination basis (latest: ${candidateCount} candidates, ~${probabilityPct}% chance)`,
-        "Your last few answers were statistically far too improbable to guess without outside help, so this attempt doesn't count.");
+      Festival.reportCheat(socket, 'sudoku', 'ai-assist-suspected',
+        `${lowProbStreak} correct entries in a row with no row/column/box elimination basis (latest: ${candidateCount} candidates, ~${probabilityPct}% chance)`);
     }
   }
 

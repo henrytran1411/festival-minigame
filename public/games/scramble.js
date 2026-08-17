@@ -33,7 +33,7 @@ if (me) {
     { word: 'ĐÈN ÔNG SAO', hint: 'A star-shaped lantern' },
     { word: 'ÔNG ĐỊA', hint: 'The Earth God character in the lion dance' },
     { word: 'SMARTDEV', hint: 'The home' },
-    { word: 'CÔNG ĐOÀN', hint: 'The trade union that organizes employee activities' },
+    { word: 'CÔNG ĐOÀN', hint: 'The team' },
     { word: 'MẶT NẠ', hint: 'The paper mask kids wear during the parade' },
     { word: 'THỎ NGỌC', hint: 'The Jade Rabbit living on the moon in folklore' },
     { word: 'ĐÈN KÉO QUÂN', hint: 'The rotating lantern with shadow figures inside' },
