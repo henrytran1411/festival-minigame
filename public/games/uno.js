@@ -396,6 +396,96 @@ if (me) {
     }
   }
 
+  // Whoever the direction arrow will land on after the current player's
+  // turn — computed the same way the server's advance(1) would move the
+  // turn pointer, just read-only here purely for display.
+  function computeNextPlayerId(state) {
+    const n = state.players.length;
+    if (!n) return null;
+    const currentIndex = state.players.findIndex((p) => p.id === state.currentPlayerId);
+    if (currentIndex === -1) return null;
+    const nextIndex = (((currentIndex + state.direction) % n) + n) % n;
+    return state.players[nextIndex].id;
+  }
+
+  // Seats everyone — you included — around an oval table, in FIXED seating
+  // order (the same order the server deals turns in), with you always at
+  // the bottom. The direction arrow in the center plus each seat's
+  // turn/next highlighting together show which way play is moving and who
+  // goes after the current player, without needing the seats themselves to
+  // physically rotate when a Reverse flips the direction.
+  function renderTable(state, unoWindows) {
+    othersRowEl.innerHTML = '';
+    const n = state.players.length;
+    if (!n) return;
+    const nextPlayerId = computeNextPlayerId(state);
+    const youIndex = state.players.findIndex((p) => p.id === state.yourId);
+    const startIndex = youIndex === -1 ? 0 : youIndex;
+
+    for (let seat = 0; seat < n; seat++) {
+      const p = state.players[(startIndex + seat) % n];
+      const isYou = p.id === state.yourId;
+
+      // seat 0 (you) sits at the bottom (90°); the rest fill in evenly
+      // around the oval in fixed seating order.
+      const angleDeg = 90 + seat * (360 / n);
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const x = 50 + 42 * Math.cos(angleRad);
+      const y = 50 + 38 * Math.sin(angleRad);
+
+      const seatEl = document.createElement('div');
+      seatEl.className = 'uno-seat'
+        + (isYou ? ' you' : '')
+        + (p.id === state.currentPlayerId ? ' turn' : '')
+        + (p.id === nextPlayerId ? ' next' : '')
+        + (p.connected ? '' : ' offline');
+      seatEl.style.left = x + '%';
+      seatEl.style.top = y + '%';
+
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = p.name + (isYou ? ' (You)' : '');
+      const count = document.createElement('div');
+      count.className = 'count';
+      const cardCount = isYou ? state.yourHand.length : p.cardCount;
+      count.textContent = `${cardCount} card${cardCount === 1 ? '' : 's'}`;
+      seatEl.append(name, count);
+
+      if (p.id === nextPlayerId) {
+        const nextBadge = document.createElement('div');
+        nextBadge.className = 'next-badge';
+        nextBadge.textContent = '▶ Next';
+        seatEl.appendChild(nextBadge);
+      }
+
+      if (!isYou && p.cardCount === 1) {
+        if (p.calledUno) {
+          const flag = document.createElement('div');
+          flag.className = 'uno-flag';
+          flag.textContent = 'UNO!';
+          seatEl.appendChild(flag);
+        } else {
+          const catchBtn = document.createElement('button');
+          catchBtn.className = 'secondary catch-btn';
+          catchBtn.textContent = 'Catch!';
+          catchBtn.addEventListener('click', () => socket.emit('uno:catch', { targetId: p.id }));
+          seatEl.appendChild(catchBtn);
+
+          const theirWindow = unoWindows.find((w) => w.playerId === p.id);
+          if (theirWindow) {
+            const countdown = document.createElement('div');
+            countdown.className = 'uno-countdown-mini';
+            const remaining = Math.max(0, theirWindow.deadline - Date.now());
+            countdown.textContent = `⏰ ${(remaining / 1000).toFixed(1)}s`;
+            seatEl.appendChild(countdown);
+          }
+        }
+      }
+
+      othersRowEl.appendChild(seatEl);
+    }
+  }
+
   function renderGame(state) {
     const newTopId = state.discardTop ? state.discardTop.id : null;
     if (lastDiscardCardId !== null && newTopId !== lastDiscardCardId) {
@@ -414,46 +504,7 @@ if (me) {
     const unoWindows = state.unoWindows || [];
     updateUnoTicking(state.status === 'playing' && unoWindows.length > 0);
 
-    othersRowEl.innerHTML = '';
-    state.players
-      .filter((p) => p.id !== state.yourId)
-      .forEach((p) => {
-        const tile = document.createElement('div');
-        tile.className = 'uno-player-tile' + (p.id === state.currentPlayerId ? ' turn' : '') + (p.connected ? '' : ' offline');
-
-        const name = document.createElement('div');
-        name.className = 'name';
-        name.textContent = p.name;
-        const count = document.createElement('div');
-        count.className = 'count';
-        count.textContent = `${p.cardCount} card${p.cardCount === 1 ? '' : 's'}`;
-        tile.append(name, count);
-
-        if (p.cardCount === 1) {
-          if (p.calledUno) {
-            const flag = document.createElement('div');
-            flag.className = 'uno-flag';
-            flag.textContent = 'UNO!';
-            tile.appendChild(flag);
-          } else {
-            const catchBtn = document.createElement('button');
-            catchBtn.className = 'secondary catch-btn';
-            catchBtn.textContent = 'Catch!';
-            catchBtn.addEventListener('click', () => socket.emit('uno:catch', { targetId: p.id }));
-            tile.appendChild(catchBtn);
-
-            const theirWindow = unoWindows.find((w) => w.playerId === p.id);
-            if (theirWindow) {
-              const countdown = document.createElement('div');
-              countdown.className = 'uno-countdown-mini';
-              const remaining = Math.max(0, theirWindow.deadline - Date.now());
-              countdown.textContent = `⏰ ${(remaining / 1000).toFixed(1)}s`;
-              tile.appendChild(countdown);
-            }
-          }
-        }
-        othersRowEl.appendChild(tile);
-      });
+    renderTable(state, unoWindows);
 
     deckCountEl.textContent = state.deckCount;
     discardEl.innerHTML = '';

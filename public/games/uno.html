@@ -55,38 +55,56 @@
       font-size: 14px;
     }
 
-    /* Table layout */
-    .uno-others {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      justify-content: center;
-      margin-bottom: 18px;
+    /* Table layout — everyone (including you) seated around an oval table,
+       like a real card game, with the deck/discard pile in the middle. */
+    .uno-table {
+      position: relative;
+      height: 300px;
+      margin-bottom: 8px;
+      /* The site background image shows through fairly strongly now, so
+         the play area gets its own "felt" backdrop instead of floating
+         directly on it — same reasoning as the .top-bar/.status-bar fix
+         used on the other 4 games. */
+      background: rgba(10, 12, 18, 0.55);
+      border: 1px solid var(--border);
+      border-radius: 14px;
     }
-    .uno-player-tile {
+    .uno-others {
+      position: absolute;
+      inset: 0;
+    }
+    .uno-seat {
+      position: absolute;
+      transform: translate(-50%, -50%);
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 8px 12px;
       text-align: center;
       min-width: 84px;
-      position: relative;
     }
-    .uno-player-tile.turn { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); }
-    .uno-player-tile.offline { opacity: 0.5; }
-    .uno-player-tile .name { font-size: 13px; font-weight: 600; }
-    .uno-player-tile .count { font-size: 12px; color: var(--muted); }
-    .uno-player-tile .uno-flag { color: var(--gold); font-weight: 800; font-size: 11px; margin-top: 2px; }
-    .uno-player-tile .catch-btn { margin-top: 6px; padding: 4px 8px; font-size: 11px; }
+    .uno-seat.you { border-color: var(--accent); }
+    .uno-seat.turn { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); }
+    .uno-seat.next:not(.turn) { border-color: var(--good); box-shadow: 0 0 0 2px rgba(58, 196, 125, 0.35); }
+    .uno-seat.offline { opacity: 0.5; }
+    .uno-seat .name { font-size: 13px; font-weight: 600; }
+    .uno-seat .count { font-size: 12px; color: var(--muted); }
+    .uno-seat .uno-flag { color: var(--gold); font-weight: 800; font-size: 11px; margin-top: 2px; }
+    .uno-seat .next-badge { color: var(--good); font-weight: 800; font-size: 10px; margin-top: 2px; }
+    .uno-seat .catch-btn { margin-top: 6px; padding: 4px 8px; font-size: 11px; }
 
     .uno-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 24px;
-      margin: 10px 0 20px;
+      z-index: 1;
     }
-    .uno-pile-label { text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .uno-pile-label { text-align: center; font-size: 11px; color: whitesmoke; margin-top: 4px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); }
 
     .uno-card {
       position: relative;
@@ -140,15 +158,21 @@
       z-index: 2;
     }
 
-    /* Card back — dark diagonal pattern with a festival maple leaf */
+    /* Card back — branded artwork, with a small maple leaf in each corner */
     .uno-card.back {
-      background: repeating-linear-gradient(45deg, #1a1d24, #1a1d24 6px, #262b36 6px, #262b36 12px);
-      border-style: dashed;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 30px;
+      background-image: url('cards/backcard.png');
+      background-size: cover;
+      background-position: center;
     }
+    .uno-card.back .corner-leaf {
+      position: absolute;
+      font-size: 14px;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+    .uno-card.back .corner-leaf.tl { top: 3px; left: 3px; }
+    .uno-card.back .corner-leaf.tr { top: 3px; right: 3px; }
+    .uno-card.back .corner-leaf.bl { bottom: 3px; left: 3px; }
+    .uno-card.back .corner-leaf.br { bottom: 3px; right: 3px; }
 
     /* Wild / Wild Draw Four — classic 4-color pie background (fallback for
        any wild variant without its own custom artwork) */
@@ -242,6 +266,7 @@
       font-weight: 700;
       margin-bottom: 10px;
       min-height: 22px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
     }
     .uno-turn-banner.mine { color: var(--good); }
 
@@ -251,6 +276,7 @@
       font-size: 15px;
       color: #ff5c5c;
       margin: -4px 0 8px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
       animation: uno-countdown-pulse 0.5s infinite alternate;
     }
     @keyframes uno-countdown-pulse {
@@ -357,11 +383,17 @@
     </div>
 
     <div id="game-screen" class="hidden">
-      <div class="uno-others" id="others-row"></div>
+      <div class="uno-table">
+        <div class="uno-others" id="others-row"></div>
 
-      <div class="uno-center">
+        <div class="uno-center">
         <div>
-          <div id="deck-el" class="uno-card back">🍁</div>
+          <div id="deck-el" class="uno-card back">
+            <span class="corner-leaf tl">🍁</span>
+            <span class="corner-leaf tr">🍁</span>
+            <span class="corner-leaf bl">🍁</span>
+            <span class="corner-leaf br">🍁</span>
+          </div>
           <div class="uno-pile-label">Deck: <span id="deck-count">0</span></div>
         </div>
         <div>
@@ -369,6 +401,7 @@
           <div class="uno-pile-label" id="color-label">—</div>
         </div>
         <div style="font-size:28px;" id="direction-el">↻</div>
+        </div>
       </div>
 
       <div class="uno-turn-banner" id="turn-banner"></div>
