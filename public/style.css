@@ -17,7 +17,10 @@
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg);
+  /* Light overlay + background image, with var(--bg) as a plain-color
+     fallback if the image is missing/still loading — just enough tint to
+     keep existing text/cards readable without washing out the artwork. */
+  background: linear-gradient(rgba(15, 17, 23, 0.1), rgba(15, 17, 23, 0.1)), url('assets/site-bg.png') center / cover fixed no-repeat, var(--bg);
   color: var(--text);
   min-height: 100vh;
 }
@@ -62,8 +65,14 @@ input[type="text"] {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 20px;
+  /* The site background image now shows through quite strongly (light
+     overlay), so text sitting directly on body background — like this
+     header — needs its own backdrop to stay legible. */
+  background: rgba(10, 12, 18, 0.6);
+  padding: 10px 14px;
+  border-radius: 10px;
 }
-.top-bar h1 { font-size: 20px; margin: 0; }
+.top-bar h1 { font-size: 20px; margin: 0; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
 .top-bar .who { color: var(--muted); font-size: 13px; }
 
 .card {
@@ -79,8 +88,25 @@ input[type="text"] {
   gap: 14px;
   margin: 20px 0;
 }
+
+.sponsor-logo {
+  position: fixed;
+  top: 10px;
+  height: 76px;
+  width: auto;
+  z-index: 35;
+}
+.sponsor-logo-left { left: 10px; }
+.sponsor-logo-right { right: 10px; }
+
 @media (max-width: 480px) {
   .game-grid { grid-template-columns: 1fr; }
+  .sponsor-logo { height: 44px; }
+  /* The sponsor logos are fixed at the top corners on every page (see
+     common.js) — on narrow screens the page title sits at nearly full
+     width and runs right under them, so push all page content down far
+     enough to clear both (smaller, on mobile) logos before the title starts. */
+  body { padding-top: 70px; }
 }
 
 .game-tile {
@@ -149,6 +175,10 @@ input[type="text"] {
   margin-bottom: 16px;
   font-size: 14px;
   color: var(--muted);
+  background: rgba(10, 12, 18, 0.6);
+  padding: 8px 14px;
+  border-radius: 10px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 }
 .status-bar b { color: var(--text); }
 

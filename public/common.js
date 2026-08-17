@@ -307,3 +307,75 @@ window.Festival = (function () {
     GAME_LABELS,
   };
 })();
+
+// Background theme with a manual on/off toggle — only on the hub
+// (index.html) and the live leaderboard display (leaderboard.html) for
+// now; the 4 scored games aren't wired in yet (to be set up later), and
+// UNO already has its own separate background music. Browsers block
+// autoplay-with-sound until a user gesture, so the default "on" state is
+// an INTENT — actual playback starts on the first click/keypress anywhere
+// on the page (or immediately if the browser happens to allow it), and the
+// floating button lets players flip it off/on afterward. Uses an absolute
+// audio path (leading "/") since this file is included from both
+// root-level and nested (games/*) pages, and a relative audio src resolves
+// against the CURRENT PAGE's URL, not common.js's own location.
+(function setupThemeToggle() {
+  const path = window.location.pathname;
+  const isHub = path === '/' || path.endsWith('/index.html');
+  const isLeaderboard = path.endsWith('/leaderboard.html');
+  if (!isHub && !isLeaderboard) return;
+
+  const THEME_MUTED_KEY = 'festival_theme_muted';
+  const theme = new Audio('/sounds/mid-autumn-theme.mp3');
+  theme.loop = true;
+  theme.volume = 0.15;
+  let muted = localStorage.getItem(THEME_MUTED_KEY) === '1'; // default: on
+
+  const btn = document.createElement('button');
+  btn.className = 'secondary';
+  btn.style.cssText = 'position:fixed; top:96px; right:14px; z-index:40; padding:8px 12px; font-size:16px; border-radius:20px;';
+  function updateBtn() {
+    btn.textContent = muted ? '🔇' : '🔊';
+  }
+  function sync() {
+    if (muted) theme.pause();
+    else theme.play().catch(() => {}); // still blocked until a gesture — fine, next click retries
+  }
+  btn.addEventListener('click', () => {
+    muted = !muted;
+    localStorage.setItem(THEME_MUTED_KEY, muted ? '1' : '0');
+    updateBtn();
+    sync();
+  });
+  updateBtn();
+  document.body.appendChild(btn);
+
+  sync();
+  const retryOnGesture = () => {
+    if (!muted) sync();
+    document.removeEventListener('click', retryOnGesture);
+    document.removeEventListener('keydown', retryOnGesture);
+  };
+  document.addEventListener('click', retryOnGesture, { once: true });
+  document.addEventListener('keydown', retryOnGesture, { once: true });
+})();
+
+// Sponsor logos, fixed to the top corners on every page. Plain <img>s
+// rather than markup in each HTML file, so placement stays consistent
+// regardless of what each page's own header looks like.
+(function setupSponsorLogos() {
+  // Sizing/position lives in style.css (.sponsor-logo) instead of inline
+  // styles here, so a media query there can shrink them on small screens —
+  // an inline style attribute would need !important to be overridden.
+  const left = document.createElement('img');
+  left.src = '/assets/smd-logo.webp';
+  left.alt = 'SmartDev';
+  left.className = 'sponsor-logo sponsor-logo-left';
+
+  const right = document.createElement('img');
+  right.src = '/assets/smd-union-logo.png';
+  right.alt = 'SmartDev Union';
+  right.className = 'sponsor-logo sponsor-logo-right';
+
+  document.body.append(left, right);
+})();
