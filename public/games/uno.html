@@ -130,6 +130,18 @@
     .uno-card.green { background-image: url('cards/green.png'); }
     .uno-card.blue { background-image: url('cards/blue.png'); }
 
+    /* -2 and Switch Position — dedicated artwork per color (higher
+       specificity than .uno-card.<color> above, so it takes over cleanly)
+       already shows the effect, so no corner symbols are added on top. */
+    .uno-card.red.minus2 { background-image: url('cards/minus2red.png'); }
+    .uno-card.yellow.minus2 { background-image: url('cards/minus2yellow.png'); }
+    .uno-card.green.minus2 { background-image: url('cards/minus2green.png'); }
+    .uno-card.blue.minus2 { background-image: url('cards/minus2blue.png'); }
+    .uno-card.red.switchPos { background-image: url('cards/switchred.png'); }
+    .uno-card.yellow.switchPos { background-image: url('cards/switchyellow.png'); }
+    .uno-card.green.switchPos { background-image: url('cards/switchgreen.png'); }
+    .uno-card.blue.switchPos { background-image: url('cards/switchblue.png'); }
+
     /* Draw Two — show the card's own artwork twice, stacked in the center,
        instead of a single plain badge. */
     .uno-card.draw2::before,
@@ -186,6 +198,20 @@
       background-size: cover;
       background-position: center;
     }
+    /* Action Wild / Lock / Switch Position Wild / Plus Wild — each has its
+       own dedicated artwork (replacing the generic pie + badge treatment
+       still used as a fallback by any wild variant without custom art). */
+    .uno-card.wild-actionWild,
+    .uno-card.wild-lock,
+    .uno-card.wild-switchWild,
+    .uno-card.wild-plusWild {
+      background-size: cover;
+      background-position: center;
+    }
+    .uno-card.wild-actionWild { background-image: url('cards/actionwild.png'); }
+    .uno-card.wild-lock { background-image: url('cards/lock.png'); }
+    .uno-card.wild-switchWild { background-image: url('cards/switchwild.png'); }
+    .uno-card.wild-plusWild { background-image: url('cards/pluswild.png'); }
     .uno-card .wild-badge {
       position: absolute;
       top: 50%; left: 50%;
@@ -335,6 +361,73 @@
       width: 56px; height: 56px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); cursor: pointer;
     }
 
+    .uno-advance-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 4px 0 14px;
+      cursor: pointer;
+    }
+    .uno-advance-toggle input { flex-shrink: 0; }
+
+    .uno-target-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 14px 0;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+    .uno-target-btn.selected { border-color: var(--good); box-shadow: 0 0 0 2px rgba(58, 196, 125, 0.35); }
+
+    .uno-lock-dice { font-size: 48px; margin: 14px 0 4px; min-height: 58px; }
+
+    .uno-wheel-wrap {
+      position: relative;
+      width: 220px;
+      height: 220px;
+      margin: 10px auto 4px;
+    }
+    .uno-wheel-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      border-radius: 50%;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      transform: rotate(0deg);
+      transform-box: border-box;
+      transform-origin: 50% 50%;
+    }
+    .uno-wheel-wrap::after {
+      /* Center hub, matching a real prize wheel */
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 28px; height: 28px;
+      background: #f6f4ee;
+      border: 3px solid rgba(0,0,0,0.25);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .uno-wheel-pointer {
+      position: absolute;
+      top: 50%;
+      right: -16px;
+      transform: translateY(-50%);
+      font-size: 28px;
+      line-height: 1;
+      color: var(--accent);
+      z-index: 2;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+    }
+    .uno-wheel-caption { font-size: 20px; font-weight: 800; min-height: 28px; color: var(--gold); }
+
     .uno-winner { font-size: 22px; font-weight: 800; color: var(--gold); margin-bottom: 8px; }
   </style>
 </head>
@@ -371,6 +464,10 @@
     <div id="waiting-screen" class="card hidden">
       <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
       <ul id="player-list" class="uno-player-list"></ul>
+      <label class="uno-advance-toggle">
+        <input type="checkbox" id="advance-cards-toggle" />
+        🃏 Advance Cards — adds 6 house-rule cards (-2, Switch Position, Action Wild, Lock, Switch Position Wild, Plus Wild)
+      </label>
       <div class="uno-actions">
         <button class="secondary" id="add-bots-btn">🤖 Add 3 Bots</button>
         <button id="start-btn" disabled>▶ Start Game</button>
@@ -448,6 +545,45 @@
         <button class="uno-color-btn" data-color="yellow" style="background:#e0b400;"></button>
         <button class="uno-color-btn" data-color="green" style="background:#2fa96b;"></button>
         <button class="uno-color-btn" data-color="blue" style="background:#3b6fd6;"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="target-picker-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align:center;">
+      <h2 id="target-picker-title">Choose a Player</h2>
+      <div id="target-picker-list" class="uno-target-list"></div>
+      <div class="uno-actions" style="margin-top:14px;">
+        <button id="target-picker-confirm-btn" disabled>Confirm</button>
+        <button class="secondary" id="target-picker-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="dump-picker-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align:center;">
+      <h2>Dump More Cards?</h2>
+      <p style="color:var(--muted); font-size:13px;">Pick up to 2 more <span id="dump-color-label"></span> cards to also discard, or just play the -2 alone.</p>
+      <div id="dump-picker-list" class="uno-hand-row" style="justify-content:center; flex-wrap:wrap;"></div>
+      <div class="uno-actions" style="margin-top:14px;">
+        <button id="dump-confirm-btn">Discard Selected</button>
+        <button class="secondary" id="dump-skip-btn">Just Play the -2</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="lock-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align:center;">
+      <h2 id="lock-modal-title">🔒 Lock!</h2>
+      <div id="lock-dice-display" class="uno-lock-dice"></div>
+      <div class="uno-wheel-wrap">
+        <div class="uno-wheel-pointer">◀</div>
+        <svg id="lock-wheel-svg" class="uno-wheel-svg" viewBox="-100 -100 200 200"></svg>
+      </div>
+      <div id="lock-wheel-caption" class="uno-wheel-caption"></div>
+      <div id="lock-result-list" style="font-size:13px; color:var(--muted); margin-top:6px;"></div>
+      <div class="uno-actions" style="margin-top:14px;">
+        <button class="secondary" id="lock-modal-close-btn">Close</button>
       </div>
     </div>
   </div>

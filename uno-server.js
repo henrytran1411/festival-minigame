@@ -18,9 +18,20 @@
 // becomes a disconnected player's turn, they're auto-skipped (draw one +
 // pass) so the room never stalls waiting on someone who left. An empty room
 // (no seats, or every seat disconnected) is deleted automatically.
+//
+// Optional "advance cards" (off by default, toggled per-room in the waiting
+// room before start) add 6 house-rule card types on top of the standard
+// deck — see buildAdvanceCards() and the applyPlay() branches for each.
+// (A 7th, Number Wild, was tried and removed — see buildAdvanceCards().)
 
 const COLORS = ['red', 'yellow', 'green', 'blue'];
 const ACTIONS = ['skip', 'reverse', 'draw2'];
+// Copies of EACH of the 4 colors — minus2: 2/color = 8 total; switchPos: 1/color = 4 total.
+const COLOR_ACTION_COPIES_PER_COLOR = { minus2: 2, switchPos: 1 };
+const NEW_COLOR_ACTION_VALUES = Object.keys(COLOR_ACTION_COPIES_PER_COLOR);
+const NEW_WILD_ACTION_COUNTS = { actionWild: 4, lock: 4, switchWild: 4, plusWild: 4 };
+const ALL_ACTION_VALUES = [...ACTIONS, ...NEW_COLOR_ACTION_VALUES];
+const LOCK_DICE_WEIGHTS = [{ value: 1, weight: 60 }, { value: 2, weight: 30 }, { value: 3, weight: 10 }];
 const BOT_NAMES = ['🤖 Bot Minh', '🤖 Bot Lan', '🤖 Bot Huy', '🤖 Bot Trang', '🤖 Bot Đức', '🤖 Bot Mai'];
 const BOT_THINK_MS = 1200;
 
@@ -46,6 +57,36 @@ function buildDeck() {
   return deck;
 }
 
+// Optional house-rule cards (see file header), added on top of the standard
+// 108 when a room opts in:
+//   -2                     2 of each of the 4 colors  =  8
+//   Switch Position        1 of each of the 4 colors  =  4
+//   Action Wild            4  (wild, no color)         =  4
+//   Lock                   4  (wild, no color)         =  4
+//   Switch Position Wild   4  (wild, no color)         =  4
+//   Plus Wild              4  (wild, no color)         =  4
+// Total: 28 extra cards (108 -> 136 when enabled).
+//
+// Number Wild (choose a color, plays as a plain colored card, no effect)
+// was tried and removed: tying it to a specific number and restricting
+// when it could be played would have made it the only "wild" in the game
+// that ISN'T always playable — confusing, and it fights the core meaning
+// of a wild card. Left out rather than shipped half-right.
+function buildAdvanceCards() {
+  const cards = [];
+  let n = 0;
+  const nextId = () => `a${n++}`;
+  Object.entries(COLOR_ACTION_COPIES_PER_COLOR).forEach(([value, copiesPerColor]) => {
+    COLORS.forEach((color) => {
+      for (let i = 0; i < copiesPerColor; i++) cards.push({ id: nextId(), color, value });
+    });
+  });
+  Object.entries(NEW_WILD_ACTION_COUNTS).forEach(([value, count]) => {
+    for (let i = 0; i < count; i++) cards.push({ id: nextId(), color: 'wild', value });
+  });
+  return cards;
+}
+
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -63,7 +104,11 @@ function canPlay(card, topCard, currentColor) {
 }
 
 function cardLabel(card) {
-  const names = { skip: 'Skip', reverse: 'Reverse', draw2: 'Draw Two', wild: 'Wild', wild4: 'Wild Draw Four' };
+  const names = {
+    skip: 'Skip', reverse: 'Reverse', draw2: 'Draw Two', wild: 'Wild', wild4: 'Wild Draw Four',
+    minus2: 'Minus Two', switchPos: 'Switch Position',
+    actionWild: 'Action Wild', lock: 'Lock', switchWild: 'Switch Position Wild', plusWild: 'Plus Wild',
+  };
   const label = names[card.value] || card.value;
   if (card.color === 'wild') return label;
   return `${card.color[0].toUpperCase()}${card.color.slice(1)} ${label}`;
@@ -87,13 +132,41 @@ function pickBotColor(remainingHand) {
   return COLORS.reduce((best, c) => (counts[c] > counts[best] ? c : best), COLORS[0]);
 }
 
+// Picks one item at random, weighted by weightFn(item). Assumes the total
+// weight is > 0 (true for every call site here — an empty candidate list is
+// always checked before calling this).
+function weightedRandomPick(items, weightFn) {
+  const total = items.reduce((sum, it) => sum + weightFn(it), 0);
+  let r = Math.random() * total;
+  for (const it of items) {
+    r -= weightFn(it);
+    if (r <= 0) return it;
+  }
+  return items[items.length - 1];
+}
+
+// Shared "how dangerous is this player" tier, used two ways: Lock uses it as
+// a random-pick WEIGHT (so a player one card from winning is the juiciest
+// target), and Plus Wild uses the exact same number as a DRAW COUNT (so
+// that same player gets hit hardest by the card dump too) — one scale,
+// two different house-rule cards built on top of it.
+function handSizeTier(player) {
+  if (player.hand.length === 1) return 3;
+  if (player.hand.length <= 5) return 2;
+  return 1;
+}
+
+function rollLockDice() {
+  return weightedRandomPick(LOCK_DICE_WEIGHTS, (w) => w.weight).value;
+}
+
 class UnoRoom {
   constructor(id, name, password) {
     this.id = id;
     this.name = name;
     this.password = password;
     this.status = 'waiting'; // 'waiting' | 'playing' | 'finished'
-    this.players = []; // { id: stable playerId, name, hand, calledUno, connected, socketId, isBot }
+    this.players = []; // { id: stable playerId, name, hand, calledUno, connected, socketId, isBot, lockedTurns }
     this.deck = [];
     this.discard = [];
     this.currentColor = null;
@@ -111,6 +184,8 @@ class UnoRoom {
     this.unoWindows = new Map(); // playerId -> { deadline, timer }
     this.unoPenaltyCounter = 0;
     this.lastUnoPenaltyPlayerId = null;
+    this.useAdvanceCards = false; // toggled in the waiting room before start
+    this.lastActionType = null; // last genuine skip/reverse/draw2 played — for Action Wild
   }
 
   pushLog(message) {
@@ -193,8 +268,9 @@ class UnoRoom {
   }
 
   startGame() {
-    const deck = shuffle(buildDeck());
-    this.players.forEach((p) => { p.hand = []; p.calledUno = false; });
+    const extra = this.useAdvanceCards ? buildAdvanceCards() : [];
+    const deck = shuffle([...buildDeck(), ...extra]);
+    this.players.forEach((p) => { p.hand = []; p.calledUno = false; p.lockedTurns = 0; });
     for (let i = 0; i < 7; i++) {
       this.players.forEach((p) => p.hand.push(deck.pop()));
     }
@@ -205,7 +281,7 @@ class UnoRoom {
     let starter = null;
     while (deck.length > 0) {
       const candidate = deck.pop();
-      if (candidate.color !== 'wild' && !ACTIONS.includes(candidate.value)) {
+      if (candidate.color !== 'wild' && !ALL_ACTION_VALUES.includes(candidate.value)) {
         starter = candidate;
         break;
       }
@@ -220,37 +296,137 @@ class UnoRoom {
     this.status = 'playing';
     this.winnerId = null;
     this.log = [];
+    this.lastActionType = null;
     this.pushLog(`🎉 Game started with ${this.players.map((p) => p.name).join(', ')}.`);
+    if (this.useAdvanceCards) this.pushLog('🃏 Advance cards are in the deck for this game.');
     this.pushLog(`${this.currentPlayer().name}'s turn.`);
   }
 
-  applyPlay(player, card, chosenColor) {
+  // Permanently swaps two players' seats in the fixed turn order (Switch
+  // Position / Switch Position Wild). Turn flow afterward keeps moving
+  // seat-by-seat as normal — the two named players have just traded chairs.
+  swapSeats(idA, idB) {
+    const i = this.players.findIndex((p) => p.id === idA);
+    const j = this.players.findIndex((p) => p.id === idB);
+    if (i === -1 || j === -1 || i === j) return;
+    const nameA = this.players[i].name;
+    const nameB = this.players[j].name;
+    [this.players[i], this.players[j]] = [this.players[j], this.players[i]];
+    this.pushLog(`🔀 ${nameA} and ${nameB} swapped seats!`);
+  }
+
+  // Lock card: roll a weighted d3 (60/30/10 for 1/2/3), then repeatedly do a
+  // weighted-without-replacement draw (see handSizeTier) to pick that many
+  // OTHER players whose next turn gets skipped. Returns the full round-by-
+  // round breakdown so the client can animate a dice + spinning-wheel
+  // reveal instead of just seeing the end result.
+  applyLockCard(player) {
+    const diceResult = rollLockDice();
+    let pool = this.players.filter((p) => p.id !== player.id);
+    const rounds = [];
+    const count = Math.min(diceResult, pool.length);
+    for (let i = 0; i < count; i++) {
+      const candidates = pool.map((p) => ({ id: p.id, name: p.name, weight: handSizeTier(p) }));
+      const picked = weightedRandomPick(pool, handSizeTier);
+      rounds.push({ candidates, pickedId: picked.id });
+      picked.lockedTurns = (picked.lockedTurns || 0) + 1;
+      pool = pool.filter((p) => p.id !== picked.id);
+    }
+    const lockedNames = rounds.map((r) => this.findPlayer(r.pickedId)?.name).filter(Boolean);
+    this.pushLog(`🎲 ${player.name} played Lock — rolled a ${diceResult}! Locked: ${lockedNames.join(', ') || 'no one'}.`);
+    return { playerName: player.name, diceResult, rounds };
+  }
+
+  // Plus Wild: every OTHER player draws cards based on the same
+  // handSizeTier scale Lock uses (UNO status = 3, 2-5 cards = 2, 6+ = 1) —
+  // deterministic, no randomness, so it needs no client-side animation.
+  applyPlusWildCard(player) {
+    const affected = this.players
+      .filter((p) => p.id !== player.id)
+      .map((p) => ({ id: p.id, name: p.name, amount: handSizeTier(p) }));
+    affected.forEach((a) => this.drawCards(this.findPlayer(a.id), a.amount));
+    const summary = affected.map((a) => `${a.name} +${a.amount}`).join(', ');
+    this.pushLog(`💥 ${player.name} played Plus Wild — ${summary || 'no one else at the table'}.`);
+  }
+
+  // Returns a bot's choice of extra info a card needs beyond color — Switch
+  // Position/Wild need a target (or pair); everything else needs nothing.
+  // Bots never use Minus Two's bonus multi-discard, to keep their logic simple.
+  buildBotExtra(bot, card) {
+    if (card.value === 'switchPos') {
+      const others = this.players.filter((p) => p.id !== bot.id);
+      if (!others.length) return {};
+      return { targetPlayerId: others[Math.floor(Math.random() * others.length)].id };
+    }
+    if (card.value === 'switchWild') {
+      const others = this.players.filter((p) => p.id !== bot.id);
+      if (others.length < 2) return {};
+      const shuffled = shuffle(others);
+      return { targetPlayerIds: [shuffled[0].id, shuffled[1].id] };
+    }
+    return {};
+  }
+
+  // extra: { extraCards?: Card[] (Minus Two bonus discards, already
+  // validated by the caller), targetPlayerId? (Switch Position),
+  // targetPlayerIds? (Switch Position Wild) }. Returns a Lock-card result
+  // object for the caller to broadcast separately, or null otherwise.
+  applyPlay(player, card, chosenColor, extra = {}) {
     player.hand = player.hand.filter((c) => c.id !== card.id);
     this.discard.push(card);
     this.currentColor = card.color === 'wild' ? chosenColor : card.color;
+
+    const extraDiscarded = card.value === 'minus2' && Array.isArray(extra.extraCards) ? extra.extraCards : [];
+    if (extraDiscarded.length) {
+      const extraIds = new Set(extraDiscarded.map((c) => c.id));
+      player.hand = player.hand.filter((c) => !extraIds.has(c.id));
+      extraDiscarded.forEach((c) => this.discard.push(c));
+    }
+
     if (player.hand.length !== 1) player.calledUno = false;
 
     const colorNote = card.color === 'wild' ? ` (${chosenColor})` : '';
     this.pushLog(`${player.name} played ${cardLabel(card)}${colorNote}.`);
+    if (extraDiscarded.length) {
+      this.pushLog(`${player.name} also dumped ${extraDiscarded.length} more ${card.color} card${extraDiscarded.length === 1 ? '' : 's'}.`);
+    }
 
     if (player.hand.length === 0) {
       this.status = 'finished';
       this.winnerId = player.id;
       this.pushLog(`🏆 ${player.name} wins!`);
-      return;
+      return null;
     }
 
-    if (card.value === 'skip') {
+    if (card.value === 'switchPos' && extra.targetPlayerId) {
+      this.swapSeats(player.id, extra.targetPlayerId);
+    }
+    if (card.value === 'switchWild' && Array.isArray(extra.targetPlayerIds) && extra.targetPlayerIds.length === 2) {
+      this.swapSeats(extra.targetPlayerIds[0], extra.targetPlayerIds[1]);
+    }
+
+    let lockResult = null;
+    if (card.value === 'lock') {
+      lockResult = this.applyLockCard(player);
+    }
+    if (card.value === 'plusWild') {
+      this.applyPlusWildCard(player);
+    }
+
+    if (ACTIONS.includes(card.value)) this.lastActionType = card.value;
+    const effectiveValue = card.value === 'actionWild' ? this.lastActionType : card.value;
+
+    if (effectiveValue === 'skip') {
       this.advance(2);
       this.pushLog(`${this.currentPlayer().name} was skipped.`);
-    } else if (card.value === 'reverse') {
+    } else if (effectiveValue === 'reverse') {
       if (this.players.length === 2) {
         this.advance(2); // reverse with only 2 players plays exactly like skip
       } else {
         this.direction *= -1;
         this.advance(1);
       }
-    } else if (card.value === 'draw2') {
+    } else if (effectiveValue === 'draw2') {
       this.advance(1);
       const victim = this.currentPlayer();
       this.drawCards(victim, 2);
@@ -267,19 +443,35 @@ class UnoRoom {
     }
 
     if (this.status === 'playing') this.pushLog(`${this.currentPlayer().name}'s turn.`);
+    return lockResult;
   }
 
-  // Safety net so a disconnected player's turn doesn't stall the room
-  // forever — they auto-draw one card and pass. Bounded so an all-offline
+  broadcastLockEvent(nsp, payload) {
+    this.players.forEach((p) => {
+      if (p.connected && p.socketId) nsp.to(p.socketId).emit('uno:lockEvent', payload);
+    });
+  }
+
+  // Safety net so a disconnected or Lock-skipped player's turn doesn't stall
+  // the room forever. Disconnected: auto-draw one card and pass. Locked:
+  // consume one lock charge and pass with no draw. Bounded so an all-stuck
   // room doesn't spin forever.
-  maybeAutoSkipDisconnected() {
+  resolveAutoSkips() {
     if (this.status !== 'playing') return;
     let guard = 0;
-    while (this.players.length && !this.currentPlayer().connected && guard <= this.players.length) {
+    while (this.players.length && guard <= this.players.length * 2) {
       const p = this.currentPlayer();
-      this.drawCards(p, 1);
-      this.pushLog(`${p.name} is disconnected — auto-drew a card and passed.`);
-      this.advance(1);
+      if (!p.connected) {
+        this.drawCards(p, 1);
+        this.pushLog(`${p.name} is disconnected — auto-drew a card and passed.`);
+        this.advance(1);
+      } else if (p.lockedTurns > 0) {
+        p.lockedTurns -= 1;
+        this.pushLog(`🔒 ${p.name}'s turn was locked — skipped.`);
+        this.advance(1);
+      } else {
+        break;
+      }
       guard += 1;
     }
   }
@@ -294,10 +486,11 @@ class UnoRoom {
 
     const topCard = this.discard[this.discard.length - 1];
     const card = pickBotCard(bot.hand, topCard, this.currentColor);
+    let lockResult = null;
 
     if (card) {
       const chosenColor = card.color === 'wild' ? pickBotColor(bot.hand.filter((c) => c.id !== card.id)) : undefined;
-      this.applyPlay(bot, card, chosenColor);
+      lockResult = this.applyPlay(bot, card, chosenColor, this.buildBotExtra(bot, card));
       if (bot.hand.length === 1) bot.calledUno = true;
     } else {
       this.drawCards(bot, 1);
@@ -305,7 +498,7 @@ class UnoRoom {
       const drawn = bot.hand[bot.hand.length - 1];
       if (drawn && canPlay(drawn, topCard, this.currentColor)) {
         const chosenColor = drawn.color === 'wild' ? pickBotColor(bot.hand.filter((c) => c.id !== drawn.id)) : undefined;
-        this.applyPlay(bot, drawn, chosenColor);
+        lockResult = this.applyPlay(bot, drawn, chosenColor, this.buildBotExtra(bot, drawn));
         if (bot.hand.length === 1) bot.calledUno = true;
       } else {
         this.advance(1);
@@ -313,8 +506,9 @@ class UnoRoom {
       }
     }
 
-    this.maybeAutoSkipDisconnected();
+    this.resolveAutoSkips();
     this.broadcast(nsp);
+    if (lockResult) this.broadcastLockEvent(nsp, lockResult);
     this.scheduleBotTurnIfNeeded(nsp);
   }
 
@@ -343,12 +537,14 @@ class UnoRoom {
       log: this.log,
       winnerId: this.winnerId,
       turnHasDrawn: this.turnHasDrawn,
+      useAdvanceCards: this.useAdvanceCards,
       players: this.players.map((p) => ({
         id: p.id,
         name: p.name,
         cardCount: p.hand.length,
         calledUno: p.calledUno,
         connected: p.connected,
+        lockedTurns: p.lockedTurns || 0,
       })),
       yourId: forPlayerId || null,
       yourHand: me ? me.hand : [],
@@ -382,7 +578,7 @@ class UnoRoom {
   }
 }
 
-module.exports = function attachUno(io) {
+function attachUno(io) {
   const nsp = io.of('/uno');
   const rooms = new Map();
   let roomCounter = 0;
@@ -529,6 +725,25 @@ module.exports = function attachUno(io) {
       room.broadcast(nsp);
     });
 
+    // Waiting-room toggle for the 6 optional house-rule cards (see file
+    // header). Anyone still in the waiting room can flip it, matching how
+    // Add Bots/Start already work without a "host" concept.
+    socket.on('uno:setAdvanceCards', ({ enabled }, callback) => {
+      const room = myRoom();
+      if (!room) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'no-room' });
+        return;
+      }
+      if (room.status !== 'waiting') {
+        if (typeof callback === 'function') callback({ ok: false, error: 'already-started' });
+        return;
+      }
+      room.useAdvanceCards = Boolean(enabled);
+      room.pushLog(`Advance cards turned ${room.useAdvanceCards ? 'ON' : 'off'} for the next game.`);
+      if (typeof callback === 'function') callback({ ok: true });
+      room.broadcast(nsp);
+    });
+
     socket.on('uno:start', (payload, callback) => {
       const room = myRoom();
       if (!room) {
@@ -549,7 +764,7 @@ module.exports = function attachUno(io) {
       room.scheduleBotTurnIfNeeded(nsp);
     });
 
-    socket.on('uno:play', ({ cardId, chosenColor }, callback) => {
+    socket.on('uno:play', ({ cardId, chosenColor, extraCardIds, targetPlayerId, targetPlayerIds }, callback) => {
       const room = myRoom();
       if (!room) {
         if (typeof callback === 'function') callback({ ok: false, error: 'no-room' });
@@ -574,13 +789,57 @@ module.exports = function attachUno(io) {
         if (typeof callback === 'function') callback({ ok: false, error: 'need-color' });
         return;
       }
-      room.applyPlay(player, card, chosenColor);
-      room.maybeAutoSkipDisconnected();
+
+      const extra = {};
+
+      if (card.value === 'minus2' && Array.isArray(extraCardIds) && extraCardIds.length) {
+        if (extraCardIds.length > 2 || new Set(extraCardIds).size !== extraCardIds.length) {
+          if (typeof callback === 'function') callback({ ok: false, error: 'invalid-extra-cards' });
+          return;
+        }
+        if (player.hand.length < 5) {
+          if (typeof callback === 'function') callback({ ok: false, error: 'not-enough-cards-to-dump' });
+          return;
+        }
+        const extraCards = [];
+        for (const id of extraCardIds) {
+          const c = player.hand.find((c2) => c2.id === id && c2.id !== card.id);
+          if (!c || c.color !== card.color) {
+            if (typeof callback === 'function') callback({ ok: false, error: 'invalid-extra-cards' });
+            return;
+          }
+          extraCards.push(c);
+        }
+        extra.extraCards = extraCards;
+      }
+
+      if (card.value === 'switchPos') {
+        if (!targetPlayerId || targetPlayerId === player.id || !room.findPlayer(targetPlayerId)) {
+          if (typeof callback === 'function') callback({ ok: false, error: 'invalid-target' });
+          return;
+        }
+        extra.targetPlayerId = targetPlayerId;
+      }
+
+      if (card.value === 'switchWild') {
+        const validPair = Array.isArray(targetPlayerIds) && targetPlayerIds.length === 2
+          && targetPlayerIds[0] !== targetPlayerIds[1]
+          && room.findPlayer(targetPlayerIds[0]) && room.findPlayer(targetPlayerIds[1]);
+        if (!validPair) {
+          if (typeof callback === 'function') callback({ ok: false, error: 'invalid-targets' });
+          return;
+        }
+        extra.targetPlayerIds = targetPlayerIds;
+      }
+
+      const lockResult = room.applyPlay(player, card, chosenColor, extra);
+      room.resolveAutoSkips();
       if (room.status === 'playing' && player.hand.length === 1 && !player.calledUno) {
         room.startUnoWindow(player, nsp);
       }
       if (typeof callback === 'function') callback({ ok: true });
       room.broadcast(nsp);
+      if (lockResult) room.broadcastLockEvent(nsp, lockResult);
       room.scheduleBotTurnIfNeeded(nsp);
     });
 
@@ -622,7 +881,7 @@ module.exports = function attachUno(io) {
         return;
       }
       room.advance(1);
-      room.maybeAutoSkipDisconnected();
+      room.resolveAutoSkips();
       room.pushLog(`${room.currentPlayer().name}'s turn.`);
       if (typeof callback === 'function') callback({ ok: true });
       room.broadcast(nsp);
@@ -680,6 +939,8 @@ module.exports = function attachUno(io) {
       room.status = 'waiting';
       room.winnerId = null;
       room.log = [];
+      room.lastActionType = null;
+      room.players.forEach((p) => { p.lockedTurns = 0; });
       room.clearAllUnoWindows();
       room.pushLog('Ready for a new game — click Start when everyone is in.');
       if (typeof callback === 'function') callback({ ok: true });
@@ -701,7 +962,7 @@ module.exports = function attachUno(io) {
           // mark a since-reconnected seat as offline.
           player.connected = false;
           room.pushLog(`${player.name} disconnected.`);
-          room.maybeAutoSkipDisconnected();
+          room.resolveAutoSkips();
         }
         room.broadcast(nsp);
         room.scheduleBotTurnIfNeeded(nsp);
@@ -714,4 +975,16 @@ module.exports = function attachUno(io) {
     socket.on('uno:leave', handleLeave);
     socket.on('disconnect', handleLeave);
   });
-};
+}
+
+module.exports = attachUno;
+// Exposed purely for automated testing of the game-logic pieces without
+// needing a live socket server — attachUno(io) above is the real entry
+// point used by server.js and is unaffected by these extra properties.
+module.exports.UnoRoom = UnoRoom;
+module.exports.buildDeck = buildDeck;
+module.exports.buildAdvanceCards = buildAdvanceCards;
+module.exports.canPlay = canPlay;
+module.exports.weightedRandomPick = weightedRandomPick;
+module.exports.handSizeTier = handSizeTier;
+module.exports.rollLockDice = rollLockDice;

@@ -32,6 +32,7 @@ if (me) {
   const addBotsBtn = document.getElementById('add-bots-btn');
   const waitingLogEl = document.getElementById('waiting-log');
   const leaveWaitingBtn = document.getElementById('leave-waiting-btn');
+  const advanceCardsToggle = document.getElementById('advance-cards-toggle');
 
   const othersRowEl = document.getElementById('others-row');
   const deckCountEl = document.getElementById('deck-count');
@@ -52,6 +53,26 @@ if (me) {
 
   const colorModal = document.getElementById('color-modal');
   const rulesModal = document.getElementById('rules-modal');
+
+  const targetPickerModal = document.getElementById('target-picker-modal');
+  const targetPickerTitleEl = document.getElementById('target-picker-title');
+  const targetPickerListEl = document.getElementById('target-picker-list');
+  const targetPickerConfirmBtn = document.getElementById('target-picker-confirm-btn');
+  const targetPickerCancelBtn = document.getElementById('target-picker-cancel-btn');
+
+  const dumpPickerModal = document.getElementById('dump-picker-modal');
+  const dumpColorLabelEl = document.getElementById('dump-color-label');
+  const dumpPickerListEl = document.getElementById('dump-picker-list');
+  const dumpConfirmBtn = document.getElementById('dump-confirm-btn');
+  const dumpSkipBtn = document.getElementById('dump-skip-btn');
+
+  const lockModal = document.getElementById('lock-modal');
+  const lockModalTitleEl = document.getElementById('lock-modal-title');
+  const lockDiceDisplayEl = document.getElementById('lock-dice-display');
+  const lockWheelSvg = document.getElementById('lock-wheel-svg');
+  const lockWheelCaptionEl = document.getElementById('lock-wheel-caption');
+  const lockResultListEl = document.getElementById('lock-result-list');
+  const lockModalCloseBtn = document.getElementById('lock-modal-close-btn');
 
   document.getElementById('rules-link').addEventListener('click', (e) => {
     e.preventDefault();
@@ -233,10 +254,21 @@ if (me) {
   }
 
   let lastDiscardCardId = null;
+  // While a Lock wheel animation is playing: blocks all player actions, and
+  // (via renderTable above) hides each affected player's lockedTurns count
+  // until their specific wheel round has actually landed.
+  let lockAnimationActive = false;
+  let lockRevealOverrides = null;
   let lastUnoPenaltyCounter = null;
   let unoTickInterval = null;
 
-  const ACTION_SYMBOL = { skip: '⊘', reverse: '⇄', draw2: '+2' };
+  const ACTION_SYMBOL = { skip: '⊘', reverse: '⇄', draw2: '+2', minus2: '-2', switchPos: '🔀' };
+  // These 4 wild variants now have their own dedicated card artwork
+  // (uploaded), so they skip the generic pie-background + badge treatment
+  // still used as a fallback (see buildCardEl) — only Wild Draw Four keeps
+  // the old mini-swatches + "+4" badge look, since it never got custom art.
+  const WILD_CARD_ART = new Set(['actionWild', 'lock', 'switchWild', 'plusWild']);
+  function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
   // Colors with real festival artwork (a blank card template) instead of the
   // plain gradient — the art fills the whole face, so we skip the plain
   // center oval and only stamp the corner numbers over it.
@@ -246,6 +278,7 @@ if (me) {
   let latestRooms = [];
   let joined = false;
   let pendingWildCardId = null;
+  let pendingWildCardValue = null;
   let pendingJoinRoomId = null;
 
   // Screens: 'lobby' | 'create' | 'waiting' | 'playing' | 'finished'
@@ -286,6 +319,9 @@ if (me) {
         badge.className = 'wild-badge';
         badge.textContent = '+4';
         el.appendChild(badge);
+      } else if (WILD_CARD_ART.has(card.value)) {
+        // Dedicated artwork already shows the effect — no badge needed.
+        el.classList.add('wild-' + card.value);
       } else {
         el.classList.add('wild-plain');
       }
@@ -294,6 +330,13 @@ if (me) {
 
     el.classList.add(card.color);
     if (card.value === 'draw2') el.classList.add('draw2');
+    const hasDedicatedColorArt = card.value === 'minus2' || card.value === 'switchPos';
+    if (hasDedicatedColorArt) {
+      // The -2/Switch Position artwork already shows the effect per color —
+      // no corner symbols needed on top.
+      el.classList.add(card.value);
+      return el;
+    }
     const symbol = cardSymbol(card);
 
     const tl = document.createElement('span');
@@ -379,6 +422,7 @@ if (me) {
       playerListEl.appendChild(li);
     });
     startBtn.disabled = state.players.length < 2;
+    advanceCardsToggle.checked = Boolean(state.useAdvanceCards);
     renderLog(waitingLogEl, state.log);
   }
 
@@ -458,6 +502,23 @@ if (me) {
         seatEl.appendChild(nextBadge);
       }
 
+      // The server applies Lock's effect immediately (so the broadcast
+      // already carries the final lockedTurns), but the wheel animation is
+      // still "deciding" as far as the player watching is concerned — so
+      // while that reveal is in progress, show each affected player's count
+      // as it was BEFORE this activation's still-pending picks, not the
+      // final value, and bump it up round by round as the wheel lands.
+      const displayedLockedTurns = lockRevealOverrides && lockRevealOverrides.has(p.id)
+        ? lockRevealOverrides.get(p.id)
+        : (p.lockedTurns || 0);
+      if (displayedLockedTurns > 0) {
+        const lockBadge = document.createElement('div');
+        lockBadge.className = 'next-badge';
+        lockBadge.style.color = '#ff5c5c';
+        lockBadge.textContent = `🔒 Locked x${displayedLockedTurns}`;
+        seatEl.appendChild(lockBadge);
+      }
+
       if (!isYou && p.cardCount === 1) {
         if (p.calledUno) {
           const flag = document.createElement('div');
@@ -468,7 +529,10 @@ if (me) {
           const catchBtn = document.createElement('button');
           catchBtn.className = 'secondary catch-btn';
           catchBtn.textContent = 'Catch!';
-          catchBtn.addEventListener('click', () => socket.emit('uno:catch', { targetId: p.id }));
+          catchBtn.disabled = lockAnimationActive;
+          catchBtn.addEventListener('click', () => {
+            if (!lockAnimationActive) socket.emit('uno:catch', { targetId: p.id });
+          });
           seatEl.appendChild(catchBtn);
 
           const theirWindow = unoWindows.find((w) => w.playerId === p.id);
@@ -541,7 +605,7 @@ if (me) {
       slot.style.transform = `rotate(${tilt}deg) translateY(${drop}px)`;
 
       const el = buildCardEl(card);
-      const playable = isMyTurn && canPlayLocally(card, state.discardTop, state.currentColor);
+      const playable = !lockAnimationActive && isMyTurn && canPlayLocally(card, state.discardTop, state.currentColor);
       el.classList.toggle('playable', playable);
       el.addEventListener('click', () => attemptPlay(card, isMyTurn));
 
@@ -549,10 +613,10 @@ if (me) {
       handRowEl.appendChild(slot);
     });
 
-    drawBtn.disabled = !isMyTurn || state.turnHasDrawn;
-    passBtn.disabled = !isMyTurn || !state.turnHasDrawn;
+    drawBtn.disabled = lockAnimationActive || !isMyTurn || state.turnHasDrawn;
+    passBtn.disabled = lockAnimationActive || !isMyTurn || !state.turnHasDrawn;
     const self = myPlayer(state);
-    unoBtn.disabled = state.yourHand.length !== 1 || Boolean(self?.calledUno);
+    unoBtn.disabled = lockAnimationActive || state.yourHand.length !== 1 || Boolean(self?.calledUno);
 
     renderLog(gameLogEl, state.log);
   }
@@ -589,20 +653,312 @@ if (me) {
     handRowEl.classList.add('shake');
   }
 
-  function submitPlay(cardId, chosenColor) {
-    socket.emit('uno:play', { cardId, chosenColor }, (res) => {
+  function submitPlay(cardId, chosenColor, extra = {}) {
+    socket.emit('uno:play', { cardId, chosenColor, ...extra }, (res) => {
       if (!res || !res.ok) flashInvalid();
     });
   }
 
+  // --- Target picker (Switch Position: pick 1 other player; Switch
+  // Position Wild: pick 2 players, self allowed) — a simple multi-select
+  // list capped at exactly `count` choices before Confirm enables. ---
+  let targetPickerSelection = [];
+  let targetPickerCount = 1;
+  let targetPickerOnConfirm = null;
+
+  function renderTargetPickerList(excludeSelf) {
+    targetPickerListEl.innerHTML = '';
+    const candidates = latestState.players.filter((p) => !excludeSelf || p.id !== latestState.yourId);
+    candidates.forEach((p) => {
+      const btn = document.createElement('button');
+      const selected = targetPickerSelection.includes(p.id);
+      btn.className = 'secondary uno-target-btn' + (selected ? ' selected' : '');
+      btn.textContent = p.name + (p.id === latestState.yourId ? ' (You)' : '') + (selected ? ' ✓' : '');
+      btn.addEventListener('click', () => {
+        if (targetPickerSelection.includes(p.id)) {
+          targetPickerSelection = targetPickerSelection.filter((id) => id !== p.id);
+        } else if (targetPickerSelection.length < targetPickerCount) {
+          targetPickerSelection.push(p.id);
+        }
+        renderTargetPickerList(excludeSelf);
+      });
+      targetPickerListEl.appendChild(btn);
+    });
+    targetPickerConfirmBtn.disabled = targetPickerSelection.length !== targetPickerCount;
+  }
+
+  function openTargetPicker(count, onConfirm, { excludeSelf = true } = {}) {
+    targetPickerSelection = [];
+    targetPickerCount = count;
+    targetPickerOnConfirm = onConfirm;
+    targetPickerTitleEl.textContent = count === 1 ? 'Choose a player to switch seats with' : 'Choose 2 players to switch seats';
+    renderTargetPickerList(excludeSelf);
+    targetPickerModal.classList.remove('hidden');
+  }
+
+  function closeTargetPicker() {
+    targetPickerModal.classList.add('hidden');
+    targetPickerOnConfirm = null;
+  }
+
+  targetPickerConfirmBtn.addEventListener('click', () => {
+    if (targetPickerSelection.length !== targetPickerCount) return;
+    const cb = targetPickerOnConfirm;
+    const selection = [...targetPickerSelection];
+    closeTargetPicker();
+    if (cb) cb(selection);
+  });
+  targetPickerCancelBtn.addEventListener('click', closeTargetPicker);
+
+  // --- Minus Two bonus dump: only offered when the player held 5+ cards
+  // (including the -2 itself) before playing — matches the server's own
+  // "more than 4 cards" gate, so this is purely a UI convenience, not the
+  // actual enforcement (the server re-validates independently). ---
+  let dumpPickerCard = null;
+  let dumpPickerSelection = [];
+
+  function renderDumpPickerList() {
+    dumpPickerListEl.innerHTML = '';
+    const candidates = latestState.yourHand.filter((c) => c.id !== dumpPickerCard.id && c.color === dumpPickerCard.color);
+    if (!candidates.length) {
+      const msg = document.createElement('p');
+      msg.style.cssText = 'color:var(--muted); font-size:13px;';
+      msg.textContent = `No other ${dumpPickerCard.color} cards in hand.`;
+      dumpPickerListEl.appendChild(msg);
+      return;
+    }
+    candidates.forEach((c) => {
+      const el = buildCardEl(c, { small: true });
+      el.classList.add('playable');
+      if (dumpPickerSelection.includes(c.id)) el.style.boxShadow = '0 0 0 3px var(--good)';
+      el.addEventListener('click', () => {
+        if (dumpPickerSelection.includes(c.id)) {
+          dumpPickerSelection = dumpPickerSelection.filter((id) => id !== c.id);
+        } else if (dumpPickerSelection.length < 2) {
+          dumpPickerSelection.push(c.id);
+        }
+        renderDumpPickerList();
+      });
+      dumpPickerListEl.appendChild(el);
+    });
+  }
+
+  function openDumpPicker(card) {
+    dumpPickerCard = card;
+    dumpPickerSelection = [];
+    dumpColorLabelEl.textContent = card.color;
+    renderDumpPickerList();
+    dumpPickerModal.classList.remove('hidden');
+  }
+
+  function closeDumpPicker() {
+    dumpPickerModal.classList.add('hidden');
+    dumpPickerCard = null;
+    dumpPickerSelection = [];
+  }
+
+  dumpConfirmBtn.addEventListener('click', () => {
+    const card = dumpPickerCard;
+    const extraCardIds = [...dumpPickerSelection];
+    closeDumpPicker();
+    submitPlay(card.id, null, extraCardIds.length ? { extraCardIds } : {});
+  });
+  dumpSkipBtn.addEventListener('click', () => {
+    const card = dumpPickerCard;
+    closeDumpPicker();
+    submitPlay(card.id, null);
+  });
+
+  // --- Lock card: dice + weighted "wheel" reveal, driven by the round-by-
+  // round breakdown the server sends so the animation always lands on the
+  // actual server-decided outcome rather than faking its own randomness. ---
+  // Cycles el's text through `values` (formatted by formatFn) for roughly
+  // `totalMs`, slowing down as it goes so it reads like a wheel/die
+  // decelerating into its landing spot, rather than a flat-speed flicker.
+  async function spinFor(el, values, totalMs, formatFn) {
+    let elapsed = 0;
+    let delay = 80;
+    let i = 0;
+    while (elapsed < totalMs) {
+      el.textContent = formatFn(values[i % values.length]);
+      i += 1;
+      await sleep(delay);
+      elapsed += delay;
+      delay = Math.min(delay + 15, 400);
+    }
+  }
+
+  // --- Prize-wheel visual for Lock's player pick: real pie slices (one per
+  // candidate) drawn as SVG, spun via a CSS transform transition, landing on
+  // whichever slice matches the server's actual pick under the fixed
+  // pointer (right / 0°/East side) — the visual always agrees with the
+  // real outcome, it's just decorating it. ---
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const WHEEL_SEGMENT_COLORS = ['#ea5a5f', '#f4cf5c', '#3fd08c', '#5c8ff0'];
+
+  function buildWheelSvg(names) {
+    lockWheelSvg.innerHTML = '';
+    lockWheelSvg.style.transition = 'none';
+    lockWheelSvg.style.transform = 'rotate(0deg)';
+    const n = names.length;
+    const r = 95;
+    const segAngle = 360 / n;
+    const fontSize = n > 8 ? 8 : n > 5 ? 10 : 13;
+    for (let i = 0; i < n; i++) {
+      const startRad = (i * segAngle * Math.PI) / 180;
+      const endRad = ((i + 1) * segAngle * Math.PI) / 180;
+      const x1 = r * Math.cos(startRad);
+      const y1 = r * Math.sin(startRad);
+      const x2 = r * Math.cos(endRad);
+      const y2 = r * Math.sin(endRad);
+      const largeArc = segAngle > 180 ? 1 : 0;
+
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', `M 0 0 L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`);
+      path.setAttribute('fill', WHEEL_SEGMENT_COLORS[i % WHEEL_SEGMENT_COLORS.length]);
+      path.setAttribute('stroke', 'white');
+      path.setAttribute('stroke-width', '1.5');
+      lockWheelSvg.appendChild(path);
+
+      const midDeg = (i + 0.5) * segAngle;
+      const midRad = (midDeg * Math.PI) / 180;
+      const labelR = r * 0.62;
+      const lx = labelR * Math.cos(midRad);
+      const ly = labelR * Math.sin(midRad);
+      const text = document.createElementNS(SVG_NS, 'text');
+      text.setAttribute('x', String(lx));
+      text.setAttribute('y', String(ly));
+      text.setAttribute('fill', 'white');
+      text.setAttribute('font-size', String(fontSize));
+      text.setAttribute('font-weight', '800');
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'middle');
+      text.setAttribute('transform', `rotate(${midDeg}, ${lx}, ${ly})`);
+      text.textContent = names[i].length > 10 ? names[i].slice(0, 9) + '…' : names[i];
+      lockWheelSvg.appendChild(text);
+    }
+  }
+
+  // Rotates the wheel so pickedIndex's slice ends up under the fixed
+  // pointer (East / 0°), after a few extra full spins for showmanship.
+  function spinWheelTo(segmentCount, pickedIndex, durationMs) {
+    return new Promise((resolve) => {
+      const segAngle = 360 / segmentCount;
+      const targetCenterDeg = (pickedIndex + 0.5) * segAngle;
+      const baseRotation = (360 - (targetCenterDeg % 360)) % 360;
+      const extraSpins = 5;
+      const finalRotation = baseRotation + extraSpins * 360;
+      requestAnimationFrame(() => {
+        lockWheelSvg.style.transition = `transform ${durationMs}ms cubic-bezier(0.12, 0.66, 0.18, 1)`;
+        requestAnimationFrame(() => {
+          lockWheelSvg.style.transform = `rotate(${finalRotation}deg)`;
+        });
+      });
+      setTimeout(resolve, durationMs + 100);
+    });
+  }
+
+  // Turns a round's candidate list into wheel SLOTS, repeating each
+  // candidate `weight` times (UNO status = 3 slots, 2-5 cards = 2 slots, 6+
+  // cards = 1 slot — the exact same weight the server used to actually pick
+  // the winner) so the wheel's slice sizes visually match the real odds
+  // instead of giving everyone one equal-sized slice regardless of weight.
+  function expandCandidatesToSlots(candidates) {
+    const slots = [];
+    candidates.forEach((c) => {
+      const weight = Math.max(1, c.weight || 1);
+      for (let i = 0; i < weight; i++) slots.push(c);
+    });
+    return slots;
+  }
+
+  async function showLockAnimation(payload) {
+    lockAnimationActive = true;
+    drawBtn.disabled = true;
+    passBtn.disabled = true;
+    unoBtn.disabled = true;
+
+    lockModalTitleEl.textContent = `🔒 ${payload.playerName} played Lock!`;
+    lockDiceDisplayEl.textContent = '🎲 …';
+    lockWheelSvg.innerHTML = '';
+    lockWheelCaptionEl.textContent = '';
+    lockResultListEl.textContent = '';
+    lockModal.classList.remove('hidden');
+
+    // The server already applied every pick before this event was even
+    // sent, so latestState's lockedTurns is already the FINAL count — snap
+    // each affected player back to their pre-reveal count (final minus this
+    // activation's pending +1) and reveal them one at a time as their round
+    // actually lands, instead of spoiling every result before the wheel spins.
+    lockRevealOverrides = new Map();
+    payload.rounds.forEach((round) => {
+      const p = latestState && latestState.players.find((pl) => pl.id === round.pickedId);
+      if (p) lockRevealOverrides.set(p.id, Math.max(0, (p.lockedTurns || 0) - 1));
+    });
+    if (latestState) renderGame(latestState);
+
+    // Dice: ~5s of suspenseful rolling before landing on the real result.
+    await spinFor(lockDiceDisplayEl, [1, 2, 3], 5000, (n) => `🎲 ${n}`);
+    lockDiceDisplayEl.textContent = `🎲 Rolled a ${payload.diceResult}!`;
+    await sleep(500);
+
+    // Wheel: one ~5s spin per locked player (so a dice roll of 2 means two
+    // back-to-back 5s spins), showing that round's actual candidate pool —
+    // weighted into repeated slots — as real pie slices, landing on the
+    // real pick under the pointer.
+    const lockedNames = [];
+    for (const round of payload.rounds) {
+      const slots = expandCandidatesToSlots(round.candidates);
+      const matchingSlotIndices = slots.reduce((acc, c, idx) => {
+        if (c.id === round.pickedId) acc.push(idx);
+        return acc;
+      }, []);
+      const pickedSlotIndex = matchingSlotIndices.length
+        ? matchingSlotIndices[Math.floor(Math.random() * matchingSlotIndices.length)]
+        : 0;
+      const picked = round.candidates.find((c) => c.id === round.pickedId);
+      const pickedName = picked ? picked.name : '?';
+
+      buildWheelSvg(slots.map((c) => c.name));
+      lockWheelCaptionEl.textContent = '';
+      await spinWheelTo(slots.length, pickedSlotIndex, 4800);
+      lockWheelCaptionEl.textContent = `🔒 ${pickedName}`;
+      lockedNames.push(pickedName);
+
+      // Reveal this round's pick now that the wheel has actually landed.
+      lockRevealOverrides.delete(round.pickedId);
+      if (latestState) renderGame(latestState);
+      await sleep(600);
+    }
+    lockResultListEl.textContent = lockedNames.length ? `Locked: ${lockedNames.join(', ')}` : 'No one else at the table to lock.';
+
+    lockRevealOverrides = null;
+    lockAnimationActive = false;
+    if (latestState) render();
+  }
+
+  lockModalCloseBtn.addEventListener('click', () => lockModal.classList.add('hidden'));
+  socket.on('uno:lockEvent', (payload) => { showLockAnimation(payload); });
+
   function attemptPlay(card, isMyTurn) {
+    if (lockAnimationActive) return;
     if (!isMyTurn) return;
     if (!canPlayLocally(card, latestState.discardTop, latestState.currentColor)) {
       flashInvalid();
       return;
     }
+    if (card.value === 'minus2') {
+      if (latestState.yourHand.length >= 5) openDumpPicker(card);
+      else submitPlay(card.id, null);
+      return;
+    }
+    if (card.value === 'switchPos') {
+      openTargetPicker(1, (ids) => submitPlay(card.id, null, { targetPlayerId: ids[0] }), { excludeSelf: true });
+      return;
+    }
     if (card.color === 'wild') {
       pendingWildCardId = card.id;
+      pendingWildCardValue = card.value;
       colorModal.classList.remove('hidden');
       return;
     }
@@ -613,8 +969,16 @@ if (me) {
     btn.addEventListener('click', () => {
       const color = btn.dataset.color;
       colorModal.classList.add('hidden');
-      if (pendingWildCardId) submitPlay(pendingWildCardId, color);
+      const cardId = pendingWildCardId;
+      const cardValue = pendingWildCardValue;
       pendingWildCardId = null;
+      pendingWildCardValue = null;
+      if (!cardId) return;
+      if (cardValue === 'switchWild') {
+        openTargetPicker(2, (ids) => submitPlay(cardId, color, { targetPlayerIds: ids }), { excludeSelf: false });
+      } else {
+        submitPlay(cardId, color);
+      }
     });
   });
 
@@ -720,6 +1084,13 @@ if (me) {
   addBotsBtn.addEventListener('click', () => {
     socket.emit('uno:addBots', { count: 3 }, (res) => {
       if (!res || !res.ok) alert('Could not add bots: ' + ((res && res.error) || 'unknown error'));
+    });
+  });
+
+  advanceCardsToggle.addEventListener('change', () => {
+    const enabled = advanceCardsToggle.checked;
+    socket.emit('uno:setAdvanceCards', { enabled }, (res) => {
+      if (!res || !res.ok) advanceCardsToggle.checked = !enabled; // revert on rejection
     });
   });
 
