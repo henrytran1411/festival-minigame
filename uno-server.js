@@ -37,7 +37,21 @@ const ALL_ACTION_VALUES = [...ACTIONS, ...NEW_COLOR_ACTION_VALUES];
 const ADVANCE_CARD_TYPES = new Set([...NEW_COLOR_ACTION_VALUES, ...Object.keys(NEW_WILD_ACTION_COUNTS)]);
 const LOCK_DICE_WEIGHTS = [{ value: 1, weight: 60 }, { value: 2, weight: 30 }, { value: 3, weight: 10 }];
 const BOT_NAMES = ['🤖 Bot Minh', '🤖 Bot Lan', '🤖 Bot Huy', '🤖 Bot Trang', '🤖 Bot Đức', '🤖 Bot Mai'];
-const BOT_THINK_MS = 1200;
+const BOT_THINK_MIN_MS = 1000;
+const BOT_THINK_MAX_MS = 3000;
+function randomBotThinkMs() {
+  return BOT_THINK_MIN_MS + Math.random() * (BOT_THINK_MAX_MS - BOT_THINK_MIN_MS);
+}
+
+// Mirrors the timings in showLockAnimation() (uno.js) so the server holds
+// bots back for as long as the reveal actually takes on screen — not a
+// flat worst-case guess. Keep these two in sync if either side's timing
+// changes: dice spin (5000) + pause (500), per-round wheel spin (4800) +
+// pause (600), final hold (1000), plus slack for socket delivery latency.
+const LOCK_REVEAL_DICE_MS = 5500;
+const LOCK_REVEAL_ROUND_MS = 5400;
+const LOCK_REVEAL_FINAL_HOLD_MS = 1000;
+const LOCK_REVEAL_NETWORK_BUFFER_MS = 1500;
 
 function buildDeck() {
   const deck = [];
@@ -226,6 +240,13 @@ class UnoRoom {
     // show one of THOSE afterward — this stays pinned to the real play so the
     // client's per-card callout sound (see uno.js) doesn't miss it.
     this.lastPlayedCard = null;
+    // While a Lock card's dice+wheel reveal is playing on every client (see
+    // showLockAnimation in uno.js), bots must not act either — otherwise the
+    // server keeps advancing turns in real time underneath the animation and
+    // a bot can play a card the whole table is blocked from reacting to.
+    // Humans are already blocked locally by lockAnimationActive, but bots
+    // have no client, so this timestamp is the server-side equivalent.
+    this.botsPausedUntil = 0;
   }
 
   pushLog(message) {
@@ -584,20 +605,37 @@ class UnoRoom {
 
     this.resolveAutoSkips();
     this.broadcast(nsp);
-    if (lockResult) this.broadcastLockEvent(nsp, lockResult);
+    if (lockResult) {
+      this.pauseBotsForLockReveal(lockResult.rounds.length);
+      this.broadcastLockEvent(nsp, lockResult);
+    }
     if (switchResult) this.broadcastSwitchEvent(nsp, switchResult);
     this.scheduleBotTurnIfNeeded(nsp);
   }
 
+  // Extends botsPausedUntil to cover this Lock reveal's real on-screen
+  // duration (see LOCK_REVEAL_* above) — called wherever a lockResult comes
+  // back from applyPlay, whether the player was human or a bot.
+  pauseBotsForLockReveal(roundCount) {
+    const durationMs = LOCK_REVEAL_DICE_MS + roundCount * LOCK_REVEAL_ROUND_MS
+      + LOCK_REVEAL_FINAL_HOLD_MS + LOCK_REVEAL_NETWORK_BUFFER_MS;
+    this.botsPausedUntil = Math.max(this.botsPausedUntil, Date.now() + durationMs);
+  }
+
   // Called after every action that might change whose turn it is. Bots act
-  // on a short delay so their move doesn't feel instant/robotic, and so
-  // several bots in a row don't all resolve within the same tick.
+  // on a random 1-3s "thinking" delay so their move doesn't feel instant/
+  // robotic, and so several bots in a row don't all resolve within the same
+  // tick or in an obviously identical rhythm — except while a Lock reveal is
+  // still playing on screen, when they're held back until it's done (see
+  // botsPausedUntil / pauseBotsForLockReveal).
   scheduleBotTurnIfNeeded(nsp) {
     clearTimeout(this.botTimer);
     this.botTimer = null;
     if (this.status !== 'playing') return;
     const cp = this.currentPlayer();
-    if (cp && cp.isBot) this.botTimer = setTimeout(() => this.runBotTurn(nsp), BOT_THINK_MS);
+    if (!cp || !cp.isBot) return;
+    const lockHoldRemaining = Math.max(0, this.botsPausedUntil - Date.now());
+    this.botTimer = setTimeout(() => this.runBotTurn(nsp), lockHoldRemaining + randomBotThinkMs());
   }
 
   personalizedState(forPlayerId) {
@@ -916,7 +954,10 @@ function attachUno(io) {
       }
       if (typeof callback === 'function') callback({ ok: true });
       room.broadcast(nsp);
-      if (lockResult) room.broadcastLockEvent(nsp, lockResult);
+      if (lockResult) {
+        room.pauseBotsForLockReveal(lockResult.rounds.length);
+        room.broadcastLockEvent(nsp, lockResult);
+      }
       if (switchResult) room.broadcastSwitchEvent(nsp, switchResult);
       room.scheduleBotTurnIfNeeded(nsp);
     });
@@ -934,6 +975,11 @@ function attachUno(io) {
       }
       if (room.turnHasDrawn) {
         if (typeof callback === 'function') callback({ ok: false, error: 'already-drawn' });
+        return;
+      }
+      const topCardForDraw = room.discard[room.discard.length - 1];
+      if (player.hand.some((c) => canPlay(c, topCardForDraw, room.currentColor))) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'must-play-if-able' });
         return;
       }
       room.drawCards(player, 1);
@@ -956,6 +1002,16 @@ function attachUno(io) {
       }
       if (!room.turnHasDrawn) {
         if (typeof callback === 'function') callback({ ok: false, error: 'must-draw-first' });
+        return;
+      }
+      // The rule above (uno:draw) only ever lets a draw happen when nothing
+      // in hand was playable, so the only card that could have just BECOME
+      // playable is the one drawn — it's always the last card pushed onto
+      // the hand by drawCards().
+      const topCardForPass = room.discard[room.discard.length - 1];
+      const drawnCard = player.hand[player.hand.length - 1];
+      if (drawnCard && canPlay(drawnCard, topCardForPass, room.currentColor)) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'must-play-drawn-card' });
         return;
       }
       room.advance(1);

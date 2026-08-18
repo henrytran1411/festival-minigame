@@ -53,6 +53,7 @@ if (me) {
   const newGameBtn = document.getElementById('new-game-btn');
 
   const colorModal = document.getElementById('color-modal');
+  const colorModalCancelBtn = document.getElementById('color-modal-cancel-btn');
   const rulesModal = document.getElementById('rules-modal');
   const catalogModal = document.getElementById('catalog-modal');
   const catalogContentEl = document.getElementById('catalog-content');
@@ -75,7 +76,6 @@ if (me) {
   const lockWheelSvg = document.getElementById('lock-wheel-svg');
   const lockWheelCaptionEl = document.getElementById('lock-wheel-caption');
   const lockResultListEl = document.getElementById('lock-result-list');
-  const lockModalCloseBtn = document.getElementById('lock-modal-close-btn');
 
   document.getElementById('rules-link').addEventListener('click', (e) => {
     e.preventDefault();
@@ -733,7 +733,18 @@ if (me) {
 
     const isMyTurn = state.currentPlayerId === state.yourId;
     const other = state.players.find((p) => p.id === state.currentPlayerId);
-    turnBannerEl.textContent = isMyTurn ? 'Your turn!' : other ? `${other.name}'s turn` : '';
+    // House rule: drawing is only allowed when NOTHING in hand is playable,
+    // and if what you draw turns out to be playable, you must play it — no
+    // drawing to dodge a card you'd rather not play, and no holding a drawn
+    // card you could've played. The server enforces both; this just mirrors
+    // them so the buttons/hint don't invite a rejected action.
+    const hasPlayableCard = state.yourHand.some((c) => canPlayLocally(c, state.discardTop, state.currentColor));
+    const drawnCard = state.turnHasDrawn ? state.yourHand[state.yourHand.length - 1] : null;
+    const mustPlayDrawnCard = Boolean(drawnCard && canPlayLocally(drawnCard, state.discardTop, state.currentColor));
+    let turnBannerText = isMyTurn ? 'Your turn!' : other ? `${other.name}'s turn` : '';
+    if (isMyTurn && !state.turnHasDrawn && hasPlayableCard) turnBannerText += ' — you have a playable card, play it!';
+    else if (isMyTurn && mustPlayDrawnCard) turnBannerText += ' — that drawn card is playable, you must play it!';
+    turnBannerEl.textContent = turnBannerText;
     turnBannerEl.classList.toggle('mine', isMyTurn);
 
     const myWindow = unoWindows.find((w) => w.playerId === state.yourId);
@@ -766,8 +777,8 @@ if (me) {
       handRowEl.appendChild(slot);
     });
 
-    drawBtn.disabled = lockAnimationActive || !isMyTurn || state.turnHasDrawn;
-    passBtn.disabled = lockAnimationActive || !isMyTurn || !state.turnHasDrawn;
+    drawBtn.disabled = lockAnimationActive || !isMyTurn || state.turnHasDrawn || hasPlayableCard;
+    passBtn.disabled = lockAnimationActive || !isMyTurn || !state.turnHasDrawn || mustPlayDrawnCard;
     const self = myPlayer(state);
     unoBtn.disabled = lockAnimationActive || state.yourHand.length !== 1 || Boolean(self?.calledUno);
 
@@ -1088,18 +1099,16 @@ if (me) {
     }
     lockResultListEl.textContent = lockedNames.length ? `Locked: ${lockedNames.join(', ')}` : 'No one else at the table to lock.';
 
-    // Hold the confirmed reveal on screen for a bit longer before trusting
-    // live state again — the seat badges are hidden behind this modal the
-    // whole time anyway, so this just guarantees whoever closes the modal
-    // (manually or once this finishes) actually sees "Locked" at least
-    // once, even if it's since been consumed by real gameplay underneath.
-    await sleep(2500);
+    // Hold the confirmed reveal on screen for a beat so it actually reads,
+    // then close automatically — no manual "Close" button, every player at
+    // the table sees the same effect and is unblocked at the same moment.
+    await sleep(1000);
+    lockModal.classList.add('hidden');
     lockRevealOverrides = null;
     lockAnimationActive = false;
     if (latestState) render();
   }
 
-  lockModalCloseBtn.addEventListener('click', () => lockModal.classList.add('hidden'));
   socket.on('uno:lockEvent', (payload) => { showLockAnimation(payload); });
 
   // Switch Position / Switch Position Wild: by the time this event arrives,
@@ -1188,6 +1197,12 @@ if (me) {
         submitPlay(cardId, color);
       }
     });
+  });
+
+  colorModalCancelBtn.addEventListener('click', () => {
+    colorModal.classList.add('hidden');
+    pendingWildCardId = null;
+    pendingWildCardValue = null;
   });
 
   function enterRoom(roomId) {

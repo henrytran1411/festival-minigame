@@ -65,7 +65,7 @@
          the play area gets its own "felt" backdrop instead of floating
          directly on it — same reasoning as the .top-bar/.status-bar fix
          used on the other 4 games. */
-      background: rgba(10, 12, 18, 0.55);
+      background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 14px;
     }
@@ -615,6 +615,9 @@
         <button class="uno-color-btn" data-color="green" style="background:#2fa96b;"></button>
         <button class="uno-color-btn" data-color="blue" style="background:#3b6fd6;"></button>
       </div>
+      <div class="uno-actions" style="margin-top:14px;">
+        <button class="secondary" id="color-modal-cancel-btn">Cancel</button>
+      </div>
     </div>
   </div>
 
@@ -651,9 +654,6 @@
       </div>
       <div id="lock-wheel-caption" class="uno-wheel-caption"></div>
       <div id="lock-result-list" style="font-size:13px; color:var(--muted); margin-top:6px;"></div>
-      <div class="uno-actions" style="margin-top:14px;">
-        <button class="secondary" id="lock-modal-close-btn">Close</button>
-      </div>
     </div>
   </div>
 
