@@ -32,7 +32,7 @@ if (me) {
   const addBotsBtn = document.getElementById('add-bots-btn');
   const waitingLogEl = document.getElementById('waiting-log');
   const leaveWaitingBtn = document.getElementById('leave-waiting-btn');
-  const advanceCardsToggle = document.getElementById('advance-cards-toggle');
+  const advanceCardCheckboxes = Array.from(document.querySelectorAll('.advance-card-checkbox'));
 
   const othersRowEl = document.getElementById('others-row');
   const deckCountEl = document.getElementById('deck-count');
@@ -41,6 +41,7 @@ if (me) {
   const directionEl = document.getElementById('direction-el');
   const turnBannerEl = document.getElementById('turn-banner');
   const unoCountdownBannerEl = document.getElementById('uno-countdown-banner');
+  const switchToastEl = document.getElementById('switch-toast');
   const handRowEl = document.getElementById('hand-row');
   const drawBtn = document.getElementById('draw-btn');
   const passBtn = document.getElementById('pass-btn');
@@ -53,6 +54,8 @@ if (me) {
 
   const colorModal = document.getElementById('color-modal');
   const rulesModal = document.getElementById('rules-modal');
+  const catalogModal = document.getElementById('catalog-modal');
+  const catalogContentEl = document.getElementById('catalog-content');
 
   const targetPickerModal = document.getElementById('target-picker-modal');
   const targetPickerTitleEl = document.getElementById('target-picker-title');
@@ -79,6 +82,13 @@ if (me) {
     rulesModal.classList.remove('hidden');
   });
   rulesModal.querySelector('.modal-close').addEventListener('click', () => rulesModal.classList.add('hidden'));
+
+  document.getElementById('catalog-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    buildCatalog();
+    catalogModal.classList.remove('hidden');
+  });
+  catalogModal.querySelector('.modal-close').addEventListener('click', () => catalogModal.classList.add('hidden'));
 
   // --- Sound: looping background music while a game is in progress, plus a
   // synthesized "card flick" effect whenever a card hits the discard pile
@@ -138,6 +148,22 @@ if (me) {
     skip: 'Dỗi!',
     reverse: 'Không chịu đâu!',
     draw2: 'Ahihi đồ ngốc!',
+    minus2: 'Trừ liền hai lá!',
+    switchPos: 'Đổi chỗ bất ngờ!',
+    actionWild: 'Lặp lại chiêu cũ!',
+    lock: 'Khóa lượt luôn!',
+    switchWild: 'Đổi chỗ theo ý mình!',
+    plusWild: 'Cộng dồn cho cả làng!',
+  };
+  const UNO_CALLOUT_TEXT = 'UNO!';
+  // Some advance-card audio files were recorded under a different filename
+  // than the card's internal value — map value -> actual file slug; any
+  // value not listed here just uses itself (e.g. minus2.mp3, lock.mp3).
+  const CALLOUT_AUDIO_FILE = {
+    switchPos: 'switchposition',
+    actionWild: 'actionwild',
+    switchWild: 'switchpositionwild',
+    plusWild: 'pluswild',
   };
   function speakCallout(text) {
     if (musicMuted) return;
@@ -163,12 +189,13 @@ if (me) {
   // file hasn't been recorded/added yet, or fails to load/play.
   const calloutAudioCache = {};
   function getCalloutAudio(value) {
-    if (!calloutAudioCache[value]) {
-      const audio = new Audio(`sounds/callouts/${value}.mp3`);
+    const slug = CALLOUT_AUDIO_FILE[value] || value;
+    if (!calloutAudioCache[slug]) {
+      const audio = new Audio(`sounds/callouts/${slug}.mp3`);
       audio.preload = 'auto';
-      calloutAudioCache[value] = audio;
+      calloutAudioCache[slug] = audio;
     }
-    return calloutAudioCache[value];
+    return calloutAudioCache[slug];
   }
   function playCallout(value, text) {
     if (musicMuted) return;
@@ -254,6 +281,18 @@ if (me) {
   }
 
   let lastDiscardCardId = null;
+  // The id of the last card we already played a callout for. Deliberately
+  // separate from lastDiscardCardId: a minus2 bonus dump pushes its extra
+  // cards on top of the minus2 itself, so discardTop ends up being one of
+  // THOSE afterward — tracking state.lastPlayedCard instead means the callout
+  // still fires for the minus2 (or any advance card) even when it's not the
+  // card the player currently sees on top of the pile.
+  let lastPlayedCardId = null;
+  // Player ids whose calledUno flag was already true as of the last render —
+  // diffed against the incoming state to detect the exact moment someone
+  // (human via the UNO button, or a bot auto-calling) newly calls UNO, so
+  // everyone at the table hears the callout, not just whoever clicked it.
+  let calledUnoIds = new Set();
   // While a Lock wheel animation is playing: blocks all player actions, and
   // (via renderTable above) hides each affected player's lockedTurns count
   // until their specific wheel round has actually landed.
@@ -363,6 +402,108 @@ if (me) {
     return el;
   }
 
+  // Reference data for the "📖 Cards" catalog — grouped by rule/behavior
+  // rather than one entry per physical card, since the point is explaining
+  // what each TYPE does, not enumerating all 108+ individual cards. The
+  // colored entries that got dedicated per-color artwork (-2, Switch
+  // Position) show all 4 so their distinct art is visible; plain number/
+  // action cards just show one representative color.
+  const CATALOG_SECTIONS = [
+    {
+      title: 'Standard Deck (108 cards)',
+      entries: [
+        {
+          cards: [
+            { color: 'red', value: '5' }, { color: 'yellow', value: '5' },
+            { color: 'green', value: '5' }, { color: 'blue', value: '5' },
+          ],
+          label: 'Number (0-9)',
+          description: 'Match by color or number. One 0 and two of each 1-9, per color. No special effect.',
+        },
+        { cards: [{ color: 'red', value: 'skip' }], label: 'Skip', description: "Next player's turn is skipped entirely." },
+        { cards: [{ color: 'red', value: 'reverse' }], label: 'Reverse', description: 'Reverses turn direction. Acts like Skip with only 2 players.' },
+        { cards: [{ color: 'red', value: 'draw2' }], label: 'Draw Two', description: 'Next player draws 2 cards and their turn is skipped.' },
+        { cards: [{ color: 'wild', value: 'wild' }], label: 'Wild', description: 'Play anytime. Choose the new color. No other effect.' },
+        { cards: [{ color: 'wild', value: 'wild4' }], label: 'Wild Draw Four', description: 'Play anytime. Choose the new color; next player draws 4 and is skipped.' },
+      ],
+    },
+    {
+      title: 'Advance Cards (optional house rules)',
+      entries: [
+        {
+          cards: [
+            { color: 'red', value: 'minus2' }, { color: 'yellow', value: 'minus2' },
+            { color: 'green', value: 'minus2' }, { color: 'blue', value: 'minus2' },
+          ],
+          label: '-2 (Minus Two)',
+          description: 'Plays like a normal card of its color. If you have 5+ cards (including this one), you may also discard up to 2 more cards of the same color in the same turn.',
+        },
+        {
+          cards: [
+            { color: 'red', value: 'switchPos' }, { color: 'yellow', value: 'switchPos' },
+            { color: 'green', value: 'switchPos' }, { color: 'blue', value: 'switchPos' },
+          ],
+          label: 'Switch Position',
+          description: 'No choice involved — 2 random players at the table (possibly including you) permanently swap seats/turn order.',
+        },
+        {
+          cards: [{ color: 'wild', value: 'actionWild' }],
+          label: 'Action Wild',
+          description: 'Choose a color. Repeats whichever of Skip / Reverse / Draw Two was most recently played by anyone this game (no effect if none has been played yet).',
+        },
+        {
+          cards: [{ color: 'wild', value: 'lock' }],
+          label: 'Lock',
+          description: "Choose a color. Rolls a die (1-3, weighted toward 1) and randomly skips that many other players' next turn — players holding fewer cards are more likely to be picked.",
+        },
+        {
+          cards: [{ color: 'wild', value: 'switchWild' }],
+          label: 'Switch Position Wild',
+          description: 'Choose a color, then pick any 2 players at the table (yourself included) — they permanently swap seats/turn order.',
+        },
+        {
+          cards: [{ color: 'wild', value: 'plusWild' }],
+          label: 'Plus Wild',
+          description: 'Choose a color. Every other player immediately draws cards — more if they hold fewer cards (up to 3 for someone at UNO, down to 1 for a big hand). No one is skipped.',
+        },
+      ],
+    },
+  ];
+
+  function buildCatalog() {
+    catalogContentEl.innerHTML = '';
+    CATALOG_SECTIONS.forEach((section) => {
+      const heading = document.createElement('div');
+      heading.className = 'catalog-section-title';
+      heading.textContent = section.title;
+      catalogContentEl.appendChild(heading);
+
+      section.entries.forEach((entry) => {
+        const row = document.createElement('div');
+        row.className = 'catalog-entry';
+
+        const cardsRow = document.createElement('div');
+        cardsRow.className = 'catalog-cards-row';
+        entry.cards.forEach((c) => {
+          cardsRow.appendChild(buildCardEl({ id: 'catalog', ...c }, { small: true }));
+        });
+
+        const text = document.createElement('div');
+        text.className = 'catalog-text';
+        const label = document.createElement('div');
+        label.className = 'catalog-label';
+        label.textContent = entry.label;
+        const desc = document.createElement('div');
+        desc.className = 'catalog-desc';
+        desc.textContent = entry.description;
+        text.append(label, desc);
+
+        row.append(cardsRow, text);
+        catalogContentEl.appendChild(row);
+      });
+    });
+  }
+
   function canPlayLocally(card, topCard, currentColor) {
     if (!topCard) return true;
     if (card.color === 'wild') return true;
@@ -422,7 +563,8 @@ if (me) {
       playerListEl.appendChild(li);
     });
     startBtn.disabled = state.players.length < 2;
-    advanceCardsToggle.checked = Boolean(state.useAdvanceCards);
+    const selectedAdvanceCards = new Set(state.advanceCardTypes || []);
+    advanceCardCheckboxes.forEach((cb) => { cb.checked = selectedAdvanceCards.has(cb.value); });
     renderLog(waitingLogEl, state.log);
   }
 
@@ -483,6 +625,7 @@ if (me) {
         + (p.id === state.currentPlayerId ? ' turn' : '')
         + (p.id === nextPlayerId ? ' next' : '')
         + (p.connected ? '' : ' offline');
+      seatEl.dataset.playerId = p.id;
       seatEl.style.left = x + '%';
       seatEl.style.top = y + '%';
 
@@ -554,16 +697,26 @@ if (me) {
     const newTopId = state.discardTop ? state.discardTop.id : null;
     if (lastDiscardCardId !== null && newTopId !== lastDiscardCardId) {
       playCardDropSound();
-      const calloutValue = state.discardTop && state.discardTop.value;
+    }
+    lastDiscardCardId = newTopId;
+
+    const newPlayedId = state.lastPlayedCard ? state.lastPlayedCard.id : null;
+    if (lastPlayedCardId !== null && newPlayedId !== null && newPlayedId !== lastPlayedCardId) {
+      const calloutValue = state.lastPlayedCard.value;
       const calloutText = CARD_CALLOUTS[calloutValue];
       if (calloutText) playCallout(calloutValue, calloutText);
     }
-    lastDiscardCardId = newTopId;
+    lastPlayedCardId = newPlayedId;
 
     if (lastUnoPenaltyCounter !== null && state.unoPenaltyCounter !== lastUnoPenaltyCounter) {
       playPenaltySound();
     }
     lastUnoPenaltyCounter = state.unoPenaltyCounter;
+
+    const nowCalledUnoIds = new Set(state.players.filter((p) => p.calledUno).map((p) => p.id));
+    const someoneJustCalledUno = [...nowCalledUnoIds].some((id) => !calledUnoIds.has(id));
+    if (someoneJustCalledUno) playCallout('uno', UNO_CALLOUT_TEXT);
+    calledUnoIds = nowCalledUnoIds;
 
     const unoWindows = state.unoWindows || [];
     updateUnoTicking(state.status === 'playing' && unoWindows.length > 0);
@@ -885,15 +1038,15 @@ if (me) {
     lockResultListEl.textContent = '';
     lockModal.classList.remove('hidden');
 
-    // The server already applied every pick before this event was even
-    // sent, so latestState's lockedTurns is already the FINAL count — snap
-    // each affected player back to their pre-reveal count (final minus this
-    // activation's pending +1) and reveal them one at a time as their round
-    // actually lands, instead of spoiling every result before the wheel spins.
+    // Hide each affected player's badge at their PRE-pick count (sent by the
+    // server, not inferred from live state — see applyLockCard's comment:
+    // the room keeps running underneath this animation, so by the time we
+    // read latestState a lock may already have been consumed by a real
+    // turn-skip, and "current minus 1" would then be wrong) until their
+    // round actually lands, instead of spoiling every result up front.
     lockRevealOverrides = new Map();
     payload.rounds.forEach((round) => {
-      const p = latestState && latestState.players.find((pl) => pl.id === round.pickedId);
-      if (p) lockRevealOverrides.set(p.id, Math.max(0, (p.lockedTurns || 0) - 1));
+      lockRevealOverrides.set(round.pickedId, round.baselineLockedTurns);
     });
     if (latestState) renderGame(latestState);
 
@@ -925,13 +1078,22 @@ if (me) {
       lockWheelCaptionEl.textContent = `🔒 ${pickedName}`;
       lockedNames.push(pickedName);
 
-      // Reveal this round's pick now that the wheel has actually landed.
-      lockRevealOverrides.delete(round.pickedId);
+      // Reveal this round's pick now that the wheel has actually landed —
+      // force-show the confirmed +1 rather than falling back to live state,
+      // which may already have moved past it (their turn came up and the
+      // lock was auto-consumed) before the player ever got to see this.
+      lockRevealOverrides.set(round.pickedId, round.baselineLockedTurns + 1);
       if (latestState) renderGame(latestState);
       await sleep(600);
     }
     lockResultListEl.textContent = lockedNames.length ? `Locked: ${lockedNames.join(', ')}` : 'No one else at the table to lock.';
 
+    // Hold the confirmed reveal on screen for a bit longer before trusting
+    // live state again — the seat badges are hidden behind this modal the
+    // whole time anyway, so this just guarantees whoever closes the modal
+    // (manually or once this finishes) actually sees "Locked" at least
+    // once, even if it's since been consumed by real gameplay underneath.
+    await sleep(2500);
     lockRevealOverrides = null;
     lockAnimationActive = false;
     if (latestState) render();
@@ -939,6 +1101,56 @@ if (me) {
 
   lockModalCloseBtn.addEventListener('click', () => lockModal.classList.add('hidden'));
   socket.on('uno:lockEvent', (payload) => { showLockAnimation(payload); });
+
+  // Switch Position / Switch Position Wild: by the time this event arrives,
+  // uno:state already reflects the swapped seating order, so the two seat
+  // elements are already sitting at their correct final spots. To actually
+  // SHOW the swap (rather than a silent instant jump), snap them back to
+  // each other's spot with no transition, then animate them sliding into
+  // the position they're really at now.
+  function showSwitchAnimation(payload) {
+    const seatA = othersRowEl.querySelector(`[data-player-id="${CSS.escape(payload.idA)}"]`);
+    const seatB = othersRowEl.querySelector(`[data-player-id="${CSS.escape(payload.idB)}"]`);
+    if (seatA && seatB) {
+      const toA = { left: seatA.style.left, top: seatA.style.top };
+      const toB = { left: seatB.style.left, top: seatB.style.top };
+
+      seatA.style.transition = 'none';
+      seatB.style.transition = 'none';
+      seatA.style.left = toB.left;
+      seatA.style.top = toB.top;
+      seatB.style.left = toA.left;
+      seatB.style.top = toA.top;
+      seatA.classList.add('swapping');
+      seatB.classList.add('swapping');
+
+      // Force a reflow so the instant jump above actually paints before the
+      // transitioned move back below starts, or the browser may collapse
+      // both into a single no-op frame.
+      void seatA.offsetWidth;
+
+      requestAnimationFrame(() => {
+        seatA.style.transition = '';
+        seatB.style.transition = '';
+        seatA.style.left = toA.left;
+        seatA.style.top = toA.top;
+        seatB.style.left = toB.left;
+        seatB.style.top = toB.top;
+      });
+
+      setTimeout(() => {
+        seatA.classList.remove('swapping');
+        seatB.classList.remove('swapping');
+      }, 1200);
+    }
+
+    switchToastEl.textContent = `🔀 ${payload.nameA} and ${payload.nameB} swapped seats!`;
+    switchToastEl.classList.remove('hidden');
+    clearTimeout(showSwitchAnimation.hideTimer);
+    showSwitchAnimation.hideTimer = setTimeout(() => switchToastEl.classList.add('hidden'), 2200);
+  }
+
+  socket.on('uno:switchEvent', (payload) => { showSwitchAnimation(payload); });
 
   function attemptPlay(card, isMyTurn) {
     if (lockAnimationActive) return;
@@ -950,10 +1162,6 @@ if (me) {
     if (card.value === 'minus2') {
       if (latestState.yourHand.length >= 5) openDumpPicker(card);
       else submitPlay(card.id, null);
-      return;
-    }
-    if (card.value === 'switchPos') {
-      openTargetPicker(1, (ids) => submitPlay(card.id, null, { targetPlayerId: ids[0] }), { excludeSelf: true });
       return;
     }
     if (card.color === 'wild') {
@@ -992,7 +1200,9 @@ if (me) {
     joined = false;
     latestState = null;
     lastDiscardCardId = null;
+    lastPlayedCardId = null;
     lastUnoPenaltyCounter = null;
+    calledUnoIds = new Set();
     updateUnoTicking(false);
     localStorage.removeItem(LAST_ROOM_KEY);
     createRoomScreen.classList.add('hidden');
@@ -1087,10 +1297,12 @@ if (me) {
     });
   });
 
-  advanceCardsToggle.addEventListener('change', () => {
-    const enabled = advanceCardsToggle.checked;
-    socket.emit('uno:setAdvanceCards', { enabled }, (res) => {
-      if (!res || !res.ok) advanceCardsToggle.checked = !enabled; // revert on rejection
+  advanceCardCheckboxes.forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const selected = advanceCardCheckboxes.filter((c) => c.checked).map((c) => c.value);
+      socket.emit('uno:setAdvanceCards', { selected }, (res) => {
+        if (!res || !res.ok) cb.checked = !cb.checked; // revert just this one on rejection
+      });
     });
   });
 
