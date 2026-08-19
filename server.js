@@ -59,10 +59,10 @@ GAMES.forEach((g) => {
 
 // Separate from the join-gating window above: fully hides a game from the
 // index page's grid (replaced with a card-back "Open later" placeholder)
-// regardless of whether its join window is open/closed. Admin-only, off by
-// default for all 4 games.
+// regardless of whether its join window is open/closed. Admin-only, ON by
+// default for all 4 games — the admin reveals each one when it's time.
 const gameHidden = {};
-GAMES.forEach((g) => { gameHidden[g] = false; });
+GAMES.forEach((g) => { gameHidden[g] = true; });
 
 function gameWindowSnapshot(game) {
   const w = gameWindows[game];

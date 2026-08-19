@@ -194,11 +194,17 @@
       z-index: 2;
     }
 
-    /* Card back — branded artwork, with a small maple leaf in each corner */
+    /* Card back — branded artwork, with a small maple leaf in each corner.
+       Lightened (along with the discard pile's top card below) so both read
+       clearly against the dark table felt instead of looking too dim. */
     .uno-card.back {
       background-image: url('cards/backcard.png');
       background-size: cover;
       background-position: center;
+      filter: brightness(1.25);
+    }
+    #discard-el .uno-card {
+      filter: brightness(1.25);
     }
     .uno-card.back .corner-leaf {
       position: absolute;
