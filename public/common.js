@@ -308,25 +308,33 @@ window.Festival = (function () {
   };
 })();
 
-// Background theme with a manual on/off toggle — only on the hub
-// (index.html) and the live leaderboard display (leaderboard.html) for
-// now; the 4 scored games aren't wired in yet (to be set up later), and
-// UNO already has its own separate background music. Browsers block
-// autoplay-with-sound until a user gesture, so the default "on" state is
-// an INTENT — actual playback starts on the first click/keypress anywhere
-// on the page (or immediately if the browser happens to allow it), and the
-// floating button lets players flip it off/on afterward. Uses an absolute
-// audio path (leading "/") since this file is included from both
-// root-level and nested (games/*) pages, and a relative audio src resolves
-// against the CURRENT PAGE's URL, not common.js's own location.
+// Background theme with a manual on/off toggle — on the hub (index.html),
+// the live leaderboard display (leaderboard.html), and each of the 4 scored
+// games (its own dedicated track). UNO already has its own separate
+// background music, so it's excluded here. Browsers block autoplay-with-
+// sound until a user gesture, so the default "on" state is an INTENT —
+// actual playback starts on the first click/keypress anywhere on the page
+// (or immediately if the browser happens to allow it), and the floating
+// button lets players flip it off/on afterward. Uses an absolute audio path
+// (leading "/") since this file is included from both root-level and nested
+// (games/*) pages, and a relative audio src resolves against the CURRENT
+// PAGE's URL, not common.js's own location.
 (function setupThemeToggle() {
   const path = window.location.pathname;
   const isHub = path === '/' || path.endsWith('/index.html');
   const isLeaderboard = path.endsWith('/leaderboard.html');
-  if (!isHub && !isLeaderboard) return;
+  const GAME_BGM_FILES = {
+    'sudoku.html': 'sudoku.mp3',
+    'scramble.html': 'scramble.mp3',
+    'memory.html': 'memory.mp3',
+    'proverb.html': 'proverb.mp3',
+  };
+  const gamePage = Object.keys(GAME_BGM_FILES).find((f) => path.endsWith('/games/' + f));
+  if (!isHub && !isLeaderboard && !gamePage) return;
 
   const THEME_MUTED_KEY = 'festival_theme_muted';
-  const theme = new Audio('/sounds/mid-autumn-theme.mp3');
+  const themeSrc = gamePage ? `/games/sounds/${GAME_BGM_FILES[gamePage]}` : '/sounds/mid-autumn-theme.mp3';
+  const theme = new Audio(themeSrc);
   theme.loop = true;
   theme.volume = 0.15;
   let muted = localStorage.getItem(THEME_MUTED_KEY) === '1'; // default: on
