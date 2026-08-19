@@ -15,7 +15,7 @@ let me = Festival.getPlayer();
 
 const gameWindowStates = {};
 window.FESTIVAL_GAMES.forEach((g) => {
-  gameWindowStates[g.key] = { isOpen: false, openedAt: null, closesAt: null };
+  gameWindowStates[g.key] = { isOpen: false, openedAt: null, closesAt: null, hidden: false };
 });
 let windowTickHandle = null;
 
@@ -62,12 +62,20 @@ function buildGameGrid() {
   gameGrid.innerHTML = '';
   const myEntry = latestLeaderboard.find((p) => p.id === me.id);
   window.FESTIVAL_GAMES.forEach((g) => {
+    const state = gameWindowStates[g.key];
+    if (state && state.hidden) {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'game-tile hidden-placeholder';
+      placeholder.innerHTML = '<div class="open-later-label">Open later</div>';
+      gameGrid.appendChild(placeholder);
+      return;
+    }
+
     const tile = document.createElement('div');
     tile.className = 'game-tile';
 
     const best = myEntry ? myEntry.scores[g.key] || 0 : 0;
     const open = isGameOpen(g.key);
-    const state = gameWindowStates[g.key];
     let statusText;
     if (open) {
       statusText = `🔓 Closes in ${Festival.formatCountdown(state.closesAt - Date.now())}`;

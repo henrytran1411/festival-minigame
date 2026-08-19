@@ -98,16 +98,20 @@ const cardEls = {};
 function buildGameCards() {
   gameControlsEl.innerHTML = '';
   window.FESTIVAL_GAMES.forEach((g) => {
-    gameWindowStates[g.key] = gameWindowStates[g.key] || { game: g.key, isOpen: false, openedAt: null, closesAt: null };
+    gameWindowStates[g.key] = gameWindowStates[g.key] || { game: g.key, isOpen: false, openedAt: null, closesAt: null, hidden: false };
 
     const card = document.createElement('div');
     card.className = 'card';
     card.innerHTML = `
       <h3 style="text-align:center; margin-top:0;">${g.icon} ${g.title}</h3>
       <div class="admin-status closed" data-role="status">🔒 Closed</div>
+      <div class="admin-status" data-role="hidden-status" style="color: var(--muted); font-size: 12px;"></div>
       <div class="admin-actions">
         <button data-role="open">▶ Open (2 min)</button>
         <button data-role="close" class="danger" disabled>■ Close Now</button>
+      </div>
+      <div class="admin-actions">
+        <button data-role="toggle-hidden" class="secondary">🙈 Hide from Players</button>
         <button data-role="reset-attempts" class="secondary">↺ Reset Attempts</button>
       </div>
     `;
@@ -118,6 +122,12 @@ function buildGameCards() {
     });
     card.querySelector('[data-role="close"]').addEventListener('click', () => {
       socket.emit('admin:close', { game: g.key }, (res) => {
+        if (res && res.ok) applyState(res.state);
+      });
+    });
+    card.querySelector('[data-role="toggle-hidden"]').addEventListener('click', () => {
+      const currentlyHidden = Boolean(gameWindowStates[g.key].hidden);
+      socket.emit('admin:set-hidden', { game: g.key, hidden: !currentlyHidden }, (res) => {
         if (res && res.ok) applyState(res.state);
       });
     });
@@ -150,6 +160,11 @@ function renderCard(game) {
     statusEl.className = 'admin-status closed';
     statusEl.textContent = '🔒 Closed';
   }
+
+  const hiddenStatusEl = card.querySelector('[data-role="hidden-status"]');
+  const toggleHiddenBtn = card.querySelector('[data-role="toggle-hidden"]');
+  hiddenStatusEl.textContent = state.hidden ? '🙈 Hidden from index page ("Open later")' : '';
+  toggleHiddenBtn.textContent = state.hidden ? '👁 Show to Players' : '🙈 Hide from Players';
 }
 
 function showResetNote(game, playerCount) {

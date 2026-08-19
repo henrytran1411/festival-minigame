@@ -16,7 +16,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 require('./uno-server.js')(io);
 
 const GAMES = ['sudoku', 'scramble', 'memory', 'proverb'];
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'trungthu2026';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'trungthu2026!@';
 const JOIN_WINDOW_MS = 2 * 60 * 1000;
 
 // Lifetime attempt cap per game. Games not listed here are unlimited.
@@ -57,10 +57,17 @@ GAMES.forEach((g) => {
   gameWindows[g] = { openedAt: null, closesAt: null };
 });
 
+// Separate from the join-gating window above: fully hides a game from the
+// index page's grid (replaced with a card-back "Open later" placeholder)
+// regardless of whether its join window is open/closed. Admin-only, off by
+// default for all 4 games.
+const gameHidden = {};
+GAMES.forEach((g) => { gameHidden[g] = false; });
+
 function gameWindowSnapshot(game) {
   const w = gameWindows[game];
   const isOpen = w.closesAt !== null && Date.now() < w.closesAt;
-  return { game, isOpen, openedAt: w.openedAt, closesAt: w.closesAt };
+  return { game, isOpen, openedAt: w.openedAt, closesAt: w.closesAt, hidden: Boolean(gameHidden[game]) };
 }
 
 function allGameWindowsSnapshot() {
@@ -247,6 +254,20 @@ io.on('connection', (socket) => {
       return;
     }
     closeGameWindowNow(game);
+    if (typeof callback === 'function') callback({ ok: true, state: gameWindowSnapshot(game) });
+  });
+
+  socket.on('admin:set-hidden', ({ game, hidden }, callback) => {
+    if (!socket.isAdmin) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'not authorized' });
+      return;
+    }
+    if (!GAMES.includes(game)) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'invalid game' });
+      return;
+    }
+    gameHidden[game] = Boolean(hidden);
+    broadcastGameWindow(game);
     if (typeof callback === 'function') callback({ ok: true, state: gameWindowSnapshot(game) });
   });
 
