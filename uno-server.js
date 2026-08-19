@@ -430,7 +430,9 @@ class UnoRoom {
 
   // Plus Wild: every OTHER player draws cards based on the same
   // handSizeTier scale Lock uses (UNO status = 3, 2-5 cards = 2, 6+ = 1) —
-  // deterministic, no randomness, so it needs no client-side animation.
+  // deterministic, no randomness, but the client still animates it (one
+  // flying card per unit of `amount`, per affected player), so this returns
+  // the same {playerName, affected} shape for the caller to broadcast.
   applyPlusWildCard(player) {
     const affected = this.players
       .filter((p) => p.id !== player.id)
@@ -438,6 +440,7 @@ class UnoRoom {
     affected.forEach((a) => this.drawCards(this.findPlayer(a.id), a.amount));
     const summary = affected.map((a) => `${a.name} +${a.amount}`).join(', ');
     this.pushLog(`💥 ${player.name} played Plus Wild — ${summary || 'no one else at the table'}.`);
+    return { playerName: player.name, affected };
   }
 
   // Returns a bot's choice of extra info a card needs beyond color — only
@@ -484,7 +487,7 @@ class UnoRoom {
       this.status = 'finished';
       this.winnerId = player.id;
       this.pushLog(`🏆 ${player.name} wins!`);
-      return { lockResult: null, switchResult: null };
+      return { lockResult: null, switchResult: null, plusWildResult: null };
     }
 
     let switchResult = null;
@@ -499,8 +502,9 @@ class UnoRoom {
     if (card.value === 'lock') {
       lockResult = this.applyLockCard(player);
     }
+    let plusWildResult = null;
     if (card.value === 'plusWild') {
-      this.applyPlusWildCard(player);
+      plusWildResult = this.applyPlusWildCard(player);
     }
 
     if (ACTIONS.includes(card.value)) this.lastActionType = card.value;
@@ -533,12 +537,18 @@ class UnoRoom {
     }
 
     if (this.status === 'playing') this.pushLog(`${this.currentPlayer().name}'s turn.`);
-    return { lockResult, switchResult };
+    return { lockResult, switchResult, plusWildResult };
   }
 
   broadcastLockEvent(nsp, payload) {
     this.players.forEach((p) => {
       if (p.connected && p.socketId) nsp.to(p.socketId).emit('uno:lockEvent', payload);
+    });
+  }
+
+  broadcastPlusWildEvent(nsp, payload) {
+    this.players.forEach((p) => {
+      if (p.connected && p.socketId) nsp.to(p.socketId).emit('uno:plusWildEvent', payload);
     });
   }
 
@@ -584,10 +594,11 @@ class UnoRoom {
     const card = pickBotCard(bot.hand, topCard, this.currentColor);
     let lockResult = null;
     let switchResult = null;
+    let plusWildResult = null;
 
     if (card) {
       const chosenColor = card.color === 'wild' ? pickBotColor(bot.hand.filter((c) => c.id !== card.id)) : undefined;
-      ({ lockResult, switchResult } = this.applyPlay(bot, card, chosenColor, this.buildBotExtra(bot, card)));
+      ({ lockResult, switchResult, plusWildResult } = this.applyPlay(bot, card, chosenColor, this.buildBotExtra(bot, card)));
       if (bot.hand.length === 1) bot.calledUno = true;
     } else {
       this.drawCards(bot, 1);
@@ -595,7 +606,7 @@ class UnoRoom {
       const drawn = bot.hand[bot.hand.length - 1];
       if (drawn && canPlay(drawn, topCard, this.currentColor)) {
         const chosenColor = drawn.color === 'wild' ? pickBotColor(bot.hand.filter((c) => c.id !== drawn.id)) : undefined;
-        ({ lockResult, switchResult } = this.applyPlay(bot, drawn, chosenColor, this.buildBotExtra(bot, drawn)));
+        ({ lockResult, switchResult, plusWildResult } = this.applyPlay(bot, drawn, chosenColor, this.buildBotExtra(bot, drawn)));
         if (bot.hand.length === 1) bot.calledUno = true;
       } else {
         this.advance(1);
@@ -610,6 +621,7 @@ class UnoRoom {
       this.broadcastLockEvent(nsp, lockResult);
     }
     if (switchResult) this.broadcastSwitchEvent(nsp, switchResult);
+    if (plusWildResult) this.broadcastPlusWildEvent(nsp, plusWildResult);
     this.scheduleBotTurnIfNeeded(nsp);
   }
 
@@ -947,7 +959,7 @@ function attachUno(io) {
         extra.targetPlayerIds = targetPlayerIds;
       }
 
-      const { lockResult, switchResult } = room.applyPlay(player, card, chosenColor, extra);
+      const { lockResult, switchResult, plusWildResult } = room.applyPlay(player, card, chosenColor, extra);
       room.resolveAutoSkips();
       if (room.status === 'playing' && player.hand.length === 1 && !player.calledUno) {
         room.startUnoWindow(player, nsp);
@@ -959,6 +971,7 @@ function attachUno(io) {
         room.broadcastLockEvent(nsp, lockResult);
       }
       if (switchResult) room.broadcastSwitchEvent(nsp, switchResult);
+      if (plusWildResult) room.broadcastPlusWildEvent(nsp, plusWildResult);
       room.scheduleBotTurnIfNeeded(nsp);
     });
 

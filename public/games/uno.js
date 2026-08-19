@@ -35,6 +35,8 @@ if (me) {
   const advanceCardCheckboxes = Array.from(document.querySelectorAll('.advance-card-checkbox'));
 
   const othersRowEl = document.getElementById('others-row');
+  const deckEl = document.getElementById('deck-el');
+  const unoTableEl = document.querySelector('.uno-table');
   const deckCountEl = document.getElementById('deck-count');
   const discardEl = document.getElementById('discard-el');
   const colorLabelEl = document.getElementById('color-label');
@@ -1160,6 +1162,54 @@ if (me) {
   }
 
   socket.on('uno:switchEvent', (payload) => { showSwitchAnimation(payload); });
+
+  // Plus Wild: animates one card-back "flyer" per card the player actually
+  // receives — a player getting 2 cards sees 2 separate flights land on
+  // their seat, not one combined effect, matching the real per-card amount.
+  function flyCardToSeat(playerId) {
+    const seatEl = othersRowEl.querySelector(`[data-player-id="${CSS.escape(playerId)}"]`);
+    if (!seatEl || !deckEl || !unoTableEl) return;
+    const tableRect = unoTableEl.getBoundingClientRect();
+    const fromRect = deckEl.getBoundingClientRect();
+    const toRect = seatEl.getBoundingClientRect();
+    const fromX = fromRect.left + fromRect.width / 2 - tableRect.left;
+    const fromY = fromRect.top + fromRect.height / 2 - tableRect.top;
+    const toX = toRect.left + toRect.width / 2 - tableRect.left;
+    const toY = toRect.top + toRect.height / 2 - tableRect.top;
+
+    const flyer = document.createElement('div');
+    flyer.className = 'uno-card back small';
+    flyer.style.position = 'absolute';
+    flyer.style.left = fromX + 'px';
+    flyer.style.top = fromY + 'px';
+    flyer.style.transform = 'translate(-50%, -50%)';
+    flyer.style.transition = 'left 0.5s ease, top 0.5s ease, opacity 0.2s ease 0.35s';
+    flyer.style.zIndex = '45';
+    flyer.style.pointerEvents = 'none';
+    unoTableEl.appendChild(flyer);
+
+    requestAnimationFrame(() => {
+      flyer.style.left = toX + 'px';
+      flyer.style.top = toY + 'px';
+    });
+    setTimeout(() => { flyer.style.opacity = '0'; }, 350);
+    setTimeout(() => { flyer.remove(); }, 600);
+  }
+
+  function showPlusWildAnimation(payload) {
+    switchToastEl.textContent = `💥 ${payload.playerName} played Plus Wild!`;
+    switchToastEl.classList.remove('hidden');
+    clearTimeout(showPlusWildAnimation.hideTimer);
+    showPlusWildAnimation.hideTimer = setTimeout(() => switchToastEl.classList.add('hidden'), 2200);
+
+    (payload.affected || []).forEach((a) => {
+      for (let i = 0; i < a.amount; i++) {
+        setTimeout(() => flyCardToSeat(a.id), i * 350);
+      }
+    });
+  }
+
+  socket.on('uno:plusWildEvent', (payload) => { showPlusWildAnimation(payload); });
 
   function attemptPlay(card, isMyTurn) {
     if (lockAnimationActive) return;
