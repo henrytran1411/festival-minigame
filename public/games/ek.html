@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exploding Kittens — Autumn Festival</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .ek-wrap { max-width: 760px; }
+
+    .ek-log {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 14px;
+    }
+    .ek-log div { padding: 2px 0; }
+
+    .ek-player-list { list-style: none; padding: 0; margin: 12px 0; }
+    .ek-player-list li { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .ek-player-list li:last-child { border-bottom: none; }
+
+    .room-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; }
+    .room-row .room-info { display: flex; flex-direction: column; }
+    .room-row .room-name { font-weight: 600; font-size: 14px; }
+    .room-row .room-meta { font-size: 12px; color: var(--muted); }
+    .room-row .room-meta.playing { color: var(--gold); }
+    .room-row button { padding: 6px 14px; font-size: 13px; }
+
+    #lobby-screen input, #create-room-screen input, #password-modal input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .ek-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+
+    /* Table: opponent seats around the top, deck/discard piles in the
+       middle, your own hand fanned out below — same spatial idea as UNO's
+       table, just simpler (no fixed seating geometry, a plain row). */
+    .ek-table {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .ek-seats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 14px; }
+    .ek-seat {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      text-align: center;
+      min-width: 84px;
+    }
+    .ek-seat.turn { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); }
+    .ek-seat.dead { opacity: 0.4; }
+    .ek-seat.offline { opacity: 0.55; }
+    .ek-seat .name { font-size: 13px; font-weight: 600; }
+    .ek-seat .count { font-size: 12px; color: var(--muted); }
+    .ek-seat .dead-tag { color: var(--bad); font-weight: 800; font-size: 11px; margin-top: 2px; }
+
+    .ek-center { display: flex; align-items: center; justify-content: center; gap: 28px; }
+    .ek-pile-label { text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    .ek-card {
+      position: relative;
+      width: 84px;
+      height: 118px;
+      border-radius: 10px;
+      border: 2px solid rgba(255,255,255,0.15);
+      box-shadow: 0 3px 7px rgba(0,0,0,0.35);
+      flex-shrink: 0;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-align: center;
+      padding: 6px;
+      box-sizing: border-box;
+      cursor: default;
+    }
+    .ek-card.small { width: 58px; height: 82px; gap: 3px; }
+    .ek-card .emoji { font-size: 30px; line-height: 1; }
+    .ek-card.small .emoji { font-size: 20px; }
+    .ek-card .label { font-size: 10px; font-weight: 700; line-height: 1.15; }
+    .ek-card.playable { cursor: pointer; }
+    .ek-card.playable:hover { transform: translateY(-4px); transition: transform 0.12s ease; }
+    .ek-card.selected { outline: 3px solid var(--gold); outline-offset: -3px; transform: translateY(-6px); }
+    .ek-card.back { background: linear-gradient(135deg, #2a2f3a, #12141a); border-color: var(--border); }
+    .ek-card.back .emoji { font-size: 22px; opacity: 0.6; }
+
+    .ek-card[data-type="defuse"] { background: linear-gradient(135deg, #2fa96b, #1c6e45); color: #fff; }
+    .ek-card[data-type="explodingKitten"] { background: linear-gradient(135deg, #3a1010, #120404); color: #ff9d9d; border-color: #ff5c5c; }
+    .ek-card[data-type="attack"] { background: linear-gradient(135deg, #d64545, #7a1f1f); color: #fff; }
+    .ek-card[data-type="skip"] { background: linear-gradient(135deg, #3b6fd6, #1c3670); color: #fff; }
+    .ek-card[data-type="favor"] { background: linear-gradient(135deg, #9b59d0, #4f2670); color: #fff; }
+    .ek-card[data-type="shuffle"] { background: linear-gradient(135deg, #2fb0a9, #145b56); color: #fff; }
+    .ek-card[data-type="seeFuture"] { background: linear-gradient(135deg, #4a4fd6, #21246e); color: #fff; }
+    .ek-card[data-type="nope"] { background: linear-gradient(135deg, #e0973e, #7a4a10); color: #fff; }
+    .ek-card[data-type="tacocat"] { background: linear-gradient(135deg, #e0b400, #7a5f00); color: #fff; }
+    .ek-card[data-type="cattermelon"] { background: linear-gradient(135deg, #e0507a, #7a1f3a); color: #fff; }
+    .ek-card[data-type="beardcat"] { background: linear-gradient(135deg, #a67c52, #5c4324); color: #fff; }
+    .ek-card[data-type="potatocat"] { background: linear-gradient(135deg, #b8863f, #5c4118); color: #fff; }
+    .ek-card[data-type="rainbowcat"] { background: linear-gradient(135deg, #d64545 0%, #e0b400 25%, #2fa96b 50%, #3b6fd6 75%, #9b59d0 100%); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+
+    .ek-hand-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 14px 0; min-height: 130px; }
+
+    .ek-turn-banner { text-align: center; font-weight: 700; margin-bottom: 8px; min-height: 22px; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+    .ek-turn-banner.mine { color: var(--good); }
+
+    .ek-pending-banner {
+      text-align: center;
+      background: rgba(255, 209, 102, 0.12);
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .ek-pending-banner.hidden { display: none; }
+
+    .ek-target-list, .ek-discard-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-height: 300px; overflow-y: auto; }
+    .ek-target-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 14px;
+    }
+    .ek-target-btn:hover { border-color: var(--accent); }
+    .ek-target-btn.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255,209,102,0.4); }
+
+    .ek-winner { font-size: 22px; font-weight: 800; color: var(--gold); margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap ek-wrap">
+    <div class="top-bar">
+      <h1>💥 Exploding Kittens <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
+      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+    </div>
+
+    <div id="lobby-screen" class="card">
+      <h2 style="margin-top:0; text-align:center;">Exploding Kittens Rooms</h2>
+      <ul id="room-list" class="ek-player-list"></ul>
+      <p id="no-rooms-msg" style="color:var(--muted); font-size:13px; text-align:center; display:none;">No rooms yet — create one to get started.</p>
+      <div class="ek-actions">
+        <button id="show-create-btn">+ Create Room</button>
+      </div>
+    </div>
+
+    <div id="create-room-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;">Create Room</h2>
+      <p style="font-size:13px; color:var(--muted);">Room name</p>
+      <input type="text" id="room-name-input" maxlength="30" placeholder="e.g. Kittens Table 1" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Password</p>
+      <input type="text" id="room-password-input" maxlength="30" placeholder="Anything — share it with your table" />
+      <p id="create-room-error" style="color:var(--bad); font-size:13px; display:none;"></p>
+      <div class="ek-actions">
+        <button id="create-room-btn">Create &amp; Join</button>
+        <button class="secondary" id="cancel-create-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="waiting-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
+      <ul id="player-list" class="ek-player-list"></ul>
+      <div class="ek-actions">
+        <button class="secondary" id="add-bots-btn">🤖 Add 3 Bots</button>
+        <button id="start-btn" disabled>▶ Start Game</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center; margin-top:8px;">No one else around? Add bots and play solo.</p>
+      <div class="ek-actions">
+        <button class="danger" id="leave-waiting-btn">Leave Room</button>
+      </div>
+      <div id="waiting-log" class="ek-log"></div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+      <div class="ek-table">
+        <div class="ek-seats" id="seats-row"></div>
+        <div class="ek-center">
+          <div>
+            <div class="ek-card back"><span class="emoji">🂠</span></div>
+            <div class="ek-pile-label">Deck: <span id="deck-count">0</span></div>
+          </div>
+          <div>
+            <div id="discard-el"></div>
+            <div class="ek-pile-label">Discard (<span id="discard-count">0</span>) — <a href="#" id="view-discard-link">view all</a></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ek-turn-banner" id="turn-banner"></div>
+      <div class="ek-pending-banner hidden" id="pending-banner"></div>
+
+      <div class="ek-hand-row" id="hand-row"></div>
+
+      <div class="ek-actions">
+        <button class="secondary" id="draw-btn">🎴 Draw Card</button>
+        <button id="play-selected-btn" disabled>▶ Play Selected</button>
+        <button class="secondary" id="clear-selection-btn">Clear Selection</button>
+        <button class="danger" id="nope-btn" style="display:none;">🙅 Nope!</button>
+        <button class="danger" id="leave-btn">Leave Room</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center;">Click 1 card to play it alone (Attack/Skip/Shuffle/See the Future/Favor). Click 2, 3, or 5 matching Cat cards for a Cat Combo.</p>
+
+      <div id="game-log" class="ek-log"></div>
+    </div>
+
+    <div id="finished-screen" class="card result-card hidden">
+      <div class="ek-winner" id="winner-text"></div>
+      <div class="actions">
+        <button id="new-game-btn">Play Again</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 id="password-modal-title">Enter Password</h2>
+      <input type="text" id="join-password-input" placeholder="Room password" />
+      <p id="password-error" style="color:var(--bad); font-size:13px; display:none;">Wrong password.</p>
+      <div class="ek-actions">
+        <button id="password-submit-btn">Join</button>
+        <button class="secondary" id="password-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="target-picker-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align:center;">
+      <h2 id="target-picker-title">Choose a Player</h2>
+      <div id="target-picker-list" class="ek-target-list"></div>
+      <div id="requested-type-row" class="hidden" style="margin-top:14px;">
+        <p style="font-size:13px; color:var(--muted);">Name a card to demand:</p>
+        <select id="requested-type-select" style="width:100%; padding:8px; border-radius:8px; border:1px solid var(--border); background:#1a1d24; color:var(--text);"></select>
+      </div>
+      <div class="ek-actions" style="margin-top:14px;">
+        <button id="target-picker-confirm-btn" disabled>Confirm</button>
+        <button class="secondary" id="target-picker-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="discard-picker-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align:center;">
+      <h2>Take a Card From the Discard Pile</h2>
+      <div id="discard-picker-list" class="ek-discard-list"></div>
+      <div class="ek-actions" style="margin-top:14px;">
+        <button class="secondary" id="discard-picker-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-discard-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align:center;">
+      <h2>Discard Pile</h2>
+      <div id="view-discard-list" class="ek-discard-list"></div>
+      <button class="modal-close secondary" id="view-discard-close-btn">Close</button>
+    </div>
+  </div>
+
+  <div id="reinsert-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align:center;">
+      <h2>💣 Defused! Slip the Kitten Back In...</h2>
+      <p style="color:var(--muted); font-size:13px;">Choose where in the deck to secretly place the Exploding Kitten.</p>
+      <div class="ek-actions" id="reinsert-options"></div>
+    </div>
+  </div>
+
+  <div id="favor-give-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align:center;">
+      <h2 id="favor-give-title">Favor: Give a Card</h2>
+      <div id="favor-give-list" class="ek-hand-row"></div>
+    </div>
+  </div>
+
+  <div id="see-future-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align:center;">
+      <h2>🔮 The Next 3 Cards...</h2>
+      <div id="see-future-list" class="ek-discard-list"></div>
+      <button class="modal-close secondary" id="see-future-close-btn">Close</button>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>💥 How to Play</h2>
+      <ol>
+        <li>On your turn, play any number of cards, then draw one to end your turn — unless your last card was Skip or Attack.</li>
+        <li>Draw an Exploding Kitten with no Defuse card and you're out. With a Defuse, you survive and secretly slip the kitten back into the deck.</li>
+        <li><b>Attack:</b> end your turn without drawing — the next player must take 2 turns in a row (stacks if they Attack right back).</li>
+        <li><b>Skip:</b> end your turn without drawing.</li>
+        <li><b>Favor:</b> pick a player — they must give you a card of their choice.</li>
+        <li><b>Shuffle:</b> shuffles the draw pile.</li>
+        <li><b>See the Future:</b> privately peek at the top 3 cards.</li>
+        <li><b>Nope:</b> cancel the last action card played by anyone (even out of turn) — but a Nope can't itself be Noped here.</li>
+        <li><b>Cat Combo:</b> 2 matching cats steal a random card from a player; 3 matching cats demand a named card from a player; 5 different cats take any card from the discard pile.</li>
+        <li>Last player standing wins!</li>
+      </ol>
+      <button class="modal-close secondary">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../common.js"></script>
+  <script src="ek.js"></script>
+</body>
+</html>

@@ -14,6 +14,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // on its own Socket.IO namespace so it can't collide with the main game
 // protocol above.
 require('./uno-server.js')(io);
+require('./ek-server.js')(io);
 
 const GAMES = ['sudoku', 'scramble', 'memory', 'proverb'];
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'trungthu2026!@';
