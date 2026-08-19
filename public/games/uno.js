@@ -33,6 +33,8 @@ if (me) {
   const waitingLogEl = document.getElementById('waiting-log');
   const leaveWaitingBtn = document.getElementById('leave-waiting-btn');
   const advanceCardCheckboxes = Array.from(document.querySelectorAll('.advance-card-checkbox'));
+  const targetScoreInput = document.getElementById('target-score-input');
+  const targetScoreSetBtn = document.getElementById('target-score-set-btn');
 
   const othersRowEl = document.getElementById('others-row');
   const deckEl = document.getElementById('deck-el');
@@ -52,6 +54,7 @@ if (me) {
   const gameLogEl = document.getElementById('game-log');
 
   const winnerTextEl = document.getElementById('winner-text');
+  const matchScoresEl = document.getElementById('match-scores');
   const newGameBtn = document.getElementById('new-game-btn');
 
   const colorModal = document.getElementById('color-modal');
@@ -567,6 +570,11 @@ if (me) {
     startBtn.disabled = state.players.length < 2;
     const selectedAdvanceCards = new Set(state.advanceCardTypes || []);
     advanceCardCheckboxes.forEach((cb) => { cb.checked = selectedAdvanceCards.has(cb.value); });
+    // Don't clobber the input while someone's actively editing it — the
+    // waiting room re-renders on every player join/leave/checkbox change.
+    if (document.activeElement !== targetScoreInput) {
+      targetScoreInput.value = state.targetScore || '';
+    }
     renderLog(waitingLogEl, state.log);
   }
 
@@ -789,7 +797,47 @@ if (me) {
 
   function renderFinished(state) {
     const winner = state.players.find((p) => p.id === state.winnerId);
-    winnerTextEl.textContent = winner ? `🏆 ${winner.name} wins!` : 'Game over.';
+    const matchWinner = state.players.find((p) => p.id === state.matchWinnerId);
+    const points = state.lastHandPoints;
+    const earnedNote = points && points.winnerId === state.winnerId ? ` (+${points.points} points)` : '';
+
+    if (matchWinner) {
+      winnerTextEl.textContent = `👑 ${matchWinner.name} WINS THE MATCH with ${matchWinner.score} points!`;
+    } else if (winner) {
+      winnerTextEl.textContent = `🏆 ${winner.name} wins the hand${earnedNote}!`;
+    } else {
+      winnerTextEl.textContent = 'Game over.';
+    }
+
+    const ranked = [...state.players].sort((a, b) => (b.score || 0) - (a.score || 0));
+    const target = state.targetScore || 500;
+    matchScoresEl.innerHTML = matchWinner
+      ? `<div style="text-align:center; color:var(--muted); font-size:12px; margin-bottom:6px;">Final match scores (target was ${target}):</div>`
+      : `<div style="text-align:center; color:var(--muted); font-size:12px; margin-bottom:6px;">Match scores so far (first to ${target} wins):</div>`;
+    ranked.forEach((p) => {
+      const row = document.createElement('div');
+      row.textContent = `${p.name}: ${p.score || 0}${p.id === state.matchWinnerId ? ' 👑' : ''}`;
+      matchScoresEl.appendChild(row);
+    });
+
+    // "Next Match" continues the SAME match (scores carry over) as long as
+    // no one has reached the target yet; once someone has, the server resets
+    // scores to 0 on the next uno:newGame, so this becomes a fresh "Play
+    // Again" instead.
+    newGameBtn.textContent = matchWinner ? '▶ Play Again' : '▶ Next Match';
+
+    const readyIds = state.nextMatchReadyIds || [];
+    const connectedCount = state.players.filter((p) => p.connected).length;
+    const iAmReady = readyIds.includes(state.yourId);
+    newGameBtn.disabled = !matchWinner && iAmReady;
+    if (!matchWinner) {
+      const readyNote = document.createElement('div');
+      readyNote.style.cssText = 'text-align:center; color:var(--muted); font-size:12px; margin-top:8px;';
+      readyNote.textContent = iAmReady
+        ? `⏳ Waiting for other players (${readyIds.length}/${connectedCount} ready)...`
+        : `Click "Next Match" when you're ready (${readyIds.length}/${connectedCount} ready so far).`;
+      matchScoresEl.appendChild(readyNote);
+    }
   }
 
   function render() {
@@ -1371,11 +1419,24 @@ if (me) {
     });
   });
 
+  targetScoreSetBtn.addEventListener('click', () => {
+    const targetScore = Number(targetScoreInput.value);
+    socket.emit('uno:setTargetScore', { targetScore }, (res) => {
+      if (!res || !res.ok) alert('Could not set target score: ' + ((res && res.error) || 'unknown error'));
+    });
+  });
+
   startBtn.addEventListener('click', () => socket.emit('uno:start'));
   drawBtn.addEventListener('click', () => socket.emit('uno:draw'));
   passBtn.addEventListener('click', () => socket.emit('uno:pass'));
   unoBtn.addEventListener('click', () => socket.emit('uno:callUno'));
-  newGameBtn.addEventListener('click', () => socket.emit('uno:newGame'));
+  newGameBtn.addEventListener('click', () => {
+    if (latestState && latestState.matchWinnerId) {
+      socket.emit('uno:newGame'); // match concluded -- fresh match, back to the waiting room
+    } else {
+      socket.emit('uno:readyNextMatch'); // match ongoing -- ready-check, no waiting room
+    }
+  });
   leaveWaitingBtn.addEventListener('click', () => {
     socket.emit('uno:leave');
     backToLobby();

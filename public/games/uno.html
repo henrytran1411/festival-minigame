@@ -536,6 +536,13 @@
           <label class="uno-advance-option"><input type="checkbox" class="advance-card-checkbox" value="plusWild" /> Plus Wild</label>
         </div>
       </div>
+      <div class="uno-advance-picker">
+        <div class="uno-advance-picker-title">🏆 Match target score — first player to reach this many points (across hands) wins the match</div>
+        <div style="display:flex; gap:8px; justify-content:center; align-items:center;">
+          <input type="number" id="target-score-input" aria-label="Match target score" min="50" max="5000" step="50" style="width:100px; padding:8px; border-radius:8px; border:1px solid var(--border); background:#1a1d24; color:var(--text); font-size:14px;" />
+          <button class="secondary" id="target-score-set-btn">Set</button>
+        </div>
+      </div>
       <div class="uno-actions">
         <button class="secondary" id="add-bots-btn">🤖 Add 3 Bots</button>
         <button id="start-btn" disabled>▶ Start Game</button>
@@ -587,6 +594,7 @@
 
     <div id="finished-screen" class="card result-card hidden">
       <div class="uno-winner" id="winner-text"></div>
+      <div id="match-scores" class="uno-log" style="text-align:left; margin-top:14px;"></div>
       <div class="actions">
         <button id="new-game-btn">Play Again</button>
         <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>

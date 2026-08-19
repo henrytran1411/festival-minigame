@@ -152,6 +152,27 @@ function canPlay(card, topCard, currentColor) {
   return false;
 }
 
+// Standard UNO scoring, extended to the advance cards: number cards score
+// their face value, colored action cards (Skip/Reverse/Draw Two, and our
+// Minus Two/Switch Position) score 20, and every wild-colored card (plain
+// Wild/Wild Draw Four, and our Action Wild/Lock/Switch Position Wild/Plus
+// Wild) scores 50 — whoever empties their hand collects the total of
+// everyone else's remaining hand value for that round.
+const ACTION_CARD_POINTS = 20;
+const WILD_CARD_POINTS = 50;
+function cardPoints(card) {
+  if (card.color === 'wild') return WILD_CARD_POINTS;
+  if (ALL_ACTION_VALUES.includes(card.value)) return ACTION_CARD_POINTS;
+  const n = Number(card.value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Default target score for ending the match (classic UNO plays to 500) —
+// configurable per room in the waiting room (see uno:setTargetScore).
+const DEFAULT_TARGET_SCORE = 500;
+const MIN_TARGET_SCORE = 50;
+const MAX_TARGET_SCORE = 5000;
+
 function cardLabel(card) {
   const names = {
     skip: 'Skip', reverse: 'Reverse', draw2: 'Draw Two', wild: 'Wild', wild4: 'Wild Draw Four',
@@ -247,6 +268,22 @@ class UnoRoom {
     // Humans are already blocked locally by lockAnimationActive, but bots
     // have no client, so this timestamp is the server-side equivalent.
     this.botsPausedUntil = 0;
+    // Match scoring (persists ACROSS hands via uno:newGame, unlike the
+    // per-hand fields above): playerId -> cumulative points collected by
+    // winning hands. Reset only when a new match starts after the previous
+    // one was actually won (see matchWinnerId / uno:newGame).
+    this.scores = {};
+    this.targetScore = DEFAULT_TARGET_SCORE; // configurable in the waiting room
+    this.matchWinnerId = null; // set once someone's score crosses targetScore
+    this.lastHandPoints = null; // { winnerId, points } from the most recently finished hand
+    // playerIds who've clicked "Next Match" after this hand ended — once
+    // every currently-connected player is in here, the next hand starts
+    // automatically with no trip through the waiting room (see
+    // uno:readyNextMatch). Bots are seeded in immediately since they have no
+    // button to click. Only meaningful when the match hasn't concluded yet
+    // (matchWinnerId null) — a concluded match uses "Play Again"/uno:newGame
+    // instead, which goes through the waiting room to allow reconfiguring.
+    this.nextMatchReady = new Set();
   }
 
   pushLog(message) {
@@ -370,6 +407,28 @@ class UnoRoom {
     this.pushLog(`${this.currentPlayer().name}'s turn.`);
   }
 
+  // True once every currently-connected player has clicked "Next Match"
+  // (bots are pre-seeded in nextMatchReady the moment the hand ends, since
+  // they have no button to click). Re-evaluated dynamically against who's
+  // connected right now, so a player leaving mid-wait doesn't stall the rest
+  // of the table forever.
+  allReadyForNextMatch() {
+    const required = this.players.filter((p) => p.connected);
+    if (!required.length) return false;
+    return required.every((p) => this.nextMatchReady.has(p.id));
+  }
+
+  // Starts the next hand directly from 'finished' -> 'playing', with no trip
+  // through 'waiting' — same advance-card selection and target score as the
+  // hand that just ended, since nothing needs reconfiguring mid-match.
+  startNextHandDirectly(nsp) {
+    this.clearAllUnoWindows();
+    this.startGame();
+    this.nextMatchReady = new Set();
+    this.broadcast(nsp);
+    this.scheduleBotTurnIfNeeded(nsp);
+  }
+
   // Permanently swaps two players' seats in the fixed turn order (Switch
   // Position / Switch Position Wild). Turn flow afterward keeps moving
   // seat-by-seat as normal — the two named players have just traded chairs.
@@ -486,7 +545,21 @@ class UnoRoom {
     if (player.hand.length === 0) {
       this.status = 'finished';
       this.winnerId = player.id;
-      this.pushLog(`🏆 ${player.name} wins!`);
+      // Classic UNO scoring: the winner collects the point value of every
+      // OTHER player's remaining hand (see cardPoints — numbers score face
+      // value, colored actions 20, wild-colored cards 50).
+      const roundPoints = this.players
+        .filter((p) => p.id !== player.id)
+        .reduce((sum, p) => sum + p.hand.reduce((s, c) => s + cardPoints(c), 0), 0);
+      this.scores[player.id] = (this.scores[player.id] || 0) + roundPoints;
+      const totalScore = this.scores[player.id];
+      this.lastHandPoints = { winnerId: player.id, points: roundPoints };
+      this.pushLog(`🏆 ${player.name} wins the hand! +${roundPoints} points (total: ${totalScore}/${this.targetScore}).`);
+      if (totalScore >= this.targetScore) {
+        this.matchWinnerId = player.id;
+        this.pushLog(`👑 ${player.name} wins the MATCH with ${totalScore} points!`);
+      }
+      this.nextMatchReady = new Set(this.players.filter((p) => p.isBot).map((p) => p.id));
       return { lockResult: null, switchResult: null, plusWildResult: null };
     }
 
@@ -666,6 +739,10 @@ class UnoRoom {
       winnerId: this.winnerId,
       turnHasDrawn: this.turnHasDrawn,
       advanceCardTypes: [...this.advanceCardTypes],
+      targetScore: this.targetScore,
+      matchWinnerId: this.matchWinnerId,
+      lastHandPoints: this.lastHandPoints,
+      nextMatchReadyIds: [...this.nextMatchReady],
       players: this.players.map((p) => ({
         id: p.id,
         name: p.name,
@@ -673,6 +750,7 @@ class UnoRoom {
         calledUno: p.calledUno,
         connected: p.connected,
         lockedTurns: p.lockedTurns || 0,
+        score: this.scores[p.id] || 0,
       })),
       yourId: forPlayerId || null,
       yourHand: me ? me.hand : [],
@@ -876,6 +954,31 @@ function attachUno(io) {
         ? `Advance cards selected for the next game: ${[...room.advanceCardTypes].join(', ')}.`
         : 'Advance cards turned off for the next game.');
       if (typeof callback === 'function') callback({ ok: true });
+      room.broadcast(nsp);
+    });
+
+    // Waiting-room config for how many match points (accumulated across
+    // hands via uno:newGame) end the whole match, not just one hand —
+    // classic UNO plays to 500. Only adjustable before a hand is in
+    // progress, same rule as the advance-card picker above.
+    socket.on('uno:setTargetScore', ({ targetScore }, callback) => {
+      const room = myRoom();
+      if (!room) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'no-room' });
+        return;
+      }
+      if (room.status !== 'waiting') {
+        if (typeof callback === 'function') callback({ ok: false, error: 'already-started' });
+        return;
+      }
+      const n = Math.round(Number(targetScore));
+      if (!Number.isFinite(n) || n < MIN_TARGET_SCORE || n > MAX_TARGET_SCORE) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'invalid-target-score' });
+        return;
+      }
+      room.targetScore = n;
+      room.pushLog(`Match target score set to ${n} points.`);
+      if (typeof callback === 'function') callback({ ok: true, targetScore: n });
       room.broadcast(nsp);
     });
 
@@ -1089,10 +1192,49 @@ function attachUno(io) {
       room.lastActionType = null;
       room.players.forEach((p) => { p.lockedTurns = 0; });
       room.clearAllUnoWindows();
-      room.pushLog('Ready for a new game — click Start when everyone is in.');
+      // The previous hand only ends the whole MATCH once someone's score
+      // crosses targetScore — if it hasn't, scores carry into the next hand;
+      // if it has, this "Play Again" starts a fresh match from 0.
+      if (room.matchWinnerId) {
+        room.scores = {};
+        room.matchWinnerId = null;
+        room.pushLog('New match — scores reset to 0. Click Start when everyone is in.');
+      } else {
+        room.pushLog('Ready for the next hand — click Start when everyone is in.');
+      }
       if (typeof callback === 'function') callback({ ok: true });
       room.broadcast(nsp);
       broadcastRoomList();
+    });
+
+    // "Next Match" — used instead of uno:newGame when the match is still
+    // ongoing (no one has hit the target score yet): marks this player
+    // ready, and once every connected player has clicked, the next hand
+    // starts immediately with no stop at the waiting room.
+    socket.on('uno:readyNextMatch', (payload, callback) => {
+      const room = myRoom();
+      if (!room) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'no-room' });
+        return;
+      }
+      if (room.status !== 'finished') {
+        if (typeof callback === 'function') callback({ ok: false, error: 'not-finished' });
+        return;
+      }
+      if (room.matchWinnerId) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'match-concluded' });
+        return;
+      }
+      const player = room.findPlayer(socket.playerId);
+      if (!player) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'not-in-room' });
+        return;
+      }
+      room.nextMatchReady.add(player.id);
+      room.pushLog(`${player.name} is ready for the next match.`);
+      if (typeof callback === 'function') callback({ ok: true });
+      room.broadcast(nsp);
+      if (room.allReadyForNextMatch()) room.startNextHandDirectly(nsp);
     });
 
     function handleLeave() {
@@ -1135,3 +1277,4 @@ module.exports.canPlay = canPlay;
 module.exports.weightedRandomPick = weightedRandomPick;
 module.exports.handSizeTier = handSizeTier;
 module.exports.rollLockDice = rollLockDice;
+module.exports.cardPoints = cardPoints;
