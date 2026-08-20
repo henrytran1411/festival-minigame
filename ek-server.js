@@ -56,12 +56,39 @@ const CARD_INFO = {
   nope: { label: 'Nope', emoji: '🙅' },
   lazycat: { label: 'Lazy Cat', emoji: '😴' },
   cutecat: { label: 'Cute Cat', emoji: '🥹' },
+  // Trap Cards: a third category alongside Cat Combo cards and Action Cards
+  // — never played by their own owner at all. Dim-witted Cat sits inert in
+  // your hand; it only does anything the moment someone ELSE successfully
+  // takes it off you via a Cat Pair/Triple (see triggerDimWittedCatTrap).
+  dimwittedcat: { label: 'Dim-witted Cat', emoji: '🙀' },
 };
 CAT_TYPES.forEach((c) => { CARD_INFO[c.key] = { label: c.label, emoji: c.emoji }; });
 
 function cardLabel(type) {
   const info = CARD_INFO[type];
   return info ? `${info.emoji} ${info.label}` : type;
+}
+
+// Rainbow-Ralphing Cat is a wildcard for Cat Combos: it can stand in for
+// whatever type a Pair/Triple needs, or fill an otherwise-missing distinct
+// type for a Five Different. Every card must still be combo-eligible
+// (CAT_KEYS) — this only relaxes the "must match"/"must all differ" checks.
+function catsMatchForCombo(cards) {
+  if (!cards.every((c) => CAT_KEYS.includes(c.type))) return false;
+  const nonWild = cards.filter((c) => c.type !== 'rainbowcat');
+  if (!nonWild.length) return true; // an all-Rainbow-Cat set always "matches"
+  return nonWild.every((c) => c.type === nonWild[0].type);
+}
+function catsFormFiveDifferentForCombo(cards) {
+  if (cards.length !== 5 || !cards.every((c) => CAT_KEYS.includes(c.type))) return false;
+  const nonWild = cards.filter((c) => c.type !== 'rainbowcat');
+  return new Set(nonWild.map((c) => c.type)).size === nonWild.length; // no real duplicates
+}
+// For logging/labeling a combo: prefer the actual represented type over a
+// Rainbow Cat standing in for it.
+function comboRepresentativeType(cards) {
+  const real = cards.find((c) => c.type !== 'rainbowcat');
+  return real ? real.type : 'rainbowcat';
 }
 
 // See the Future's result is private to whoever played it — sent directly
@@ -73,9 +100,13 @@ function sendSeeFuture(nsp, room, payload) {
   }
 }
 
-// Lazy Cat / Cute Cat are counted here (not in CAT_TYPES) since they're
-// built via the same per-type loop as the other action cards below.
-const ACTION_COUNTS = { attack: 4, skip: 4, favor: 4, shuffle: 4, seeFuture: 5, nope: 5, lazycat: 4, cutecat: 4 };
+// Lazy Cat / Cute Cat / Dim-witted Cat are counted here (not in CAT_TYPES)
+// since they're built via the same per-type loop as the other action cards
+// below, even though "action" isn't quite right for Dim-witted Cat (a Trap
+// Card — see CARD_INFO). Cute Cat is rarer than the rest (2 instead of 4)
+// — it's significantly more powerful (mimics any action, substitutes for
+// Defuse, immune to a regular Nope), so it's dealt more sparingly.
+const ACTION_COUNTS = { attack: 4, skip: 4, favor: 4, shuffle: 4, seeFuture: 5, nope: 5, lazycat: 4, cutecat: 2, dimwittedcat: 4 };
 const CAT_COPIES_PER_TYPE = 4;
 const BASE_DEFUSE_TOTAL = 6;
 const STARTING_HAND_EXTRA = 6; // + 1 guaranteed Defuse = 7 total, matching the official box
@@ -240,6 +271,18 @@ class EkRoom {
     }
   }
 
+  // Whenever the CURRENT player's own draw explodes them (their normal
+  // end-of-turn draw, or now a Dim-witted Cat trap sprung mid-combo — see
+  // triggerDimWittedCatTrap), someone needs to move play on since they're no
+  // longer alive and nothing else naturally advances the turn pointer.
+  // No-ops if the match already ended (last player standing).
+  advanceAfterExplosion() {
+    if (this.status !== 'playing') return;
+    this.advanceToNextAlive();
+    this.turnsOwed = 1;
+    this.pushLog(`${this.currentPlayer().name}'s turn.`);
+  }
+
   // Attack: ends the current player's turn-taking immediately (regardless of
   // how many turns they still owed) and hands the next seat 2 MORE turns
   // than whatever was left — so an attack played back on the very first of
@@ -285,17 +328,25 @@ class EkRoom {
   }
 
   resolveFavor(cardId) {
-    if (!this.pendingFavor) return;
+    if (!this.pendingFavor) return { ok: false, error: 'nothing-pending' };
     const { fromId, toId } = this.pendingFavor;
     const giver = this.findPlayer(toId);
     const receiver = this.findPlayer(fromId);
+    // Dim-witted Cat is a Trap Card: it can only ever change hands by being
+    // stolen (Cat Pair/Triple), never handed over voluntarily. Otherwise its
+    // owner could dump it onto someone via Favor risk-free, which defeats
+    // the entire point of it being a trap.
+    const givable = giver ? giver.hand.filter((c) => c.type !== 'dimwittedcat') : [];
+    if (!giver || !receiver || !givable.length) { this.pendingFavor = null; return { ok: false, error: 'no-givable-card' }; }
+    const idx = cardId
+      ? giver.hand.findIndex((c) => c.id === cardId && c.type !== 'dimwittedcat')
+      : giver.hand.indexOf(givable[Math.floor(Math.random() * givable.length)]);
+    if (idx === -1) return { ok: false, error: cardId ? 'card-not-givable' : 'no-givable-card' };
     this.pendingFavor = null;
-    if (!giver || !receiver || !giver.hand.length) return;
-    const idx = cardId ? giver.hand.findIndex((c) => c.id === cardId) : Math.floor(Math.random() * giver.hand.length);
-    if (idx === -1) return;
     const [card] = giver.hand.splice(idx, 1);
     receiver.hand.push(card);
     this.pushLog(`${giver.name} handed a card to ${receiver.name} (Favor).`);
+    return { ok: true };
   }
 
   applyCatPair(player, targetId) {
@@ -308,6 +359,7 @@ class EkRoom {
     const [card] = target.hand.splice(idx, 1);
     player.hand.push(card);
     this.pushLog(`🐱🐱 ${player.name} used a Cat Pair on ${target.name} and stole a card!`);
+    this.triggerDimWittedCatTrap(player, card);
   }
 
   applyCatTriple(player, targetId, requestedType) {
@@ -321,6 +373,33 @@ class EkRoom {
     const [card] = target.hand.splice(idx, 1);
     player.hand.push(card);
     this.pushLog(`🐱🐱🐱 ${player.name} demanded and got a ${cardLabel(requestedType)} from ${target.name}!`);
+    this.triggerDimWittedCatTrap(player, card);
+  }
+
+  // Dim-witted Cat (Trap Card): never played by its own owner — it just
+  // sits in a hand until someone else successfully takes it via a Pair
+  // (random steal) or Triple (named demand). Whoever ends up holding it is
+  // immediately forced to draw — a REAL draw via drawCard(), so this can
+  // genuinely explode them, same as their own end-of-turn draw would. The
+  // card itself isn't consumed; it stays with its new owner to keep
+  // "wreaking havoc" if it gets stolen again later. This forced draw plays
+  // out exactly like a normal ek:draw: a safe card ends the taker's turn
+  // right there (see endTurnNormally()), an explosion moves play on
+  // (advanceAfterExplosion()), and a defused kitten leaves pendingReinsert
+  // set — resolveReinsert() ends the turn once they've tucked it back in,
+  // same as any other defused draw.
+  triggerDimWittedCatTrap(taker, card) {
+    if (card.type !== 'dimwittedcat') return;
+    const result = this.drawCard(taker);
+    if (result.exploded) {
+      this.pushLog(`🙀 The Dim-witted Cat wreaks havoc — ${taker.name}'s forced draw was an Exploding Kitten!`);
+      this.advanceAfterExplosion();
+    } else if (result.defused) {
+      this.pushLog(`🙀 The Dim-witted Cat wreaks havoc — ${taker.name} drew an Exploding Kitten from the trap but defused it!`);
+    } else if (!result.empty) {
+      this.pushLog(`🙀 The Dim-witted Cat wreaks havoc — ${taker.name} is forced to draw a card!`);
+      this.endTurnNormally();
+    }
   }
 
   applyCatFive(player, discardCardId) {
@@ -648,9 +727,10 @@ class EkRoom {
       const giver = this.findPlayer(this.pendingFavor.toId);
       let cardId = null;
       if (giver) {
-        const preferred = giver.hand.find((c) => CAT_KEYS.includes(c.type))
-          || giver.hand.find((c) => c.type !== 'defuse' && c.type !== 'nope' && c.type !== 'lazycat' && c.type !== 'cutecat')
-          || giver.hand[0];
+        const givable = giver.hand.filter((c) => c.type !== 'dimwittedcat');
+        const preferred = givable.find((c) => CAT_KEYS.includes(c.type))
+          || givable.find((c) => c.type !== 'defuse' && c.type !== 'nope' && c.type !== 'lazycat' && c.type !== 'cutecat')
+          || givable[0];
         cardId = preferred ? preferred.id : null;
       }
       this.resolveFavor(cardId);
@@ -685,13 +765,7 @@ class EkRoom {
       } else {
         const result = this.drawCard(bot);
         if (!result.defused && !result.exploded) this.endTurnNormally();
-        // exploded: turn/seat already moved on inside drawCard via advanceToNextAlive-equivalent (status check below).
-        if (result.exploded && this.status === 'playing') {
-          // The seat that just exploded is no longer alive; move on to the next.
-          this.advanceToNextAlive();
-          this.turnsOwed = 1;
-          this.pushLog(`${this.currentPlayer().name}'s turn.`);
-        }
+        else if (result.exploded) this.advanceAfterExplosion();
         // defused: pendingReinsert now set, handled by scheduleBotAction next.
       }
       this.broadcast(nsp);
@@ -836,10 +910,8 @@ function attachEk(io) {
       if (typeof callback === 'function') callback({ ok: true });
       if (!result.defused && !result.exploded) {
         room.endTurnNormally();
-      } else if (result.exploded && room.status === 'playing') {
-        room.advanceToNextAlive();
-        room.turnsOwed = 1;
-        room.pushLog(`${room.currentPlayer().name}'s turn.`);
+      } else if (result.exploded) {
+        room.advanceAfterExplosion();
       }
       room.broadcast(nsp);
       room.scheduleBotAction(nsp);
@@ -865,8 +937,8 @@ function attachEk(io) {
         if (typeof callback === 'function') callback({ ok: false, error: 'nothing-pending' });
         return;
       }
-      room.resolveFavor(cardId);
-      if (typeof callback === 'function') callback({ ok: true });
+      const result = room.resolveFavor(cardId);
+      if (typeof callback === 'function') callback(result);
       room.broadcast(nsp);
       room.scheduleBotAction(nsp);
     });
@@ -907,7 +979,7 @@ function attachEk(io) {
           return;
         }
       } else if (cards.length === 2) {
-        if (cards[0].type !== cards[1].type || !CAT_KEYS.includes(cards[0].type)) {
+        if (!catsMatchForCombo(cards)) {
           if (typeof callback === 'function') callback({ ok: false, error: 'not-a-matching-pair' });
           return;
         }
@@ -917,7 +989,7 @@ function attachEk(io) {
         }
         type = 'catPair';
       } else if (cards.length === 3) {
-        if (!cards.every((c) => c.type === cards[0].type) || !CAT_KEYS.includes(cards[0].type)) {
+        if (!catsMatchForCombo(cards)) {
           if (typeof callback === 'function') callback({ ok: false, error: 'not-a-matching-triple' });
           return;
         }
@@ -931,8 +1003,7 @@ function attachEk(io) {
         }
         type = 'catTriple';
       } else {
-        const distinctTypes = new Set(cards.map((c) => c.type));
-        if (distinctTypes.size !== 5 || ![...distinctTypes].every((t) => CAT_KEYS.includes(t))) {
+        if (!catsFormFiveDifferentForCombo(cards)) {
           if (typeof callback === 'function') callback({ ok: false, error: 'not-five-different-cats' });
           return;
         }
@@ -952,7 +1023,7 @@ function attachEk(io) {
         targetId: type === 'cutecat' && mimicType !== 'favor' ? null : targetId,
         requestedType,
         discardCardId,
-        catType: cards[0].type,
+        catType: comboRepresentativeType(cards),
         mimicType,
       });
     });
@@ -1073,3 +1144,6 @@ module.exports.cardLabel = cardLabel;
 module.exports.ACTION_COUNTS = ACTION_COUNTS;
 module.exports.CAT_COPIES_PER_TYPE = CAT_COPIES_PER_TYPE;
 module.exports.BASE_DEFUSE_TOTAL = BASE_DEFUSE_TOTAL;
+module.exports.catsMatchForCombo = catsMatchForCombo;
+module.exports.catsFormFiveDifferentForCombo = catsFormFiveDifferentForCombo;
+module.exports.comboRepresentativeType = comboRepresentativeType;

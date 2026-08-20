@@ -100,6 +100,7 @@ if (me) {
     nope: { label: 'Nope', emoji: '🙅' },
     lazycat: { label: 'Lazy Cat', emoji: '😴' },
     cutecat: { label: 'Cute Cat', emoji: '🥹' },
+    dimwittedcat: { label: 'Dim-witted Cat', emoji: '🙀' },
     breadcat: { label: 'Bread Cat', emoji: '🍞' },
     derpcat: { label: 'Derp Cat', emoji: '😝' },
     sushicat: { label: 'Sushi Cat', emoji: '🍣' },
@@ -117,11 +118,27 @@ if (me) {
     'breadcat', 'derpcat', 'sushicat',
     'tacocat', 'cattermelon', 'beardcat', 'potatocat', 'rainbowcat',
   ];
+  // Mirrors ek-server.js's Rainbow Cat wildcard rule: it can stand in for
+  // whatever type a Pair/Triple needs, or fill a missing distinct type for
+  // a Five Different. Kept in sync with the server, which is the real
+  // authority — this just drives the "Play Selected" button locally.
+  function catsMatchForCombo(cards) {
+    if (!cards.every((c) => CAT_KEYS.includes(c.type))) return false;
+    const nonWild = cards.filter((c) => c.type !== 'rainbowcat');
+    if (!nonWild.length) return true;
+    return nonWild.every((c) => c.type === nonWild[0].type);
+  }
+  function catsFormFiveDifferentForCombo(cards) {
+    if (cards.length !== 5 || !cards.every((c) => CAT_KEYS.includes(c.type))) return false;
+    const nonWild = cards.filter((c) => c.type !== 'rainbowcat');
+    return new Set(nonWild.map((c) => c.type)).size === nonWild.length;
+  }
+
   // Types with real uploaded card art (see the matching background-image
   // rules in ek.html) — every type has art, including seeFuture.
   const CARD_ART_TYPES = new Set([
     'defuse', 'explodingKitten', 'attack', 'skip', 'favor', 'shuffle', 'nope', 'seeFuture',
-    'lazycat', 'cutecat',
+    'lazycat', 'cutecat', 'dimwittedcat',
     ...CAT_KEYS,
   ]);
 
@@ -146,7 +163,7 @@ if (me) {
       ],
     },
     {
-      title: 'Action Cards (34 total)',
+      title: 'Action Cards (32 total)',
       entries: [
         {
           cards: [{ type: 'attack' }],
@@ -185,7 +202,7 @@ if (me) {
         },
         {
           cards: [{ type: 'cutecat' }],
-          label: 'Cute Cat (4)',
+          label: 'Cute Cat (2)',
           description: "The all-encompassing power of cuteness: play it as ANY action card of your choice (Attack, Skip, Favor, Shuffle, or See the Future), or use it in place of a real Defuse card. A regular Nope can't stop it — only another Cute Cat can.",
         },
       ],
@@ -197,6 +214,11 @@ if (me) {
           cards: CAT_KEYS.map((type) => ({ type })),
           label: 'The 8 Combo-Eligible Cat Types',
           description: 'No effect alone — any 2, 3, or 5 matching/distinct cats combine into a Cat Combo (see below). Lazy Cat and Cute Cat are NOT part of this — they have their own powers above.',
+        },
+        {
+          cards: [{ type: 'rainbowcat' }],
+          label: 'Rainbow-Ralphing Cat: Wildcard',
+          description: 'Counts as ANY of the other 7 types when forming a Cat Combo — pairs/triples with mismatched cats as long as only Rainbow Cats are the odd ones out, and fills in a missing distinct type for a Five Different.',
         },
         {
           cards: [{ type: CAT_KEYS[0] }, { type: CAT_KEYS[0] }],
@@ -212,6 +234,16 @@ if (me) {
           cards: CAT_KEYS.slice(0, 5).map((type) => ({ type })),
           label: 'Cat Combo: Five Different',
           description: 'Play 5 mutually different eligible cat types at once (any 5 of the 8) to take any one card you want from the (always-visible) discard pile.',
+        },
+      ],
+    },
+    {
+      title: 'Trap Cards (4 total)',
+      entries: [
+        {
+          cards: [{ type: 'dimwittedcat' }],
+          label: 'Dim-witted Cat (4)',
+          description: "You can never play this yourself — it just sits in your hand, and you can't hand it away with Favor either. If someone steals it with a Cat Pair or demands it with a Cat Triple, they're immediately forced to draw a card as punishment (which can even explode them!). The card stays with its new owner, ready to bite whoever takes it next.",
         },
       ],
     },
@@ -379,12 +411,12 @@ if (me) {
       return ['attack', 'skip', 'favor', 'shuffle', 'seeFuture'].includes(cards[0].type) ? { kind: 'single', type: cards[0].type } : null;
     }
     if (cards.length === 2 || cards.length === 3) {
-      if (!CAT_KEYS.includes(cards[0].type) || !cards.every((c) => c.type === cards[0].type)) return null;
-      return { kind: cards.length === 2 ? 'pair' : 'triple', type: cards[0].type };
+      if (!catsMatchForCombo(cards)) return null;
+      const repType = (cards.find((c) => c.type !== 'rainbowcat') || cards[0]).type;
+      return { kind: cards.length === 2 ? 'pair' : 'triple', type: repType };
     }
     if (cards.length === 5) {
-      const types = new Set(cards.map((c) => c.type));
-      if (types.size !== 5 || ![...types].every((t) => CAT_KEYS.includes(t))) return null;
+      if (!catsFormFiveDifferentForCombo(cards)) return null;
       return { kind: 'five' };
     }
     return null;
@@ -502,12 +534,19 @@ if (me) {
     favorGiveListEl.innerHTML = '';
     state.yourHand.forEach((card) => {
       const el = buildCardEl(card);
-      el.classList.add('playable');
-      el.addEventListener('click', () => {
-        socket.emit('ek:giveFavorCard', { cardId: card.id }, (res) => {
-          if (!res || !res.ok) alert('Could not give that card: ' + ((res && res.error) || 'unknown error'));
+      // Dim-witted Cat is a Trap Card: it can only ever be stolen (Cat
+      // Pair/Triple), never voluntarily handed over via Favor.
+      if (card.type === 'dimwittedcat') {
+        el.classList.add('disabled');
+        el.title = "Dim-witted Cat can't be given away — it can only be stolen with a Cat Pair or Triple.";
+      } else {
+        el.classList.add('playable');
+        el.addEventListener('click', () => {
+          socket.emit('ek:giveFavorCard', { cardId: card.id }, (res) => {
+            if (!res || !res.ok) alert('Could not give that card: ' + ((res && res.error) || 'unknown error'));
+          });
         });
-      });
+      }
       favorGiveListEl.appendChild(el);
     });
   }

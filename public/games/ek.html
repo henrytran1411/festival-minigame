@@ -99,6 +99,7 @@
     .ek-card .label { font-size: 10px; font-weight: 700; line-height: 1.15; }
     .ek-card.playable { cursor: pointer; }
     .ek-card.playable:hover { transform: translateY(-4px); transition: transform 0.12s ease; }
+    .ek-card.disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(60%); }
     .ek-card.selected { outline: 3px solid var(--gold); outline-offset: -3px; transform: translateY(-6px); }
     .ek-card.back { background: linear-gradient(135deg, #2a2f3a, #12141a); border-color: var(--border); }
     .ek-card.back .emoji { font-size: 22px; opacity: 0.6; }
@@ -125,6 +126,7 @@
     .ek-card[data-type="beardcat"] { background-image: url('cards/explodingkitten/beardedcat.png'); }
     .ek-card[data-type="potatocat"] { background-image: url('cards/explodingkitten/potatocat.png'); }
     .ek-card[data-type="rainbowcat"] { background-image: url('cards/explodingkitten/rainbowcat.png'); }
+    .ek-card[data-type="dimwittedcat"] { background-image: url('cards/explodingkitten/dimwittedcat.png'); }
 
     .ek-hand-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 14px 0; min-height: 130px; }
 
