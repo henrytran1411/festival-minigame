@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cờ Vây (Go) — Autumn Festival</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .go-wrap { max-width: 760px; }
+
+    .go-log {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 14px;
+    }
+    .go-log div { padding: 2px 0; }
+
+    .go-player-list { list-style: none; padding: 0; margin: 12px 0; }
+    .go-player-list li { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .go-player-list li:last-child { border-bottom: none; }
+
+    .room-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; }
+    .room-row .room-info { display: flex; flex-direction: column; }
+    .room-row .room-name { font-weight: 600; font-size: 14px; }
+    .room-row .room-meta { font-size: 12px; color: var(--muted); }
+    .room-row .room-meta.playing { color: var(--gold); }
+    .room-row button { padding: 6px 14px; font-size: 13px; }
+
+    #lobby-screen input, #create-room-screen input, #password-modal input, #create-room-screen select {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 14px;
+    }
+    .board-size-options { display: flex; gap: 10px; margin-top: 6px; }
+    .board-size-options label {
+      flex: 1;
+      text-align: center;
+      padding: 10px 6px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .board-size-options input { display: none; }
+    .board-size-options input:checked + span { color: var(--gold); font-weight: 700; }
+    .board-size-options label:has(input:checked) { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.3); }
+
+    .go-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+
+    .go-table {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .go-seats { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+    .go-seat {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      text-align: center;
+      min-width: 120px;
+      flex: 1;
+    }
+    .go-seat.turn { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); }
+    .go-seat.offline { opacity: 0.55; }
+    .go-seat .stone-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .go-seat .stone-dot.black { background: #111; border: 1px solid #555; }
+    .go-seat .stone-dot.white { background: #f4f4f4; border: 1px solid #999; }
+    .go-seat .name { font-size: 13px; font-weight: 600; }
+    .go-seat .captures { font-size: 11px; color: var(--muted); }
+
+    #board-wrap { display: flex; justify-content: center; margin: 6px 0; }
+    #board-wrap svg { max-width: 100%; height: auto; touch-action: manipulation; }
+    .go-point { cursor: pointer; }
+    .go-point:hover circle.hover-preview { opacity: 0.35; }
+
+    .go-turn-banner { text-align: center; font-weight: 700; margin-bottom: 8px; min-height: 22px; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+    .go-turn-banner.mine { color: var(--good); }
+    .go-turn-banner.pass-warning { color: var(--gold); font-weight: 400; font-size: 13px; }
+
+    .go-winner { text-align: center; font-size: 22px; font-weight: 800; margin: 10px 0; }
+    .go-score-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+    .go-score-table th, .go-score-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: right; }
+    .go-score-table th:first-child, .go-score-table td:first-child { text-align: left; }
+  </style>
+</head>
+<body>
+  <div class="wrap go-wrap">
+    <div class="top-bar">
+      <h1>⚫⚪ Cờ Vây (Go) <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
+      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+    </div>
+
+    <div id="lobby-screen" class="card">
+      <h2 style="margin-top:0; text-align:center;">Go Rooms</h2>
+      <ul id="room-list" class="go-player-list"></ul>
+      <p id="no-rooms-msg" style="color:var(--muted); font-size:13px; text-align:center; display:none;">No rooms yet — create one to get started.</p>
+      <div class="go-actions">
+        <button id="show-create-btn">+ Create Room</button>
+      </div>
+    </div>
+
+    <div id="create-room-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;">Create Room</h2>
+      <p style="font-size:13px; color:var(--muted);">Room name</p>
+      <input type="text" id="room-name-input" maxlength="30" placeholder="e.g. Go Table 1" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Password</p>
+      <input type="text" id="room-password-input" maxlength="30" placeholder="Anything — share it with your opponent" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Board size</p>
+      <div class="board-size-options">
+        <label><input type="radio" name="board-size" value="9" checked /><span>9×9<br /><small style="font-weight:400; color:var(--muted);">Quick</small></span></label>
+        <label><input type="radio" name="board-size" value="13" /><span>13×13<br /><small style="font-weight:400; color:var(--muted);">Medium</small></span></label>
+        <label><input type="radio" name="board-size" value="19" /><span>19×19<br /><small style="font-weight:400; color:var(--muted);">Full</small></span></label>
+      </div>
+      <p id="create-room-error" style="color:var(--bad); font-size:13px; display:none;"></p>
+      <div class="go-actions">
+        <button id="create-room-btn">Create &amp; Join</button>
+        <button class="secondary" id="cancel-create-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="waiting-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
+      <p style="text-align:center; color:var(--muted); font-size:13px;" id="waiting-board-size"></p>
+      <ul id="player-list" class="go-player-list"></ul>
+      <div class="go-actions">
+        <button class="secondary" id="add-bot-btn">🤖 Add Bot Opponent</button>
+        <button id="start-btn" disabled>▶ Start Game</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center; margin-top:8px;">No one else around? Add a bot and play solo. (A simple bot — not strong Go play.)</p>
+      <div class="go-actions">
+        <button class="danger" id="leave-waiting-btn">Leave Room</button>
+      </div>
+      <div id="waiting-log" class="go-log"></div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+      <div class="go-table">
+        <div class="go-seats" id="seats-row"></div>
+      </div>
+
+      <div class="go-turn-banner" id="turn-banner"></div>
+
+      <div id="board-wrap"></div>
+
+      <div class="go-actions">
+        <button class="secondary" id="pass-btn">⏭ Pass</button>
+        <button class="danger" id="resign-btn">🏳️ Resign</button>
+        <button class="danger" id="leave-btn">Leave Room</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center;">Click an intersection to place a stone. Two passes in a row ends the game and scores the board.</p>
+
+      <div id="game-log" class="go-log"></div>
+    </div>
+
+    <div id="finished-screen" class="card result-card hidden">
+      <div class="go-winner" id="winner-text"></div>
+      <table class="go-score-table" id="score-table"></table>
+      <div class="actions">
+        <button id="new-game-btn">Play Again</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 id="password-modal-title">Enter Password</h2>
+      <input type="text" id="join-password-input" placeholder="Room password" />
+      <p id="password-error" style="color:var(--bad); font-size:13px; display:none;">Wrong password.</p>
+      <div class="go-actions">
+        <button id="password-submit-btn">Join</button>
+        <button class="secondary" id="password-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>How to Play Go (Cờ Vây)</h2>
+      <ul>
+        <li>Two players take turns placing stones (Black first) on empty intersections of the board.</li>
+        <li>A stone or connected group of same-colored stones is captured and removed the moment it has no empty neighboring points ("liberties") left.</li>
+        <li>You may not play a move that would leave your own stone/group with zero liberties ("suicide") — unless it captures enemy stones first.</li>
+        <li><b>Ko rule:</b> if your move captures exactly one stone and leaves your own stone alone with exactly one liberty, your opponent cannot immediately play back into that same spot next turn.</li>
+        <li>Instead of placing a stone, you may <b>Pass</b>. When both players pass in a row, the game ends immediately and the board is scored.</li>
+        <li><b>Scoring:</b> each player's score = their stones remaining on the board + empty territory fully surrounded by only their color. White additionally gets a 6.5 point "komi" bonus to offset Black's first-move advantage. Highest score wins.</li>
+        <li>Since there's no separate "removing dead stones" step, make sure to actually capture anything you want off the board before passing!</li>
+        <li>You can <b>Resign</b> at any time to concede the game to your opponent.</li>
+      </ul>
+      <button class="modal-close">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../common.js"></script>
+  <script src="go.js"></script>
+</body>
+</html>
