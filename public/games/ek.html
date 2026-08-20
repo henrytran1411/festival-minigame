@@ -103,19 +103,28 @@
     .ek-card.back { background: linear-gradient(135deg, #2a2f3a, #12141a); border-color: var(--border); }
     .ek-card.back .emoji { font-size: 22px; opacity: 0.6; }
 
-    .ek-card[data-type="defuse"] { background: linear-gradient(135deg, #2fa96b, #1c6e45); color: #fff; }
-    .ek-card[data-type="explodingKitten"] { background: linear-gradient(135deg, #3a1010, #120404); color: #ff9d9d; border-color: #ff5c5c; }
-    .ek-card[data-type="attack"] { background: linear-gradient(135deg, #d64545, #7a1f1f); color: #fff; }
-    .ek-card[data-type="skip"] { background: linear-gradient(135deg, #3b6fd6, #1c3670); color: #fff; }
-    .ek-card[data-type="favor"] { background: linear-gradient(135deg, #9b59d0, #4f2670); color: #fff; }
-    .ek-card[data-type="shuffle"] { background: linear-gradient(135deg, #2fb0a9, #145b56); color: #fff; }
-    .ek-card[data-type="seeFuture"] { background: linear-gradient(135deg, #4a4fd6, #21246e); color: #fff; }
-    .ek-card[data-type="nope"] { background: linear-gradient(135deg, #e0973e, #7a4a10); color: #fff; }
-    .ek-card[data-type="tacocat"] { background: linear-gradient(135deg, #e0b400, #7a5f00); color: #fff; }
-    .ek-card[data-type="cattermelon"] { background: linear-gradient(135deg, #e0507a, #7a1f3a); color: #fff; }
-    .ek-card[data-type="beardcat"] { background: linear-gradient(135deg, #a67c52, #5c4324); color: #fff; }
-    .ek-card[data-type="potatocat"] { background: linear-gradient(135deg, #b8863f, #5c4118); color: #fff; }
-    .ek-card[data-type="rainbowcat"] { background: linear-gradient(135deg, #d64545 0%, #e0b400 25%, #2fa96b 50%, #3b6fd6 75%, #9b59d0 100%); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+    /* Real uploaded card art fills the whole face, so the emoji/label
+       overlay (used as a placeholder for types without art) is hidden. */
+    .ek-card.has-art { background-size: cover; background-position: center; border-color: rgba(255, 255, 255, 0.35); }
+    .ek-card.has-art .emoji, .ek-card.has-art .label { display: none; }
+    .ek-card[data-type="defuse"] { background-image: url('cards/explodingkitten/defuse.png'); }
+    .ek-card[data-type="explodingKitten"] { background-image: url('cards/explodingkitten/explodingkitten.png'); }
+    .ek-card[data-type="attack"] { background-image: url('cards/explodingkitten/attack.png'); }
+    .ek-card[data-type="skip"] { background-image: url('cards/explodingkitten/skip.png'); }
+    .ek-card[data-type="favor"] { background-image: url('cards/explodingkitten/favor.png'); }
+    .ek-card[data-type="shuffle"] { background-image: url('cards/explodingkitten/shuffle.png'); }
+    .ek-card[data-type="seeFuture"] { background-image: url('cards/explodingkitten/seethefuture.png'); }
+    .ek-card[data-type="nope"] { background-image: url('cards/explodingkitten/nope.png'); }
+    .ek-card[data-type="lazycat"] { background-image: url('cards/explodingkitten/lazycat.png'); }
+    .ek-card[data-type="cutecat"] { background-image: url('cards/explodingkitten/cutecat.png'); }
+    .ek-card[data-type="breadcat"] { background-image: url('cards/explodingkitten/breadcat.png'); }
+    .ek-card[data-type="derpcat"] { background-image: url('cards/explodingkitten/derpcat.png'); }
+    .ek-card[data-type="sushicat"] { background-image: url('cards/explodingkitten/shushicat.png'); }
+    .ek-card[data-type="tacocat"] { background-image: url('cards/explodingkitten/tacocat.png'); }
+    .ek-card[data-type="cattermelon"] { background-image: url('cards/explodingkitten/watermeloncat.png'); }
+    .ek-card[data-type="beardcat"] { background-image: url('cards/explodingkitten/beardedcat.png'); }
+    .ek-card[data-type="potatocat"] { background-image: url('cards/explodingkitten/potatocat.png'); }
+    .ek-card[data-type="rainbowcat"] { background-image: url('cards/explodingkitten/rainbowcat.png'); }
 
     .ek-hand-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 14px 0; min-height: 130px; }
 
@@ -134,6 +143,28 @@
       font-weight: 700;
     }
     .ek-pending-banner.hidden { display: none; }
+
+    .catalog-modal-card { max-width: 640px; }
+    .catalog-section-title {
+      font-size: 15px;
+      color: var(--gold);
+      margin: 18px 0 6px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 4px;
+    }
+    .catalog-section-title:first-of-type { margin-top: 4px; }
+    .catalog-entry {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .catalog-entry:last-child { border-bottom: none; }
+    .catalog-cards-row { display: flex; gap: 4px; flex-shrink: 0; }
+    .catalog-text { flex: 1; min-width: 0; }
+    .catalog-label { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+    .catalog-desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
 
     .ek-target-list, .ek-discard-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-height: 300px; overflow-y: auto; }
     .ek-target-btn {
@@ -155,7 +186,7 @@
   <div class="wrap ek-wrap">
     <div class="top-bar">
       <h1>💥 Exploding Kittens <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
-      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a> · <a href="#" id="catalog-link">📖 Cards</a></div>
     </div>
 
     <div id="lobby-screen" class="card">
@@ -219,6 +250,8 @@
         <button id="play-selected-btn" disabled>▶ Play Selected</button>
         <button class="secondary" id="clear-selection-btn">Clear Selection</button>
         <button class="danger" id="nope-btn" style="display:none;">🙅 Nope!</button>
+        <button class="danger" id="lazycat-btn" style="display:none;">😴 Halve with Lazy Cat</button>
+        <button class="danger" id="countercute-btn" style="display:none;">😻 Counter with Cute Cat</button>
         <button class="danger" id="leave-btn">Leave Room</button>
       </div>
       <p style="color:var(--muted); font-size:12px; text-align:center;">Click 1 card to play it alone (Attack/Skip/Shuffle/See the Future/Favor). Click 2, 3, or 5 matching Cat cards for a Cat Combo.</p>
@@ -288,6 +321,23 @@
     </div>
   </div>
 
+  <div id="mimic-picker-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align:center;">
+      <h2>😻 Cute Cat: Choose What It Mimics</h2>
+      <p style="color:var(--muted); font-size:13px;">The all-encompassing power of cuteness — pick which action card this becomes.</p>
+      <div class="ek-actions" id="mimic-picker-options">
+        <button class="secondary" data-mimic="attack">⚔️ Attack</button>
+        <button class="secondary" data-mimic="skip">⏭️ Skip</button>
+        <button class="secondary" data-mimic="favor">🤝 Favor</button>
+        <button class="secondary" data-mimic="shuffle">🔀 Shuffle</button>
+        <button class="secondary" data-mimic="seeFuture">🔮 See the Future</button>
+      </div>
+      <div class="ek-actions" style="margin-top:14px;">
+        <button class="secondary" id="mimic-picker-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="favor-give-modal" class="modal-overlay hidden">
     <div class="modal-card" style="text-align:center;">
       <h2 id="favor-give-title">Favor: Give a Card</h2>
@@ -318,6 +368,14 @@
         <li><b>Cat Combo:</b> 2 matching cats steal a random card from a player; 3 matching cats demand a named card from a player; 5 different cats take any card from the discard pile.</li>
         <li>Last player standing wins!</li>
       </ol>
+      <button class="modal-close secondary">Close</button>
+    </div>
+  </div>
+
+  <div id="catalog-modal" class="modal-overlay hidden">
+    <div class="modal-card catalog-modal-card">
+      <h2>📖 Card Catalog</h2>
+      <div id="catalog-content"></div>
       <button class="modal-close secondary">Close</button>
     </div>
   </div>

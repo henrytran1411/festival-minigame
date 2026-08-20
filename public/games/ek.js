@@ -45,6 +45,8 @@ if (me) {
   const playSelectedBtn = document.getElementById('play-selected-btn');
   const clearSelectionBtn = document.getElementById('clear-selection-btn');
   const nopeBtn = document.getElementById('nope-btn');
+  const lazycatBtn = document.getElementById('lazycat-btn');
+  const countercuteBtn = document.getElementById('countercute-btn');
   const leaveBtn = document.getElementById('leave-btn');
   const gameLogEl = document.getElementById('game-log');
 
@@ -70,6 +72,9 @@ if (me) {
   const reinsertModal = document.getElementById('reinsert-modal');
   const reinsertOptionsEl = document.getElementById('reinsert-options');
 
+  const mimicPickerModal = document.getElementById('mimic-picker-modal');
+  const mimicPickerCancelBtn = document.getElementById('mimic-picker-cancel-btn');
+
   const favorGiveModal = document.getElementById('favor-give-modal');
   const favorGiveTitleEl = document.getElementById('favor-give-title');
   const favorGiveListEl = document.getElementById('favor-give-list');
@@ -79,6 +84,8 @@ if (me) {
   const seeFutureCloseBtn = document.getElementById('see-future-close-btn');
 
   const rulesModal = document.getElementById('rules-modal');
+  const catalogModal = document.getElementById('catalog-modal');
+  const catalogContentEl = document.getElementById('catalog-content');
 
   // Mirrors ek-server.js's CARD_INFO / CAT_KEYS — kept in sync by hand since
   // client and server don't share a module (same approach as uno.js).
@@ -91,13 +98,158 @@ if (me) {
     shuffle: { label: 'Shuffle', emoji: '🔀' },
     seeFuture: { label: 'See the Future', emoji: '🔮' },
     nope: { label: 'Nope', emoji: '🙅' },
+    lazycat: { label: 'Lazy Cat', emoji: '😴' },
+    cutecat: { label: 'Cute Cat', emoji: '🥹' },
+    breadcat: { label: 'Bread Cat', emoji: '🍞' },
+    derpcat: { label: 'Derp Cat', emoji: '😝' },
+    sushicat: { label: 'Sushi Cat', emoji: '🍣' },
     tacocat: { label: 'Tacocat', emoji: '🌮' },
     cattermelon: { label: 'Cattermelon', emoji: '🍉' },
     beardcat: { label: 'Beard Cat', emoji: '🧔' },
     potatocat: { label: 'Hairy Potato Cat', emoji: '🥔' },
     rainbowcat: { label: 'Rainbow-Ralphing Cat', emoji: '🌈' },
   };
-  const CAT_KEYS = ['tacocat', 'cattermelon', 'beardcat', 'potatocat', 'rainbowcat'];
+  // Genuine "cat" cards only — Lazy Cat and Cute Cat are full action cards
+  // (reactive halving / wild action mimic) and no longer combo-eligible, so
+  // they're NOT here (matches ek-server.js's CAT_KEYS, which doubles as the
+  // combo-eligible set now that they've moved out).
+  const CAT_KEYS = [
+    'breadcat', 'derpcat', 'sushicat',
+    'tacocat', 'cattermelon', 'beardcat', 'potatocat', 'rainbowcat',
+  ];
+  // Types with real uploaded card art (see the matching background-image
+  // rules in ek.html) — every type has art, including seeFuture.
+  const CARD_ART_TYPES = new Set([
+    'defuse', 'explodingKitten', 'attack', 'skip', 'favor', 'shuffle', 'nope', 'seeFuture',
+    'lazycat', 'cutecat',
+    ...CAT_KEYS,
+  ]);
+
+  // Base (2-4 player) counts — see ek-server.js's ACTION_COUNTS / BASE_DEFUSE_TOTAL
+  // / CAT_COPIES_PER_TYPE. Defuse/Exploding Kitten counts scale with table
+  // size (Defuse: max(6, players+1); Kittens: players-1), so those two
+  // entries describe the RULE rather than a fixed number.
+  const CATALOG_SECTIONS = [
+    {
+      title: 'The Core Two',
+      entries: [
+        {
+          cards: [{ type: 'defuse' }],
+          label: 'Defuse (6, or players+1 at big tables)',
+          description: 'Play the instant you draw an Exploding Kitten to survive — then secretly slip the kitten back into the deck at any position you choose.',
+        },
+        {
+          cards: [{ type: 'explodingKitten' }],
+          label: 'Exploding Kitten (players − 1)',
+          description: "Draw one with no Defuse in hand and you're out of the game immediately. Never dealt into a starting hand — only ever drawn from the deck.",
+        },
+      ],
+    },
+    {
+      title: 'Action Cards (34 total)',
+      entries: [
+        {
+          cards: [{ type: 'attack' }],
+          label: 'Attack (4)',
+          description: 'Ends your turn without drawing — the next player must take 2 turns in a row. Stacks by +2 if they Attack right back instead of taking their turns.',
+        },
+        {
+          cards: [{ type: 'skip' }],
+          label: 'Skip (4)',
+          description: 'Ends your turn immediately without drawing a card.',
+        },
+        {
+          cards: [{ type: 'favor' }],
+          label: 'Favor (4)',
+          description: "Pick a player — they must hand you a card of their own choosing. Play pauses until they respond (or a short timer picks one for them).",
+        },
+        {
+          cards: [{ type: 'shuffle' }],
+          label: 'Shuffle (4)',
+          description: 'Shuffles the entire draw pile. Does not end your turn — you can still act more, or must still draw.',
+        },
+        {
+          cards: [{ type: 'seeFuture' }],
+          label: 'See the Future (5)',
+          description: 'Privately peek at the top 3 cards of the draw pile, in order. Does not end your turn.',
+        },
+        {
+          cards: [{ type: 'nope' }],
+          label: 'Nope (5)',
+          description: 'Cancel the last action card played by anyone, even out of turn — but here, a Nope cannot itself be Noped.',
+        },
+        {
+          cards: [{ type: 'lazycat' }],
+          label: 'Lazy Cat (4)',
+          description: "Reactive — play it against another player's pending Attack or See the Future to HALVE its effect (rounded down) instead of cancelling it. Stacks if played more than once.",
+        },
+        {
+          cards: [{ type: 'cutecat' }],
+          label: 'Cute Cat (4)',
+          description: "The all-encompassing power of cuteness: play it as ANY action card of your choice (Attack, Skip, Favor, Shuffle, or See the Future), or use it in place of a real Defuse card. A regular Nope can't stop it — only another Cute Cat can.",
+        },
+      ],
+    },
+    {
+      title: 'Cat Cards & Combos (8 types × 4 = 32 total)',
+      entries: [
+        {
+          cards: CAT_KEYS.map((type) => ({ type })),
+          label: 'The 8 Combo-Eligible Cat Types',
+          description: 'No effect alone — any 2, 3, or 5 matching/distinct cats combine into a Cat Combo (see below). Lazy Cat and Cute Cat are NOT part of this — they have their own powers above.',
+        },
+        {
+          cards: [{ type: CAT_KEYS[0] }, { type: CAT_KEYS[0] }],
+          label: 'Cat Combo: Pair',
+          description: 'Play 2 matching cat cards, choose a player, and steal a random card from their hand.',
+        },
+        {
+          cards: [{ type: CAT_KEYS[0] }, { type: CAT_KEYS[0] }, { type: CAT_KEYS[0] }],
+          label: 'Cat Combo: Triple',
+          description: "Play 3 matching cat cards, choose a player, and name a specific card — they must hand it over if they have it (nothing happens if they don't).",
+        },
+        {
+          cards: CAT_KEYS.slice(0, 5).map((type) => ({ type })),
+          label: 'Cat Combo: Five Different',
+          description: 'Play 5 mutually different eligible cat types at once (any 5 of the 8) to take any one card you want from the (always-visible) discard pile.',
+        },
+      ],
+    },
+  ];
+
+  function buildCatalog() {
+    catalogContentEl.innerHTML = '';
+    CATALOG_SECTIONS.forEach((section) => {
+      const heading = document.createElement('div');
+      heading.className = 'catalog-section-title';
+      heading.textContent = section.title;
+      catalogContentEl.appendChild(heading);
+
+      section.entries.forEach((entry) => {
+        const row = document.createElement('div');
+        row.className = 'catalog-entry';
+
+        const cardsRow = document.createElement('div');
+        cardsRow.className = 'catalog-cards-row';
+        entry.cards.forEach((c) => {
+          cardsRow.appendChild(buildCardEl({ id: 'catalog', ...c }, { small: true }));
+        });
+
+        const text = document.createElement('div');
+        text.className = 'catalog-text';
+        const label = document.createElement('div');
+        label.className = 'catalog-label';
+        label.textContent = entry.label;
+        const desc = document.createElement('div');
+        desc.className = 'catalog-desc';
+        desc.textContent = entry.description;
+        text.append(label, desc);
+
+        row.append(cardsRow, text);
+        catalogContentEl.appendChild(row);
+      });
+    });
+  }
 
   let latestState = null;
   let latestRooms = [];
@@ -123,7 +275,7 @@ if (me) {
 
   function buildCardEl(card, { small = false } = {}) {
     const el = document.createElement('div');
-    el.className = 'ek-card' + (small ? ' small' : '');
+    el.className = 'ek-card' + (small ? ' small' : '') + (CARD_ART_TYPES.has(card.type) ? ' has-art' : '');
     el.dataset.type = card.type;
     const info = CARD_INFO[card.type] || { emoji: '❓', label: card.type };
     const emoji = document.createElement('span');
@@ -223,6 +375,7 @@ if (me) {
     const cards = selectedCardIds.map((id) => state.yourHand.find((c) => c.id === id)).filter(Boolean);
     if (cards.length !== selectedCardIds.length || !cards.length) return null;
     if (cards.length === 1) {
+      if (cards[0].type === 'cutecat') return { kind: 'cutecat' };
       return ['attack', 'skip', 'favor', 'shuffle', 'seeFuture'].includes(cards[0].type) ? { kind: 'single', type: cards[0].type } : null;
     }
     if (cards.length === 2 || cards.length === 3) {
@@ -266,10 +419,18 @@ if (me) {
 
   function renderPendingBanner(state) {
     let text = '';
-    if (state.pendingAction) {
-      const actor = state.players.find((p) => p.id === state.pendingAction.actorId);
-      const remaining = Math.max(0, state.pendingAction.deadline - Date.now());
-      text = `⏳ ${actor ? actor.name : 'Someone'} played a card — Nope it? ${(remaining / 1000).toFixed(1)}s left`;
+    const pa = state.pendingAction;
+    if (pa) {
+      const actor = state.players.find((p) => p.id === pa.actorId);
+      const remaining = Math.max(0, pa.deadline - Date.now());
+      const secs = (remaining / 1000).toFixed(1);
+      if (pa.type === 'cutecat') {
+        const mimicInfo = CARD_INFO[pa.mimicType] || { label: pa.mimicType };
+        text = `😻 ${actor ? actor.name : 'Someone'} played Cute Cat as ${mimicInfo.label} — only another Cute Cat can stop it! ${secs}s left`;
+      } else {
+        const halveNote = pa.halvings ? ` (halved x${pa.halvings} by Lazy Cat)` : '';
+        text = `⏳ ${actor ? actor.name : 'Someone'} played a card${halveNote} — react? ${secs}s left`;
+      }
     } else if (state.pendingFavor) {
       const from = state.players.find((p) => p.id === state.pendingFavor.fromId);
       const to = state.players.find((p) => p.id === state.pendingFavor.toId);
@@ -281,11 +442,19 @@ if (me) {
     pendingBannerEl.classList.toggle('hidden', !text);
     pendingBannerEl.textContent = text;
 
-    const canNope = Boolean(state.pendingAction) && state.pendingAction.actorId !== state.yourId
-      && state.yourHand.some((c) => c.type === 'nope');
+    const isActor = Boolean(pa) && pa.actorId === state.yourId;
+    const canNope = Boolean(pa) && pa.type !== 'cutecat' && !isActor && state.yourHand.some((c) => c.type === 'nope');
     nopeBtn.style.display = canNope ? '' : 'none';
 
-    updateTicking(Boolean(state.pendingAction));
+    const canHalve = Boolean(pa) && ['attack', 'seeFuture'].includes(pa.type) && !isActor
+      && state.yourHand.some((c) => c.type === 'lazycat');
+    lazycatBtn.style.display = canHalve ? '' : 'none';
+
+    const canCounterCute = Boolean(pa) && pa.type === 'cutecat' && !isActor
+      && state.yourHand.some((c) => c.type === 'cutecat');
+    countercuteBtn.style.display = canCounterCute ? '' : 'none';
+
+    updateTicking(Boolean(pa));
   }
 
   function updateTicking(shouldTick) {
@@ -422,8 +591,8 @@ if (me) {
     });
   }
 
-  function openTargetPicker(cardIds, needsRequestedType) {
-    pendingPlayContext = { cardIds, needsRequestedType };
+  function openTargetPicker(cardIds, needsRequestedType, mimicType) {
+    pendingPlayContext = { cardIds, needsRequestedType, mimicType };
     selectedTargetId = null;
     targetPickerTitleEl.textContent = needsRequestedType ? 'Choose a player to demand a card from' : 'Choose a player';
     requestedTypeRow.classList.toggle('hidden', !needsRequestedType);
@@ -441,11 +610,38 @@ if (me) {
     if (!selectedTargetId || !pendingPlayContext) return;
     const extra = { targetId: selectedTargetId };
     if (pendingPlayContext.needsRequestedType) extra.requestedType = requestedTypeSelect.value;
+    if (pendingPlayContext.mimicType) extra.mimicType = pendingPlayContext.mimicType;
     const cardIds = pendingPlayContext.cardIds;
     closeTargetPicker();
     submitPlayCard(cardIds, extra);
   });
   targetPickerCancelBtn.addEventListener('click', closeTargetPicker);
+
+  // Cute Cat: "the all-encompassing power of cuteness" -- played as any
+  // action card of the player's choosing. Favor needs a target afterward
+  // (reuses the same target picker, carrying mimicType through); everything
+  // else submits immediately.
+  function openMimicPicker(cardIds) {
+    pendingPlayContext = { cardIds };
+    mimicPickerModal.classList.remove('hidden');
+  }
+  mimicPickerModal.querySelectorAll('[data-mimic]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mimicType = btn.dataset.mimic;
+      const cardIds = pendingPlayContext ? pendingPlayContext.cardIds : [];
+      mimicPickerModal.classList.add('hidden');
+      pendingPlayContext = null;
+      if (mimicType === 'favor') {
+        openTargetPicker(cardIds, false, 'favor');
+      } else {
+        submitPlayCard(cardIds, { mimicType });
+      }
+    });
+  });
+  mimicPickerCancelBtn.addEventListener('click', () => {
+    mimicPickerModal.classList.add('hidden');
+    pendingPlayContext = null;
+  });
 
   function openDiscardPicker(cardIds) {
     pendingPlayContext = { cardIds };
@@ -481,6 +677,8 @@ if (me) {
       openTargetPicker(cardIds, true);
     } else if (shape.kind === 'five') {
       openDiscardPicker(cardIds);
+    } else if (shape.kind === 'cutecat') {
+      openMimicPicker(cardIds);
     }
   });
   clearSelectionBtn.addEventListener('click', () => { selectedCardIds = []; render(); });
@@ -492,6 +690,16 @@ if (me) {
   nopeBtn.addEventListener('click', () => {
     socket.emit('ek:nope', {}, (res) => {
       if (!res || !res.ok) alert('Could not Nope: ' + ((res && res.error) || 'unknown error'));
+    });
+  });
+  lazycatBtn.addEventListener('click', () => {
+    socket.emit('ek:playLazyCat', {}, (res) => {
+      if (!res || !res.ok) alert('Could not play Lazy Cat: ' + ((res && res.error) || 'unknown error'));
+    });
+  });
+  countercuteBtn.addEventListener('click', () => {
+    socket.emit('ek:counterCuteCat', {}, (res) => {
+      if (!res || !res.ok) alert('Could not counter with Cute Cat: ' + ((res && res.error) || 'unknown error'));
     });
   });
 
@@ -515,6 +723,13 @@ if (me) {
     rulesModal.classList.remove('hidden');
   });
   rulesModal.querySelector('.modal-close').addEventListener('click', () => rulesModal.classList.add('hidden'));
+
+  document.getElementById('catalog-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    buildCatalog();
+    catalogModal.classList.remove('hidden');
+  });
+  catalogModal.querySelector('.modal-close').addEventListener('click', () => catalogModal.classList.add('hidden'));
 
   function enterRoom(roomId) {
     joined = true;

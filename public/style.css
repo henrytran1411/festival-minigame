@@ -128,7 +128,7 @@ input[type="text"] {
 /* Admin-hidden game: shown as a face-down UNO card instead of its normal
    tile, so it reads as "not revealed yet" rather than just missing. */
 .game-tile.hidden-placeholder {
-  background-image: url('games/cards/backcard.png');
+  background-image: url('games/cards/UNO/backcard.png');
   background-size: 130px auto;
   background-repeat: no-repeat;
   background-position: center;

@@ -28,7 +28,16 @@
 //     (players + 1, so everyone still gets one plus a spare in the deck)
 //     rather than sticking to the fixed 6.
 
+// Every genuine "cat" card — no effect alone, combines into a Cat Combo
+// (pair/triple/five-different). Lazy Cat and Cute Cat are NOT here even
+// though they're drawn as cat-flavored cards visually — they're full action
+// cards with their own real effects (see ACTION_COUNTS/CARD_INFO below and
+// ek:playLazyCat / the cutecat mimic play), so CAT_KEYS doubles as "the
+// combo-eligible types" with no separate filtered list needed.
 const CAT_TYPES = [
+  { key: 'breadcat', label: 'Bread Cat', emoji: '🍞' },
+  { key: 'derpcat', label: 'Derp Cat', emoji: '😝' },
+  { key: 'sushicat', label: 'Sushi Cat', emoji: '🍣' },
   { key: 'tacocat', label: 'Tacocat', emoji: '🌮' },
   { key: 'cattermelon', label: 'Cattermelon', emoji: '🍉' },
   { key: 'beardcat', label: 'Beard Cat', emoji: '🧔' },
@@ -45,6 +54,8 @@ const CARD_INFO = {
   shuffle: { label: 'Shuffle', emoji: '🔀' },
   seeFuture: { label: 'See the Future', emoji: '🔮' },
   nope: { label: 'Nope', emoji: '🙅' },
+  lazycat: { label: 'Lazy Cat', emoji: '😴' },
+  cutecat: { label: 'Cute Cat', emoji: '🥹' },
 };
 CAT_TYPES.forEach((c) => { CARD_INFO[c.key] = { label: c.label, emoji: c.emoji }; });
 
@@ -53,7 +64,18 @@ function cardLabel(type) {
   return info ? `${info.emoji} ${info.label}` : type;
 }
 
-const ACTION_COUNTS = { attack: 4, skip: 4, favor: 4, shuffle: 4, seeFuture: 5, nope: 5 };
+// See the Future's result is private to whoever played it — sent directly
+// to their own socket rather than folded into the broadcast state.
+function sendSeeFuture(nsp, room, payload) {
+  const target = room.findPlayer(payload.forPlayerId);
+  if (target && target.connected && target.socketId) {
+    nsp.to(target.socketId).emit('ek:seeFutureResult', { top3: payload.top3 });
+  }
+}
+
+// Lazy Cat / Cute Cat are counted here (not in CAT_TYPES) since they're
+// built via the same per-type loop as the other action cards below.
+const ACTION_COUNTS = { attack: 4, skip: 4, favor: 4, shuffle: 4, seeFuture: 5, nope: 5, lazycat: 4, cutecat: 4 };
 const CAT_COPIES_PER_TYPE = 4;
 const BASE_DEFUSE_TOTAL = 6;
 const STARTING_HAND_EXTRA = 6; // + 1 guaranteed Defuse = 7 total, matching the official box
@@ -66,11 +88,6 @@ function randomBotThinkMs() {
   return BOT_THINK_MIN_MS + Math.random() * (BOT_THINK_MAX_MS - BOT_THINK_MIN_MS);
 }
 const BOT_NAMES = ['🤖 Bot An', '🤖 Bot Bình', '🤖 Bot Chi', '🤖 Bot Dũng', '🤖 Bot Giang', '🤖 Bot Hà'];
-
-// Every action-card type that goes through the Nope window before its
-// effect actually happens (i.e. everything except drawing, and Defuse which
-// is never "played" on its own).
-const NOPEABLE_TYPES = new Set(['attack', 'skip', 'favor', 'shuffle', 'seeFuture', 'catPair', 'catTriple', 'catFive']);
 
 function shuffle(arr) {
   const a = [...arr];
@@ -94,13 +111,12 @@ function buildActionAndCatCards(idPrefix = 'c') {
   return cards;
 }
 
-// The official box's action/cat pool (46 cards) is sized for its 5-player
-// max — dealing 6 non-Defuse cards to each of N players alone needs N*6, so
-// anything above 7 players would run the pool dry mid-deal. For bigger
-// tables, stack on extra full action/cat sets (fresh id prefixes so they
-// don't collide) until there's comfortably enough for dealing PLUS a real
-// draw pile left over — the same idea as combining physical decks for a big
-// group.
+// The base action/cat pool (66 cards: ACTION_COUNTS' 34 + CAT_KEYS' 8*4=32)
+// comfortably covers small-to-mid tables — dealing 6 non-Defuse cards to
+// each of N players alone needs N*6. For bigger tables, stack on extra full
+// action/cat sets (fresh id prefixes so they don't collide) until there's
+// comfortably enough for dealing PLUS a real draw pile left over — the same
+// idea as combining physical decks for a big group.
 function buildActionAndCatPoolForPlayers(playerCount) {
   let pool = buildActionAndCatCards();
   const needed = playerCount * STARTING_HAND_EXTRA + 20;
@@ -228,11 +244,18 @@ class EkRoom {
   // how many turns they still owed) and hands the next seat 2 MORE turns
   // than whatever was left — so an attack played back on the very first of
   // an owed pair stacks to 4 total for the seat after that, and so on.
-  applyAttack(player) {
+  // `halvings` (from reactive Lazy Cat plays — see beginPendingAction) floor-
+  // divides the resulting turn count that many times, clamped to a minimum
+  // of 1 (a single halving always fully cancels a fresh 2-turn Attack back
+  // down to a normal turn, never below it).
+  applyAttack(player, halvings = 0) {
     const carryOver = this.turnsOwed - 1;
     this.advanceToNextAlive();
-    this.turnsOwed = 2 + carryOver;
-    this.pushLog(`⚔️ ${player.name} played Attack — ${this.currentPlayer().name} must take ${this.turnsOwed} turn(s)!`);
+    let owed = 2 + carryOver;
+    for (let i = 0; i < halvings; i++) owed = Math.floor(owed / 2);
+    this.turnsOwed = Math.max(1, owed);
+    const halvedNote = halvings ? ` (halved by Lazy Cat x${halvings})` : '';
+    this.pushLog(`⚔️ ${player.name} played Attack — ${this.currentPlayer().name} must take ${this.turnsOwed} turn(s)${halvedNote}!`);
   }
 
   applySkip(player) {
@@ -245,10 +268,14 @@ class EkRoom {
     this.pushLog(`🔀 ${player.name} shuffled the deck.`);
   }
 
-  // Returns the top 3 cards (in draw order) for the caller to send PRIVATELY
-  // to the player who played it — never broadcast to the table.
-  applySeeFuture() {
-    return this.deck.slice(-3).reverse();
+  // Returns the top N cards (in draw order) for the caller to send PRIVATELY
+  // to the player who played it — never broadcast to the table. `halvings`
+  // (Lazy Cat) floor-divides the normal peek of 3 that many times — e.g. one
+  // halving shows 1 card, two halvings shows 0 (you see nothing at all).
+  applySeeFuture(halvings = 0) {
+    let count = 3;
+    for (let i = 0; i < halvings; i++) count = Math.floor(count / 2);
+    return count > 0 ? this.deck.slice(-count).reverse() : [];
   }
 
   applyFavor(player, targetId) {
@@ -326,6 +353,17 @@ class EkRoom {
       this.pushLog(`💣 ${player.name} drew an Exploding Kitten but defused it!`);
       return { exploded: false, defused: true };
     }
+    // Cute Cat also works as a Defuse substitute -- "the all-encompassing
+    // power of cuteness" -- used automatically only when there's no real
+    // Defuse to fall back on (survival always wins over saving it for later).
+    const cuteCatIdx = player.hand.findIndex((c) => c.type === 'cutecat');
+    if (cuteCatIdx !== -1) {
+      const [cuteCatCard] = player.hand.splice(cuteCatIdx, 1);
+      this.discard.push(cuteCatCard);
+      this.pendingReinsert = { playerId: player.id, kitten: card };
+      this.pushLog(`😻 ${player.name} drew an Exploding Kitten but used Cute Cat to survive it!`);
+      return { exploded: false, defused: true };
+    }
     this.discard.push(card);
     player.alive = false;
     this.pushLog(`💥 ${player.name} exploded! Out of the game.`);
@@ -362,25 +400,41 @@ class EkRoom {
     const player = this.findPlayer(a.actorId);
     if (!player) return null;
     switch (a.type) {
-      case 'attack': this.applyAttack(player); return null;
+      case 'attack': this.applyAttack(player, a.halvings || 0); return null;
       case 'skip': this.applySkip(player); return null;
       case 'shuffle': this.applyShuffle(player); return null;
-      case 'seeFuture': return { forPlayerId: a.actorId, top3: this.applySeeFuture() };
+      case 'seeFuture': return { forPlayerId: a.actorId, top3: this.applySeeFuture(a.halvings || 0) };
       case 'favor': this.applyFavor(player, a.targetId); return null;
       case 'catPair': this.applyCatPair(player, a.targetId); return null;
       case 'catTriple': this.applyCatTriple(player, a.targetId, a.requestedType); return null;
       case 'catFive': this.applyCatFive(player, a.discardCardId); return null;
+      // Cute Cat: "the all-encompassing power of cuteness" — mimics whichever
+      // action the player chose at play time. Deliberately NOT composed with
+      // Lazy Cat halvings even if it mimics attack/seeFuture, to keep the two
+      // mechanics independent instead of a deep interaction matrix.
+      case 'cutecat':
+        if (a.mimicType === 'attack') { this.applyAttack(player); return null; }
+        if (a.mimicType === 'skip') { this.applySkip(player); return null; }
+        if (a.mimicType === 'shuffle') { this.applyShuffle(player); return null; }
+        if (a.mimicType === 'seeFuture') return { forPlayerId: a.actorId, top3: this.applySeeFuture() };
+        if (a.mimicType === 'favor') { this.applyFavor(player, a.targetId); return null; }
+        return null;
       default: return null;
     }
   }
 
-  cancelPendingAction(noperName) {
+  // verb/emoji differ for a regular Nope vs. a Cute Cat countering another
+  // Cute Cat (the only thing that CAN stop one — see ek:nope's rejection of
+  // cutecat and the dedicated ek:counterCuteCat handler).
+  cancelPendingAction(noperName, { verb = 'Noped', emoji = '🙅' } = {}) {
     const a = this.pendingAction;
     this.pendingAction = null;
     if (!a) return;
     clearTimeout(a.timer);
     const actor = this.findPlayer(a.actorId);
-    this.pushLog(`🙅 ${noperName} Noped ${actor ? actor.name + "'s" : 'that'} ${cardLabel(a.type === 'catPair' || a.type === 'catTriple' || a.type === 'catFive' ? 'nope' : a.type)}! Nothing happens.`);
+    const isCatCombo = ['catPair', 'catTriple', 'catFive'].includes(a.type);
+    const cardName = a.type === 'cutecat' ? cardLabel('cutecat') : cardLabel(isCatCombo ? 'nope' : a.type);
+    this.pushLog(`${emoji} ${noperName} ${verb} ${actor ? actor.name + "'s" : 'that'} ${cardName}! Nothing happens.`);
   }
 
   // Simple, deliberately not-smart bot Nope check: a bot only ever
@@ -406,6 +460,73 @@ class EkRoom {
       }
     }
     return false;
+  }
+
+  // Single entry point for putting ANY Nope-able action into the pending
+  // state and running the same resolution pipeline every time — whether the
+  // card was played by a human (ek:playCard) or by a bot on its own turn
+  // (runBotTurn). Previously bots short-circuited straight to applyAttack/
+  // applySkip, which meant a bot's own Attack or Skip could never be Noped
+  // by anyone, human or bot — this is the fix for that.
+  beginPendingAction(nsp, type, actorId, extra = {}) {
+    const actor = this.findPlayer(actorId);
+    this.pendingAction = {
+      type,
+      actorId,
+      targetId: extra.targetId || null,
+      requestedType: extra.requestedType || null,
+      discardCardId: extra.discardCardId || null,
+      mimicType: extra.mimicType || null,
+      halvings: 0,
+      deadline: Date.now() + NOPE_WINDOW_MS,
+      timer: null,
+    };
+    const labelType = type === 'cutecat' ? 'cutecat' : (['catPair', 'catTriple', 'catFive'].includes(type) ? (extra.catType || type) : type);
+    const waitingNote = type === 'cutecat' ? 'waiting to see if another Cute Cat stops it...' : 'waiting to see if anyone Nopes...';
+    this.pushLog(`${actor ? actor.name : 'Someone'} played ${cardLabel(labelType)}${type.startsWith('cat') && type !== 'cutecat' ? ' (Cat Combo)' : ''} — ${waitingNote}`);
+    this.broadcast(nsp);
+
+    if (this.maybeBotNope()) {
+      this.broadcast(nsp);
+      this.scheduleBotAction(nsp);
+      return;
+    }
+
+    if (this.anyoneCanReact(actorId)) {
+      this.pendingAction.timer = setTimeout(() => {
+        try {
+          if (!this.pendingAction) return;
+          this.resolvePendingAndBroadcast(nsp);
+        } catch (err) {
+          console.error(`[ek] Nope-window timeout failed in room ${this.id}:`, err);
+        }
+      }, NOPE_WINDOW_MS);
+      return;
+    }
+
+    this.resolvePendingAndBroadcast(nsp);
+  }
+
+  // Whether the reactive window should stay open at all: a regular Nope
+  // works on anything EXCEPT a Cute Cat play (which only another Cute Cat
+  // can counter); Lazy Cat only ever reacts to attack/seeFuture.
+  anyoneCanReact(actorId) {
+    const type = this.pendingAction && this.pendingAction.type;
+    if (!type) return false;
+    return this.players.some((p) => {
+      if (!p.connected || p.isBot || p.id === actorId) return false;
+      if (type === 'cutecat') return p.hand.some((c) => c.type === 'cutecat');
+      const canNope = p.hand.some((c) => c.type === 'nope');
+      const canHalve = ['attack', 'seeFuture'].includes(type) && p.hand.some((c) => c.type === 'lazycat');
+      return canNope || canHalve;
+    });
+  }
+
+  resolvePendingAndBroadcast(nsp) {
+    const payload = this.resolvePendingActionEffect();
+    this.broadcast(nsp);
+    if (payload) sendSeeFuture(nsp, this, payload);
+    this.scheduleBotAction(nsp);
   }
 
   isEmpty() {
@@ -438,6 +559,8 @@ class EkRoom {
         type: this.pendingAction.type,
         actorId: this.pendingAction.actorId,
         targetId: this.pendingAction.targetId || null,
+        mimicType: this.pendingAction.mimicType || null,
+        halvings: this.pendingAction.halvings || 0,
         deadline: this.pendingAction.deadline,
       } : null,
       pendingFavor: this.pendingFavor,
@@ -517,14 +640,16 @@ class EkRoom {
     this.botTimer = null;
     this.safeBotStep(nsp, () => {
       if (this.status !== 'playing' || !this.pendingFavor) return;
-      // Prefer giving away a duplicate-ish / low-value card: any cat card
-      // first, otherwise whatever's first in hand. Never hands over its own
-      // last Nope/Defuse if anything else is available.
+      // Prefer giving away a duplicate-ish / low-value card: a combo-only
+      // cat card first (Lazy Cat/Cute Cat are real action cards now, not
+      // fodder — excluded here on purpose), otherwise whatever's first in
+      // hand. Never hands over its own last Nope/Defuse if anything else is
+      // available.
       const giver = this.findPlayer(this.pendingFavor.toId);
       let cardId = null;
       if (giver) {
         const preferred = giver.hand.find((c) => CAT_KEYS.includes(c.type))
-          || giver.hand.find((c) => c.type !== 'defuse' && c.type !== 'nope')
+          || giver.hand.find((c) => c.type !== 'defuse' && c.type !== 'nope' && c.type !== 'lazycat' && c.type !== 'cutecat')
           || giver.hand[0];
         cardId = preferred ? preferred.id : null;
       }
@@ -550,11 +675,13 @@ class EkRoom {
       if (attackCard && Math.random() < 0.35) {
         bot.hand = bot.hand.filter((c) => c.id !== attackCard.id);
         this.discard.push(attackCard);
-        this.applyAttack(bot);
+        this.beginPendingAction(nsp, 'attack', bot.id); // Nope-able, same as a human playing it
+        return;
       } else if (skipCard && Math.random() < 0.35) {
         bot.hand = bot.hand.filter((c) => c.id !== skipCard.id);
         this.discard.push(skipCard);
-        this.applySkip(bot);
+        this.beginPendingAction(nsp, 'skip', bot.id); // Nope-able, same as a human playing it
+        return;
       } else {
         const result = this.drawCard(bot);
         if (!result.defused && !result.exploded) this.endTurnNormally();
@@ -747,7 +874,7 @@ function attachEk(io) {
     // Unified entry point for every "played" card other than the implicit
     // draw: cardIds.length selects which kind of action it is (1 = a single
     // action card, 2/3/5 = a Cat Combo of that size).
-    socket.on('ek:playCard', ({ cardIds, targetId, requestedType, discardCardId }, callback) => {
+    socket.on('ek:playCard', ({ cardIds, targetId, requestedType, discardCardId, mimicType }, callback) => {
       const room = myRoom();
       if (!room) { if (typeof callback === 'function') callback({ ok: false, error: 'no-room' }); return; }
       const player = requireMyTurn(room, callback);
@@ -763,11 +890,19 @@ function attachEk(io) {
       let type;
       if (cards.length === 1) {
         type = cards[0].type;
-        if (!['attack', 'skip', 'favor', 'shuffle', 'seeFuture'].includes(type)) {
+        if (type === 'cutecat') {
+          if (!['attack', 'skip', 'favor', 'shuffle', 'seeFuture'].includes(mimicType)) {
+            if (typeof callback === 'function') callback({ ok: false, error: 'invalid-mimic-type' });
+            return;
+          }
+          if (mimicType === 'favor' && (!targetId || !room.findPlayer(targetId) || !room.findPlayer(targetId).alive || targetId === player.id)) {
+            if (typeof callback === 'function') callback({ ok: false, error: 'invalid-target' });
+            return;
+          }
+        } else if (!['attack', 'skip', 'favor', 'shuffle', 'seeFuture'].includes(type)) {
           if (typeof callback === 'function') callback({ ok: false, error: 'not-playable-alone' });
           return;
-        }
-        if (type === 'favor' && (!targetId || !room.findPlayer(targetId) || !room.findPlayer(targetId).alive || targetId === player.id)) {
+        } else if (type === 'favor' && (!targetId || !room.findPlayer(targetId) || !room.findPlayer(targetId).alive || targetId === player.id)) {
           if (typeof callback === 'function') callback({ ok: false, error: 'invalid-target' });
           return;
         }
@@ -813,70 +948,78 @@ function attachEk(io) {
 
       if (typeof callback === 'function') callback({ ok: true });
 
-      if (!NOPEABLE_TYPES.has(type)) {
-        // Unreachable today (every playable type is Nope-able) but kept for
-        // clarity/future-proofing if a non-Nopeable action is ever added.
-        room.pendingAction = { type, actorId: player.id, targetId, requestedType, discardCardId };
-        const seeFuturePayload = room.resolvePendingActionEffect();
-        room.broadcast(nsp);
-        if (seeFuturePayload) sendSeeFuture(room, seeFuturePayload);
-        room.scheduleBotAction(nsp);
-        return;
-      }
-
-      room.pendingAction = {
-        type, actorId: player.id, targetId: targetId || null, requestedType: requestedType || null,
-        discardCardId: discardCardId || null, deadline: Date.now() + NOPE_WINDOW_MS, timer: null,
-      };
-      room.pushLog(`${player.name} played ${cardLabel(type === 'catPair' || type === 'catTriple' || type === 'catFive' ? cards[0].type : type)}${type.startsWith('cat') ? ' (Cat Combo)' : ''} — waiting to see if anyone Nopes...`);
-      room.broadcast(nsp);
-
-      if (room.maybeBotNope()) {
-        room.broadcast(nsp);
-        room.scheduleBotAction(nsp);
-        return;
-      }
-
-      const anyHumanCanNope = room.players.some((p) => p.connected && !p.isBot && p.id !== player.id && p.hand.some((c) => c.type === 'nope'));
-      if (!anyHumanCanNope) {
-        const payload = room.resolvePendingActionEffect();
-        room.broadcast(nsp);
-        if (payload) sendSeeFuture(room, payload);
-        room.scheduleBotAction(nsp);
-        return;
-      }
-
-      room.pendingAction.timer = setTimeout(() => {
-        try {
-          if (!room.pendingAction) return;
-          const payload = room.resolvePendingActionEffect();
-          room.broadcast(nsp);
-          if (payload) sendSeeFuture(room, payload);
-          room.scheduleBotAction(nsp);
-        } catch (err) {
-          console.error(`[ek] Nope-window timeout failed in room ${room.id}:`, err);
-        }
-      }, NOPE_WINDOW_MS);
+      room.beginPendingAction(nsp, type, player.id, {
+        targetId: type === 'cutecat' && mimicType !== 'favor' ? null : targetId,
+        requestedType,
+        discardCardId,
+        catType: cards[0].type,
+        mimicType,
+      });
     });
-
-    function sendSeeFuture(room, payload) {
-      const target = room.findPlayer(payload.forPlayerId);
-      if (target && target.connected && target.socketId) {
-        nsp.to(target.socketId).emit('ek:seeFutureResult', { top3: payload.top3 });
-      }
-    }
 
     socket.on('ek:nope', (payload, callback) => {
       const room = myRoom();
       if (!room) { if (typeof callback === 'function') callback({ ok: false, error: 'no-room' }); return; }
       const player = room.findPlayer(socket.playerId);
       if (!room.pendingAction || !player) { if (typeof callback === 'function') callback({ ok: false, error: 'nothing-pending' }); return; }
+      if (room.pendingAction.type === 'cutecat') {
+        // "The all-encompassing power of cuteness" -- a regular Nope can't
+        // touch a Cute Cat play. Only another Cute Cat can (ek:counterCuteCat).
+        if (typeof callback === 'function') callback({ ok: false, error: 'nope-cannot-stop-cutecat' });
+        return;
+      }
       const nopeIdx = player.hand.findIndex((c) => c.type === 'nope');
       if (nopeIdx === -1) { if (typeof callback === 'function') callback({ ok: false, error: 'no-nope-card' }); return; }
       clearTimeout(room.pendingAction.timer);
       const [card] = player.hand.splice(nopeIdx, 1);
       room.discard.push(card);
       room.cancelPendingAction(player.name);
+      if (typeof callback === 'function') callback({ ok: true });
+      room.broadcast(nsp);
+      room.scheduleBotAction(nsp);
+    });
+
+    // Lazy Cat: reactive, only usable against a pending Attack or See the
+    // Future (not a cancel like Nope -- it HALVES the eventual effect, and
+    // stacks if played more than once against the same pending action).
+    socket.on('ek:playLazyCat', (payload, callback) => {
+      const room = myRoom();
+      if (!room) { if (typeof callback === 'function') callback({ ok: false, error: 'no-room' }); return; }
+      const player = room.findPlayer(socket.playerId);
+      if (!room.pendingAction || !player) { if (typeof callback === 'function') callback({ ok: false, error: 'nothing-pending' }); return; }
+      if (!['attack', 'seeFuture'].includes(room.pendingAction.type)) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'not-halvable' });
+        return;
+      }
+      if (room.pendingAction.actorId === player.id) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'cannot-halve-own-card' });
+        return;
+      }
+      const lazyIdx = player.hand.findIndex((c) => c.type === 'lazycat');
+      if (lazyIdx === -1) { if (typeof callback === 'function') callback({ ok: false, error: 'no-lazycat-card' }); return; }
+      const [card] = player.hand.splice(lazyIdx, 1);
+      room.discard.push(card);
+      room.pendingAction.halvings = (room.pendingAction.halvings || 0) + 1;
+      room.pushLog(`😴 ${player.name} played Lazy Cat — halving the effect!`);
+      if (typeof callback === 'function') callback({ ok: true });
+      room.broadcast(nsp);
+    });
+
+    // Cute Cat: the only thing that can stop another Cute Cat's play.
+    socket.on('ek:counterCuteCat', (payload, callback) => {
+      const room = myRoom();
+      if (!room) { if (typeof callback === 'function') callback({ ok: false, error: 'no-room' }); return; }
+      const player = room.findPlayer(socket.playerId);
+      if (!room.pendingAction || room.pendingAction.type !== 'cutecat' || !player) {
+        if (typeof callback === 'function') callback({ ok: false, error: 'nothing-pending' });
+        return;
+      }
+      const idx = player.hand.findIndex((c) => c.type === 'cutecat');
+      if (idx === -1) { if (typeof callback === 'function') callback({ ok: false, error: 'no-cutecat-card' }); return; }
+      clearTimeout(room.pendingAction.timer);
+      const [card] = player.hand.splice(idx, 1);
+      room.discard.push(card);
+      room.cancelPendingAction(player.name, { verb: 'countered', emoji: '😻' });
       if (typeof callback === 'function') callback({ ok: true });
       room.broadcast(nsp);
       room.scheduleBotAction(nsp);
