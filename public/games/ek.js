@@ -292,6 +292,85 @@ if (me) {
   let selectedTargetId = null;
   let tickInterval = null;
 
+  // --- Sound: looping background music while a game is in progress, ducked
+  // under whichever card sound effect is currently playing (mirrors UNO's
+  // bgm-audio/mute-btn pattern). ---
+  const MUSIC_MUTED_KEY = 'ek_music_muted';
+  const bgmAudio = document.getElementById('bgm-audio');
+  const muteBtn = document.getElementById('mute-btn');
+  const BGM_NORMAL_VOLUME = 0.35;
+  const BGM_DUCK_VOLUME = 0.08;
+  bgmAudio.volume = BGM_NORMAL_VOLUME;
+  let musicMuted = localStorage.getItem(MUSIC_MUTED_KEY) === '1';
+
+  // Ducking so a card sound is easy to hear over the music. Tracked with a
+  // token so two sounds firing close together can't have the first one's
+  // cleanup restore full volume while the second is still playing.
+  let duckToken = 0;
+  function duckBgm() {
+    duckToken += 1;
+    bgmAudio.volume = BGM_DUCK_VOLUME;
+    return duckToken;
+  }
+  function restoreBgmVolume(token) {
+    if (token === duckToken) bgmAudio.volume = BGM_NORMAL_VOLUME;
+  }
+  function updateMuteBtn() {
+    muteBtn.textContent = musicMuted ? '🔇' : '🔊';
+  }
+  function syncBgm(status) {
+    if (musicMuted || status !== 'playing') {
+      bgmAudio.pause();
+    } else if (bgmAudio.paused) {
+      bgmAudio.play().catch(() => {}); // blocked until a user gesture — fine, next click retries via render()
+    }
+  }
+  muteBtn.addEventListener('click', () => {
+    musicMuted = !musicMuted;
+    localStorage.setItem(MUSIC_MUTED_KEY, musicMuted ? '1' : '0');
+    updateMuteBtn();
+    syncBgm(latestState ? latestState.status : null);
+  });
+  updateMuteBtn();
+
+  // Card-type -> recorded clip (sounds/callouts/explodingKitten/<slug>.mp3).
+  const CARD_SOUND_FILE = {
+    attack: 'attack',
+    skip: 'skip',
+    favor: 'favor',
+    shuffle: 'shuffle',
+    seeFuture: 'seethefuture',
+    lazycat: 'lazy',
+    cutecat: 'cute',
+    explodingKitten: 'explodingcard',
+    dimwittedcat: 'dimwitted',
+    nope: 'nope',
+  };
+  const cardSoundCache = {};
+  function playCardSound(type) {
+    if (musicMuted) return;
+    const slug = CARD_SOUND_FILE[type];
+    if (!slug) return;
+    if (!cardSoundCache[slug]) {
+      const audio = new Audio(`sounds/callouts/explodingKitten/${slug}.mp3`);
+      audio.preload = 'auto';
+      cardSoundCache[slug] = audio;
+    }
+    const audio = cardSoundCache[slug];
+    audio.currentTime = 0;
+    const token = duckBgm();
+    const restore = () => restoreBgmVolume(token);
+    audio.onended = restore;
+    audio.onerror = restore;
+    setTimeout(restore, 4000); // safety net if neither event fires
+    audio.play().catch(restore); // blocked until a user gesture, or file missing -- best-effort, no fallback needed
+  }
+  // Tracks what we've already reacted to, so repeated 'ek:state' broadcasts
+  // (the same pending Nope window, the same resolved action) don't replay
+  // a sound on every tick — only genuinely NEW events should sound.
+  let lastCutecatPendingDeadline = null;
+  let lastSoundEventSeq = null;
+
   function showScreen(name) {
     lobbyScreen.classList.add('hidden');
     createRoomScreen.classList.add('hidden');
@@ -576,11 +655,13 @@ if (me) {
 
   function render() {
     if (!joined) {
+      syncBgm(null);
       showScreen(createRoomScreen.classList.contains('hidden') ? 'lobby' : 'create');
       renderLobby();
       return;
     }
     if (!latestState) return;
+    syncBgm(latestState.status);
     if (latestState.status === 'waiting') {
       renderWaiting(latestState);
       showScreen('waiting');
@@ -780,6 +861,8 @@ if (me) {
     joined = false;
     latestState = null;
     selectedCardIds = [];
+    lastCutecatPendingDeadline = null;
+    lastSoundEventSeq = null;
     updateTicking(false);
     localStorage.removeItem(LAST_ROOM_KEY);
     createRoomScreen.classList.add('hidden');
@@ -880,6 +963,27 @@ if (me) {
   });
 
   socket.on('ek:state', (state) => {
+    // Cute Cat gets its own sound the instant it's played (before any Nope
+    // window even opens) -- separate from whichever card it ends up
+    // mimicking, which sounds only once that actually resolves, below.
+    const pa = state.pendingAction;
+    const cutecatDeadline = pa && pa.type === 'cutecat' ? pa.deadline : null;
+    if (cutecatDeadline !== null && cutecatDeadline !== lastCutecatPendingDeadline) {
+      playCardSound('cutecat');
+    }
+    lastCutecatPendingDeadline = cutecatDeadline;
+
+    // Whatever just actually resolved: a plain action card's own sound, or
+    // (for Cute Cat) the sound of whichever card it mimicked. Also covers
+    // drawing an Exploding Kitten and the Dim-witted Cat trap springing,
+    // which emit the same event from elsewhere on the server.
+    const se = state.lastSoundEvent;
+    if (se && se.seq !== lastSoundEventSeq) {
+      const soundType = se.type === 'cutecat' ? se.mimicType : se.type;
+      if (soundType) playCardSound(soundType);
+    }
+    lastSoundEventSeq = se ? se.seq : lastSoundEventSeq;
+
     latestState = state;
     if (state.players.some((p) => p.id === state.yourId)) joined = true;
     render();

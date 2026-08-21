@@ -190,6 +190,24 @@ class EkRoom {
     this.pendingAction = null; // { type, actorId, targetId?, requestedType?, discardCardId?, cardIds, deadline }
     this.pendingFavor = null; // { fromId, toId, deadline }
     this.pendingReinsert = null; // { playerId, kitten }
+    // A single-slot "last sound-worthy event" feed for the client to play
+    // card SFX from — a seq number so the client can detect "this is a
+    // NEW event" vs. "the same one from a moment ago" across repeated
+    // state broadcasts. Deliberately only one slot: if two sound events
+    // land in the same synchronous turn (e.g. the Dim-witted Cat trap's
+    // forced draw itself reveals an Exploding Kitten), only the latter
+    // survives to the next broadcast — an acceptable rarity, not worth a
+    // full event queue for.
+    this.soundEventSeq = 0;
+    this.lastSoundEvent = null; // { seq, type, mimicType }
+  }
+
+  // type is a card type ('attack', 'skip', 'explodingKitten', 'dimwittedcat',
+  // ...) the client maps to an mp3 file; mimicType is only meaningful for
+  // 'cutecat' (which type it mimicked).
+  emitSoundEvent(type, mimicType = null) {
+    this.soundEventSeq += 1;
+    this.lastSoundEvent = { seq: this.soundEventSeq, type, mimicType };
   }
 
   pushLog(message) {
@@ -252,6 +270,8 @@ class EkRoom {
     this.pendingAction = null;
     this.pendingFavor = null;
     this.pendingReinsert = null;
+    this.soundEventSeq = 0;
+    this.lastSoundEvent = null;
     this.pushLog(`🎉 Game started with ${this.players.map((p) => p.name).join(', ')}.`);
     this.pushLog(`💣 ${explodingCount} Exploding Kitten${explodingCount === 1 ? '' : 's'} hidden in a ${this.deck.length}-card deck.`);
     this.pushLog(`${this.currentPlayer().name}'s turn.`);
@@ -390,6 +410,7 @@ class EkRoom {
   // same as any other defused draw.
   triggerDimWittedCatTrap(taker, card) {
     if (card.type !== 'dimwittedcat') return;
+    this.emitSoundEvent('dimwittedcat');
     const result = this.drawCard(taker);
     if (result.exploded) {
       this.pushLog(`🙀 The Dim-witted Cat wreaks havoc — ${taker.name}'s forced draw was an Exploding Kitten!`);
@@ -424,6 +445,7 @@ class EkRoom {
       player.hand.push(card);
       return { exploded: false, defused: false };
     }
+    this.emitSoundEvent('explodingKitten');
     const defuseIdx = player.hand.findIndex((c) => c.type === 'defuse');
     if (defuseIdx !== -1) {
       const [defuseCard] = player.hand.splice(defuseIdx, 1);
@@ -478,6 +500,13 @@ class EkRoom {
     if (!a) return null;
     const player = this.findPlayer(a.actorId);
     if (!player) return null;
+    // Every other action's sound already fired at beginPendingAction() time
+    // (the instant it was dropped). Cute Cat is the one exception: cute.mp3
+    // played immediately back then, and THIS is its second sound -- whichever
+    // card it's now confirmed to have mimicked -- which only makes sense once
+    // resolution actually happens (not when cancelPendingAction() Nopes/
+    // counters it away).
+    if (a.type === 'cutecat') this.emitSoundEvent('cutecat', a.mimicType || null);
     switch (a.type) {
       case 'attack': this.applyAttack(player, a.halvings || 0); return null;
       case 'skip': this.applySkip(player); return null;
@@ -510,6 +539,10 @@ class EkRoom {
     this.pendingAction = null;
     if (!a) return;
     clearTimeout(a.timer);
+    // A genuine Nope gets its own sound the instant it lands (default verb).
+    // A Cute Cat countering another Cute Cat calls this with verb:'countered'
+    // and deliberately doesn't go through here -- out of scope for now.
+    if (verb === 'Noped') this.emitSoundEvent('nope');
     const actor = this.findPlayer(a.actorId);
     const isCatCombo = ['catPair', 'catTriple', 'catFive'].includes(a.type);
     const cardName = a.type === 'cutecat' ? cardLabel('cutecat') : cardLabel(isCatCombo ? 'nope' : a.type);
@@ -560,6 +593,13 @@ class EkRoom {
       deadline: Date.now() + NOPE_WINDOW_MS,
       timer: null,
     };
+    // Fires immediately, in parallel with the Nope window opening -- NOT
+    // gated on whether the action ends up resolving. mimicType is withheld
+    // here even for Cute Cat: its "just played" cue (cute.mp3) is driven
+    // separately client-side off this same pendingAction's deadline, and the
+    // sound of whichever card it mimicked only plays once
+    // resolvePendingActionEffect() confirms it actually went through.
+    this.emitSoundEvent(type);
     const labelType = type === 'cutecat' ? 'cutecat' : (['catPair', 'catTriple', 'catFive'].includes(type) ? (extra.catType || type) : type);
     const waitingNote = type === 'cutecat' ? 'waiting to see if another Cute Cat stops it...' : 'waiting to see if anyone Nopes...';
     this.pushLog(`${actor ? actor.name : 'Someone'} played ${cardLabel(labelType)}${type.startsWith('cat') && type !== 'cutecat' ? ' (Cat Combo)' : ''} — ${waitingNote}`);
@@ -644,6 +684,7 @@ class EkRoom {
       } : null,
       pendingFavor: this.pendingFavor,
       pendingReinsert: this.pendingReinsert ? { playerId: this.pendingReinsert.playerId } : null,
+      lastSoundEvent: this.lastSoundEvent,
       players: this.players.map((p) => ({
         id: p.id,
         name: p.name,
