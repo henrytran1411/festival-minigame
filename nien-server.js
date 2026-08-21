@@ -28,6 +28,51 @@ const MONSTER_WANDER_SPEED = 45;
 const MONSTER_FLEE_SPEED = 190;
 const MONSTER_FLEE_MS = 2200;
 const MONSTER_RESPAWN_DELAY_MS = 60000; // matches the GDD's "every 60 seconds"
+// If nobody lands a hit for this long after the Niên Thú becomes visible,
+// it slips back into hiding at its CURRENT position (no teleport — that
+// only happens on a 10%-fear relocation, see DECILE_MILESTONES below).
+const MONSTER_HIDE_AFTER_MS = 10000;
+
+// The arena is split into 4 quadrants. Every time the Niên Thú appears or
+// relocates, it picks one at random, but the SAME zone can never be
+// picked 3 times in a row — after landing in the same zone twice
+// consecutively, the third pick is forced to exclude it.
+const ZONE_KEYS = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'];
+const ZONE_LABELS = {
+  topLeft: 'Top-Left', topRight: 'Top-Right', bottomLeft: 'Bottom-Left', bottomRight: 'Bottom-Right',
+};
+
+function pickZone(room) {
+  const lastTwo = room.zoneHistory.slice(-2);
+  const candidates = (lastTwo.length === 2 && lastTwo[0] === lastTwo[1])
+    ? ZONE_KEYS.filter((z) => z !== lastTwo[0])
+    : ZONE_KEYS;
+  const zone = candidates[Math.floor(Math.random() * candidates.length)];
+  room.zoneHistory.push(zone);
+  if (room.zoneHistory.length > 2) room.zoneHistory.shift(); // only the last 2 picks matter for the rule
+  return zone;
+}
+
+function zoneOrigin(mapWidth, mapHeight, zone) {
+  return {
+    x: (zone === 'topRight' || zone === 'bottomRight') ? mapWidth / 2 : 0,
+    y: (zone === 'bottomLeft' || zone === 'bottomRight') ? mapHeight / 2 : 0,
+  };
+}
+
+function zoneCenter(mapWidth, mapHeight, zone) {
+  const origin = zoneOrigin(mapWidth, mapHeight, zone);
+  return { x: origin.x + mapWidth / 4, y: origin.y + mapHeight / 4 };
+}
+
+function randomPositionInZone(mapWidth, mapHeight, zone, radius) {
+  const origin = zoneOrigin(mapWidth, mapHeight, zone);
+  const halfW = mapWidth / 2;
+  const halfH = mapHeight / 2;
+  const x = origin.x + radius + Math.random() * Math.max(0, halfW - radius * 2);
+  const y = origin.y + radius + Math.random() * Math.max(0, halfH - radius * 2);
+  return { x, y };
+}
 
 const FIRECRACKER_RANGE = 190; // max distance from the thrower a target point may be — same for every type in this pass
 
@@ -63,7 +108,33 @@ const FIRECRACKER_KEYS = Object.keys(FIRECRACKER_TYPES);
 const DEFAULT_LOADOUT_BUDGET = 100; // matches the GDD's own example budget
 const LOADOUT_BUDGET_OPTIONS = [50, 100, 150, 200]; // presets the room host can pick from at creation
 
-const FEAR_MILESTONES = [25, 50, 75, 100];
+const FEAR_MILESTONES = [25, 50, 75, 100]; // loot-drop thresholds (unchanged)
+
+// Every 10% of fear is its own separate milestone system, for the
+// recurring "who's scaring it the most RIGHT NOW" mini-competition: each
+// crossing pays out ranked rewards based on fear dealt since the last
+// crossing, then (below 100%) hides + relocates the Niên Thú to a new
+// zone. 100% is shared with the existing "fully scared away" behavior
+// (full disappearance + scheduled respawn), so it doesn't ALSO relocate
+// in place — see scareMonster().
+const DECILE_MILESTONES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+// Ranked reward tiers, evaluated fresh at every decile crossing, based on
+// each player's total fear damage dealt to the Niên Thú since the
+// previous crossing. Ranks not covered by a tier (i.e., past 20th place)
+// still get the flat SCARE_REWARD_ANY consolation as long as they landed
+// at least one hit. Point values are arbitrary defaults — easy to retune.
+const SCARE_REWARD_TIERS = [
+  { minRank: 1, maxRank: 1, points: 50 },
+  { minRank: 2, maxRank: 3, points: 30 },
+  { minRank: 4, maxRank: 10, points: 15 },
+  { minRank: 11, maxRank: 20, points: 5 },
+];
+const SCARE_REWARD_ANY = 1;
+// One-time bonus for whoever lands the very first successful hit of the
+// entire match — separate from (and in addition to) the recurring
+// decile-tier rewards above.
+const FIRST_HIT_BONUS = 25;
 
 function totalLoadoutCost(loadout) {
   if (!loadout) return 0;
@@ -155,7 +226,9 @@ class NienRoom {
     this.botCounter = 0;
     this.mapWidth = 0;
     this.mapHeight = 0;
-    this.monster = null; // { x, y, fear, fleeDir, fleeUntil, wanderDir, milestonesHit }
+    this.monster = null; // { x, y, zone, visible, lastHitAt, fear, fleeDir, fleeUntil, wanderDir, milestonesHit, decileHit, contributions }
+    this.zoneHistory = []; // last 2 zones the monster appeared/relocated in, for the no-3-in-a-row rule
+    this.firstHitAwarded = false;
     this.loot = []; // { id, type, label, emoji, value, x, y }
     this.lootRemaining = 0;
     this.lootCounter = 0;
@@ -217,6 +290,8 @@ class NienRoom {
     this.lootRemaining = computeLootBudget(n);
     this.finalCallDeadline = null;
     this.monster = null;
+    this.zoneHistory = [];
+    this.firstHitAwarded = false;
     clearTimeout(this.monsterSpawnTimer);
     this.status = 'playing';
     this.startedAt = Date.now();
@@ -227,17 +302,62 @@ class NienRoom {
     this.spawnMonster();
   }
 
+  // A fresh appearance (initial spawn, or the respawn 60s after being
+  // fully scared away) — always hidden, always in a freshly-picked zone.
   spawnMonster() {
+    const zone = pickZone(this);
+    const { x, y } = randomPositionInZone(this.mapWidth, this.mapHeight, zone, MONSTER_RADIUS);
     this.monster = {
-      x: MONSTER_RADIUS + Math.random() * (this.mapWidth - MONSTER_RADIUS * 2),
-      y: MONSTER_RADIUS + Math.random() * (this.mapHeight - MONSTER_RADIUS * 2),
+      x, y, zone,
+      visible: false,
+      lastHitAt: 0,
       fear: 0,
       fleeDir: null,
       fleeUntil: 0,
       wanderDir: null,
       milestonesHit: [],
+      decileHit: [],
+      contributions: {}, // playerId -> fear damage dealt since the last decile payout
     };
-    this.pushLog('👹 The Niên Thú has appeared!');
+    this.pushLog(`👹 The Niên Thú has appeared somewhere in the ${ZONE_LABELS[zone]} zone!`);
+  }
+
+  // Mid-chase relocation (every 10% fear below 100%): hides it and moves
+  // it to a freshly-picked zone WITHOUT the 60s respawn delay — the
+  // chase continues immediately, just from a new hiding spot.
+  relocateMonster() {
+    const m = this.monster;
+    if (!m) return;
+    const zone = pickZone(this);
+    const { x, y } = randomPositionInZone(this.mapWidth, this.mapHeight, zone, MONSTER_RADIUS);
+    m.zone = zone;
+    m.x = x;
+    m.y = y;
+    m.visible = false;
+    m.fleeDir = null;
+    m.fleeUntil = 0;
+    m.wanderDir = null;
+    this.pushLog(`👻 The Niên Thú vanished and reappeared somewhere in the ${ZONE_LABELS[zone]} zone!`);
+  }
+
+  // Ranked payout at a single decile crossing, based on each player's
+  // fear damage dealt to the Niên Thú since the PREVIOUS crossing (reset
+  // right after — see scareMonster()), not their whole-match total. This
+  // is what makes it a fresh mini-competition every 10%, not a single
+  // early leader coasting to the same result every time.
+  distributeScareRewards(monster, decileMs) {
+    const ranked = Object.entries(monster.contributions)
+      .filter(([, amount]) => amount > 0)
+      .sort((a, b) => b[1] - a[1]);
+    ranked.forEach(([playerId, amount], idx) => {
+      const rank = idx + 1;
+      const player = this.findPlayer(playerId);
+      if (!player) return;
+      const tier = SCARE_REWARD_TIERS.find((t) => rank >= t.minRank && rank <= t.maxRank);
+      const points = tier ? tier.points : SCARE_REWARD_ANY;
+      player.score += points;
+      this.pushLog(`🏆 ${player.name} ranked #${rank} scaring the Niên Thú to ${decileMs}% (dealt ${amount.toFixed(1)} fear) — +${points} pts!`);
+    });
   }
 
   scheduleMonsterSpawn() {
@@ -291,10 +411,33 @@ class NienRoom {
     }
   }
 
-  scareMonster(explosionX, explosionY, fearAmount) {
+  // playerId identifies who threw the firecracker that landed this hit —
+  // used for the first-hit bonus and the decile-tier reward ranking.
+  scareMonster(explosionX, explosionY, fearAmount, playerId) {
     const m = this.monster;
     if (!m) return;
+    const oldFear = m.fear;
     m.fear = Math.min(100, m.fear + fearAmount);
+    const appliedFear = m.fear - oldFear;
+
+    // A hit always reveals it (or keeps it revealed) and resets the
+    // "given up searching" clock — see tick()'s MONSTER_HIDE_AFTER_MS check.
+    m.visible = true;
+    m.lastHitAt = Date.now();
+
+    if (playerId && appliedFear > 0) {
+      m.contributions[playerId] = (m.contributions[playerId] || 0) + appliedFear;
+    }
+
+    if (!this.firstHitAwarded) {
+      this.firstHitAwarded = true;
+      const scorer = this.findPlayer(playerId);
+      if (scorer) {
+        scorer.score += FIRST_HIT_BONUS;
+        this.pushLog(`🥇 ${scorer.name} was the first to land a hit on the Niên Thú! +${FIRST_HIT_BONUS} pts!`);
+      }
+    }
+
     const dx = m.x - explosionX;
     const dy = m.y - explosionY;
     const dist = Math.hypot(dx, dy) || 1;
@@ -302,16 +445,33 @@ class NienRoom {
     m.fleeUntil = Date.now() + MONSTER_FLEE_MS;
     this.pushLog(`😱 The Niên Thú's fear rose to ${m.fear}%!`);
 
-    const crossed = FEAR_MILESTONES.filter((ms) => m.fear >= ms && !m.milestonesHit.includes(ms));
-    crossed.forEach((ms) => {
+    const lootCrossed = FEAR_MILESTONES.filter((ms) => m.fear >= ms && !m.milestonesHit.includes(ms));
+    lootCrossed.forEach((ms) => {
       m.milestonesHit.push(ms);
       this.dropLoot(m.x, m.y, ms === 100 ? 3 : 1);
     });
+
+    // Every 10% pays out the ranked "who's scaring it the most right now"
+    // rewards, then resets contributions for the next 10% segment. A
+    // single big hit can cross more than one decile at once (e.g. a
+    // Pháo cối's +35 fear) — each crossed decile gets its own payout
+    // using the same contributions snapshot, then it's reset once.
+    const decileCrossed = DECILE_MILESTONES.filter((ms) => m.fear >= ms && !m.decileHit.includes(ms));
+    decileCrossed.forEach((ms) => {
+      m.decileHit.push(ms);
+      this.distributeScareRewards(m, ms);
+    });
+    if (decileCrossed.length) m.contributions = {};
 
     if (m.fear >= 100) {
       this.pushLog('🏃 The Niên Thú fled completely! It will return in 60 seconds.');
       this.monster = null;
       this.scheduleMonsterSpawn();
+    } else if (decileCrossed.length) {
+      // 100% already relocates via the full disappear-and-respawn path
+      // above; anything below that gets an immediate hide + relocate
+      // instead, keeping the chase going without the 60s wait.
+      this.relocateMonster();
     }
   }
 
@@ -367,7 +527,7 @@ class NienRoom {
       const d = Math.hypot(this.monster.x - tx, this.monster.y - ty);
       if (d <= def.radius + MONSTER_RADIUS) {
         hitMonster = true;
-        this.scareMonster(tx, ty, def.fear);
+        this.scareMonster(tx, ty, def.fear, player.id);
       }
     }
 
@@ -414,6 +574,12 @@ class NienRoom {
   // Returns any explosions bots produced this tick by releasing an armed
   // firecracker (for the caller to broadcast as 'nien:boom', same as a
   // human's release).
+  // Bots deliberately do NOT cheat by reading the Niên Thú's true
+  // position while it's hidden — same as a human, all they know is which
+  // zone it last appeared/relocated in. They head for that zone's center
+  // and, once close enough, start blindly tossing firecrackers around
+  // themselves to sweep the area. Once someone reveals it (or a bot's own
+  // sweep does), everyone — bots included — can see and aim at it exactly.
   updateBotAI() {
     const now = Date.now();
     const explosions = [];
@@ -422,9 +588,23 @@ class NienRoom {
       if (p.burning) return; // mid-light and rooted — nothing to decide
       if (p.stunnedUntil && now < p.stunnedUntil) return; // stunned, can't act or move
 
+      // Patrol a roaming point inside the announced zone instead of
+      // camping its exact center — picks a fresh random spot once the
+      // bot arrives near its current one (or doesn't have one yet), so
+      // repeated blind sweeps actually cover different parts of the
+      // zone over time rather than only ever reaching where a single
+      // fixed-radius sweep from dead-center happens to land.
+      let searchPoint = null;
+      if (this.monster && !this.monster.visible) {
+        if (!p.searchTarget || distance(p, p.searchTarget) < 40) {
+          p.searchTarget = randomPositionInZone(this.mapWidth, this.mapHeight, this.monster.zone, MONSTER_RADIUS);
+        }
+        searchPoint = p.searchTarget;
+      }
+
       let target = null;
       if (this.monster) {
-        target = this.monster;
+        target = this.monster.visible ? this.monster : searchPoint;
       } else if (this.loot.length) {
         target = this.loot.reduce((closest, item) => (
           !closest || distance(p, item) < distance(p, closest) ? item : closest
@@ -441,24 +621,43 @@ class NienRoom {
         this.setPlayerInput(p, p.botWanderDir.x, p.botWanderDir.y);
       }
 
+      // Within throwing range of either the real (visible) monster, or
+      // its last-known zone (hidden) — close enough to actually search it.
+      const inRangeOfMonster = this.monster && (
+        this.monster.visible
+          ? distance(p, this.monster) <= FIRECRACKER_RANGE + MONSTER_RADIUS
+          : distance(p, searchPoint) <= FIRECRACKER_RANGE * 1.5
+      );
+
       if (p.armed) {
         // Holding a lit one — bots don't hesitate, they release the
-        // instant the monster is in range rather than risk fizzling it.
-        if (this.monster && distance(p, this.monster) <= FIRECRACKER_RANGE + MONSTER_RADIUS) {
-          const result = this.releaseFirecracker(p, this.monster.x, this.monster.y);
+        // instant they're in position rather than risk fizzling it.
+        // Visible: aim right at it. Hidden: toss blindly nearby to sweep.
+        if (inRangeOfMonster) {
+          let tx;
+          let ty;
+          if (this.monster.visible) {
+            tx = this.monster.x; ty = this.monster.y;
+          } else {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.random() * FIRECRACKER_RANGE;
+            tx = p.x + Math.cos(angle) * dist;
+            ty = p.y + Math.sin(angle) * dist;
+          }
+          const result = this.releaseFirecracker(p, tx, ty);
           if (result.ok) explosions.push(result.explosion);
         }
         return;
       }
 
-      if (this.monster) {
+      if (this.monster && inRangeOfMonster) {
         const canBurn = !p.nextBurnAt || now >= p.nextBurnAt;
         // Prefer the strongest type still in stock — bots don't ration
         // ammo, they just use the best they have until it runs out.
         const chosenType = [...FIRECRACKER_KEYS]
           .sort((a, b) => FIRECRACKER_TYPES[b].fear - FIRECRACKER_TYPES[a].fear)
           .find((key) => p.inventory && p.inventory[key] > 0);
-        if (chosenType && canBurn && distance(p, this.monster) <= FIRECRACKER_RANGE + MONSTER_RADIUS) {
+        if (chosenType && canBurn) {
           this.startBurning(p, chosenType);
         }
       }
@@ -498,6 +697,13 @@ class NienRoom {
         }
         m.x = clamp(m.x + m.wanderDir.x * MONSTER_WANDER_SPEED * dt, MONSTER_RADIUS, this.mapWidth - MONSTER_RADIUS);
         m.y = clamp(m.y + m.wanderDir.y * MONSTER_WANDER_SPEED * dt, MONSTER_RADIUS, this.mapHeight - MONSTER_RADIUS);
+      }
+      // Nobody's landed a hit in a while — it gives up being seen and
+      // slips back into hiding right where it currently is (no
+      // teleport; that only happens via relocateMonster() on a 10% dip).
+      if (m.visible && now - m.lastHitAt >= MONSTER_HIDE_AFTER_MS) {
+        m.visible = false;
+        this.pushLog(`👻 The Niên Thú slipped back into hiding in the ${ZONE_LABELS[m.zone]} zone...`);
       }
     }
 
@@ -576,7 +782,16 @@ class NienRoom {
         stunnedUntil: p.stunnedUntil || 0,
         nextBurnAt: p.nextBurnAt || 0,
       })),
-      monster: this.monster ? { x: this.monster.x, y: this.monster.y, fear: this.monster.fear } : null,
+      // x/y are only sent while visible — while hidden, the client (and
+      // an honest bot) only gets to know the zone, same as the log
+      // notification told everyone when it last appeared/relocated there.
+      monster: this.monster ? {
+        fear: this.monster.fear,
+        zone: this.monster.zone,
+        visible: this.monster.visible,
+        x: this.monster.visible ? this.monster.x : null,
+        y: this.monster.visible ? this.monster.y : null,
+      } : null,
       loot: this.loot.map((l) => ({ id: l.id, type: l.type, emoji: l.emoji, value: l.value, x: l.x, y: l.y })),
       lootRemaining: this.lootRemaining,
       finalCallDeadline: this.finalCallDeadline,
@@ -812,3 +1027,15 @@ module.exports.PLAYER_SPEED = PLAYER_SPEED;
 module.exports.PICKUP_RADIUS = PICKUP_RADIUS;
 module.exports.TICK_MS = TICK_MS;
 module.exports.LOOT_TYPES = LOOT_TYPES;
+module.exports.ZONE_KEYS = ZONE_KEYS;
+module.exports.ZONE_LABELS = ZONE_LABELS;
+module.exports.DECILE_MILESTONES = DECILE_MILESTONES;
+module.exports.SCARE_REWARD_TIERS = SCARE_REWARD_TIERS;
+module.exports.SCARE_REWARD_ANY = SCARE_REWARD_ANY;
+module.exports.FIRST_HIT_BONUS = FIRST_HIT_BONUS;
+module.exports.MONSTER_HIDE_AFTER_MS = MONSTER_HIDE_AFTER_MS;
+module.exports.MONSTER_RADIUS = MONSTER_RADIUS;
+module.exports.pickZone = pickZone;
+module.exports.zoneOrigin = zoneOrigin;
+module.exports.zoneCenter = zoneCenter;
+module.exports.randomPositionInZone = randomPositionInZone;

@@ -206,6 +206,10 @@ if (me) {
     });
   }
 
+  const ZONE_LABELS = {
+    topLeft: 'Top-Left', topRight: 'Top-Right', bottomLeft: 'Bottom-Left', bottomRight: 'Bottom-Right',
+  };
+
   function renderTurnBanner(state) {
     if (state.status !== 'playing') { turnBannerEl.textContent = ''; return; }
     if (!state.monster) {
@@ -217,7 +221,12 @@ if (me) {
       turnBannerEl.textContent = `🎐 All loot has been released! ${secsLeft}s left to grab what's on the ground!`;
       return;
     }
-    turnBannerEl.textContent = '👹 The Niên Thú is nearby — scare it with a firecracker!';
+    if (!state.monster.visible) {
+      const zoneLabel = ZONE_LABELS[state.monster.zone] || state.monster.zone;
+      turnBannerEl.textContent = `❓ The Niên Thú is hiding somewhere in the ${zoneLabel} zone — throw firecrackers to find it!`;
+      return;
+    }
+    turnBannerEl.textContent = '👹 The Niên Thú is REVEALED — scare it before it hides again!';
   }
 
   function renderFinished(state) {
@@ -254,6 +263,22 @@ if (me) {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
     }
 
+    // A persistent dashed cross dividing the arena into the 4 search
+    // zones (Top-Left / Top-Right / Bottom-Left / Bottom-Right) — purely
+    // a visual aid so the "hiding in the X zone" hint text maps onto an
+    // actual part of the screen.
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 209, 102, 0.25)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 8]);
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 2, 0);
+    ctx.lineTo(canvas.width / 2, canvas.height);
+    ctx.moveTo(0, canvas.height / 2);
+    ctx.lineTo(canvas.width, canvas.height / 2);
+    ctx.stroke();
+    ctx.restore();
+
     (state.loot || []).forEach((item) => {
       ctx.font = '26px sans-serif';
       ctx.textAlign = 'center';
@@ -261,7 +286,9 @@ if (me) {
       ctx.fillText(item.emoji, item.x, item.y);
     });
 
-    if (state.monster) {
+    // Only draw the monster when it's actually visible -- while hidden the
+    // server never sends x/y at all, so there's nothing to draw anyway.
+    if (state.monster && state.monster.visible && state.monster.x !== null) {
       const m = state.monster;
       ctx.font = '40px sans-serif';
       ctx.textAlign = 'center';
