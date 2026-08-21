@@ -16,6 +16,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 require('./uno-server.js')(io);
 require('./ek-server.js')(io);
 require('./go-server.js')(io);
+require('./nien-server.js')(io);
 
 const GAMES = ['sudoku', 'scramble', 'memory', 'proverb'];
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'trungthu2026!@';

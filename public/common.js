@@ -333,7 +333,7 @@ window.Festival = (function () {
   if (!isHub && !isLeaderboard && !gamePage) return;
 
   const THEME_MUTED_KEY = 'festival_theme_muted';
-  const themeSrc = gamePage ? `/games/sounds/${GAME_BGM_FILES[gamePage]}` : '/sounds/mid-autumn-theme.mp3';
+  const themeSrc = gamePage ? `/games/sounds/bgm/${GAME_BGM_FILES[gamePage]}` : '/sounds/mid-autumn-theme.mp3';
   const theme = new Audio(themeSrc);
   theme.loop = true;
   theme.volume = 0.15;

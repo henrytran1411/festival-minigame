@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đuổi Niên Thú — Autumn Festival</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .nien-wrap { max-width: 900px; }
+
+    .nien-log {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      max-height: 110px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+    .nien-log div { padding: 2px 0; }
+
+    .nien-player-list { list-style: none; padding: 0; margin: 12px 0; }
+    .nien-player-list li { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .nien-player-list li:last-child { border-bottom: none; }
+
+    .room-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; }
+    .room-row .room-info { display: flex; flex-direction: column; }
+    .room-row .room-name { font-weight: 600; font-size: 14px; }
+    .room-row .room-meta { font-size: 12px; color: var(--muted); }
+    .room-row .room-meta.playing { color: var(--gold); }
+    .room-row button { padding: 6px 14px; font-size: 13px; }
+
+    #lobby-screen input, #create-room-screen input, #password-modal input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .nien-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+
+    .budget-options { display: flex; gap: 10px; margin-top: 6px; }
+    .budget-options label {
+      flex: 1;
+      text-align: center;
+      padding: 10px 6px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .budget-options input { display: none; }
+    .budget-options input:checked + span { color: var(--gold); font-weight: 700; }
+    .budget-options label:has(input:checked) { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.3); }
+
+    .shop-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 14px;
+    }
+    .shop-points { text-align: center; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .shop-points .value { color: var(--gold); font-weight: 700; }
+    .shop-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .shop-row:last-child { border-bottom: none; }
+    .shop-row .icon { font-size: 26px; width: 34px; text-align: center; }
+    .shop-row .info { flex: 1; }
+    .shop-row .info .label { font-size: 13px; font-weight: 600; }
+    .shop-row .info .stats { font-size: 11px; color: var(--muted); }
+    .shop-row .counter { display: flex; align-items: center; gap: 8px; }
+    .shop-row .counter button { padding: 4px 10px; font-size: 14px; line-height: 1; }
+    .shop-row .counter .count { min-width: 20px; text-align: center; font-weight: 700; }
+
+    .throw-type-picker { display: flex; gap: 8px; justify-content: center; margin-bottom: 8px; }
+    .throw-type-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: center;
+      color: var(--text);
+    }
+    .throw-type-btn .icon { font-size: 20px; display: block; }
+    .throw-type-btn.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.3); }
+    .throw-type-btn:disabled, .throw-type-btn.out-of-ammo { opacity: 0.35; cursor: not-allowed; }
+    .burn-status { text-align: center; font-weight: 700; color: var(--gold); padding: 8px 0; font-size: 13px; }
+
+    .nien-hud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 8px;
+    }
+    .nien-hud-chip {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 6px 12px;
+      font-size: 12px;
+      text-align: center;
+      min-width: 90px;
+    }
+    .nien-hud-chip .value { font-weight: 700; font-size: 14px; }
+    .nien-hud-chip.you { border-color: var(--accent); }
+
+    .nien-fear-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 6px 12px;
+      font-size: 12px;
+      flex: 1;
+      min-width: 160px;
+    }
+    .nien-fear-bar-track { background: #1a1d24; border-radius: 6px; height: 10px; margin-top: 4px; overflow: hidden; }
+    .nien-fear-bar-fill { background: linear-gradient(90deg, var(--gold), var(--bad)); height: 100%; width: 0%; transition: width 0.15s linear; }
+
+    .nien-turn-banner { text-align: center; font-weight: 700; margin-bottom: 8px; min-height: 20px; color: var(--gold); text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+
+    #arena-wrap {
+      display: flex;
+      justify-content: center;
+      margin: 6px 0;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px;
+    }
+    #arena-canvas { max-width: 100%; height: auto; border-radius: 8px; cursor: crosshair; touch-action: none; }
+
+    .nien-winner { text-align: center; font-size: 20px; font-weight: 800; margin: 10px 0; }
+    .nien-score-list { list-style: none; padding: 0; margin: 12px 0; }
+    .nien-score-list li { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .nien-score-list li:first-child { color: var(--gold); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="wrap nien-wrap">
+    <div class="top-bar">
+      <h1>🏮 Đuổi Niên Thú <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
+      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+    </div>
+
+    <div id="lobby-screen" class="card">
+      <h2 style="margin-top:0; text-align:center;">Niên Thú Chase Rooms</h2>
+      <ul id="room-list" class="nien-player-list"></ul>
+      <p id="no-rooms-msg" style="color:var(--muted); font-size:13px; text-align:center; display:none;">No rooms yet — create one to get started.</p>
+      <div class="nien-actions">
+        <button id="show-create-btn">+ Create Room</button>
+      </div>
+    </div>
+
+    <div id="create-room-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;">Create Room</h2>
+      <p style="font-size:13px; color:var(--muted);">Room name</p>
+      <input type="text" id="room-name-input" maxlength="30" placeholder="e.g. Chase Table 1" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Password</p>
+      <input type="text" id="room-password-input" maxlength="30" placeholder="Anything — share it with your group" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Firecracker shop budget (points per player)</p>
+      <div class="budget-options">
+        <label><input type="radio" name="loadout-budget" value="50" /><span>50<br /><small style="font-weight:400; color:var(--muted);">Tight</small></span></label>
+        <label><input type="radio" name="loadout-budget" value="100" checked /><span>100<br /><small style="font-weight:400; color:var(--muted);">Default</small></span></label>
+        <label><input type="radio" name="loadout-budget" value="150" /><span>150<br /><small style="font-weight:400; color:var(--muted);">Generous</small></span></label>
+        <label><input type="radio" name="loadout-budget" value="200" /><span>200<br /><small style="font-weight:400; color:var(--muted);">Loaded</small></span></label>
+      </div>
+      <p id="create-room-error" style="color:var(--bad); font-size:13px; display:none;"></p>
+      <div class="nien-actions">
+        <button id="create-room-btn">Create &amp; Join</button>
+        <button class="secondary" id="cancel-create-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="waiting-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
+      <ul id="player-list" class="nien-player-list"></ul>
+      <div class="nien-actions">
+        <button class="secondary" id="add-bots-btn">🤖 Add 3 Bots</button>
+        <button id="start-btn" disabled>▶ Start Chase</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center; margin-top:8px;">No one else around? Add bots and test with multiple players at once.</p>
+
+      <div class="shop-card">
+        <h3 style="margin:0 0 4px; text-align:center; font-size:14px;">🛒 Firecracker Shop</h3>
+        <div class="shop-points">Points: <span class="value" id="shop-remaining">0</span> / <span id="shop-total">0</span> remaining</div>
+        <div id="shop-list"></div>
+        <p style="color:var(--muted); font-size:11px; text-align:center; margin:8px 0 0;">Didn't buy anything? You'll automatically get as many Pháo tép as your budget allows when the chase starts.</p>
+      </div>
+
+      <div class="nien-actions">
+        <button class="danger" id="leave-waiting-btn">Leave Room</button>
+      </div>
+      <div id="waiting-log" class="nien-log"></div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+      <div class="nien-hud" id="hud-row"></div>
+      <div class="nien-hud" style="margin-bottom:10px;">
+        <div class="nien-fear-wrap">
+          Niên Thú Fear: <span id="fear-value">0%</span>
+          <div class="nien-fear-bar-track"><div class="nien-fear-bar-fill" id="fear-bar"></div></div>
+        </div>
+        <div class="nien-hud-chip">Loot left to drop<div class="value" id="loot-remaining">0</div></div>
+      </div>
+
+      <div class="nien-turn-banner" id="turn-banner"></div>
+
+      <div class="throw-type-picker" id="throw-type-picker"></div>
+
+      <div id="arena-wrap">
+        <canvas id="arena-canvas"></canvas>
+      </div>
+
+      <div class="nien-actions">
+        <button class="danger" id="leave-btn">Leave Room</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center;">Move with WASD or Arrow Keys. Select a firecracker, click the arena to light it (rooted while it burns), then click the arena again to throw it once it's armed — wait too long and it goes off in your hands, stunning you! Scare the Niên Thú to make it drop gifts — walk over them to collect!</p>
+
+      <div id="game-log" class="nien-log"></div>
+    </div>
+
+    <div id="finished-screen" class="card result-card hidden">
+      <div class="nien-winner" id="winner-text"></div>
+      <ul class="nien-score-list" id="score-list"></ul>
+      <div class="actions">
+        <button id="new-game-btn">Play Again</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 id="password-modal-title">Enter Password</h2>
+      <input type="text" id="join-password-input" placeholder="Room password" />
+      <p id="password-error" style="color:var(--bad); font-size:13px; display:none;">Wrong password.</p>
+      <div class="nien-actions">
+        <button id="password-submit-btn">Join</button>
+        <button class="secondary" id="password-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>How to Play Đuổi Niên Thú</h2>
+      <ul>
+        <li>Before the chase starts, spend your shared point budget in the <b>Firecracker Shop</b> on a mix of Pháo tép (small/cheap), Pháo chuột (medium), and Pháo cối (large/expensive) — each purchase gives you that many uses of that type.</li>
+        <li>Move around the arena with <b>WASD</b> or the <b>Arrow Keys</b>.</li>
+        <li>Throwing a firecracker is a 4-step dance: (1) <b>select</b> a type by clicking its icon (click it again to unselect — this doesn't cost anything yet); (2) with a type selected, <b>click the arena</b> to confirm and start <b>lighting</b> it — you're rooted and can't move while it burns; (3) once lit, it's <b>armed</b> and you're free to move again while you aim — <b>click the arena</b> again to actually throw it at that spot; (4) if you wait too long without throwing, it goes off in your hands instead — no damage to the Niên Thú, and you're <b>stunned</b> (can't move) for 3 seconds. Bigger firecrackers take longer to light and give you less time to throw before they fizzle, so plan ahead!</li>
+        <li>Just lit or thrown one? There's a brief cooldown (shown as a countdown) before you can select and light another.</li>
+        <li>Once thrown, it resolves immediately against wherever the Niên Thú currently is — raising its <b>Fear Meter</b> (larger firecrackers hit harder) and making it bolt away from the blast.</li>
+        <li>At 25%, 50%, 75%, and 100% fear it drops Mid-Autumn gifts nearby. At 100% it flees completely and returns about a minute later.</li>
+        <li>Walk over dropped gifts to collect them automatically: 🕯️ Red Candle (5 pts), ⭐ Star Lantern (10 pts), 🥮 Mooncake (20 pts).</li>
+        <li>There's a limited total amount of loot for the whole game. Once it's all been dropped, there's a short final scramble before the game ends and the highest score wins.</li>
+        <li>This is an early (MVP) version — movement speed and firecracker range are still fixed for everyone; only the firecracker type loadout is customizable so far.</li>
+      </ul>
+      <button class="modal-close">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../common.js"></script>
+  <script src="nien.js"></script>
+</body>
+</html>
