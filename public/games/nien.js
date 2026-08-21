@@ -65,7 +65,14 @@ if (me) {
   const pressedKeys = new Set();
 
   function totalLoadoutCost(loadout, catalog) {
-    return Object.keys(catalog).reduce((sum, key) => sum + ((loadout && loadout[key]) || 0) * catalog[key].cost, 0);
+    // loadout[key] is a raw firecracker count; cost is per PACK
+    // (purchaseUnit firecrackers, e.g. 1,000 Pháo tép per pack), so divide
+    // back down to packs before pricing -- mirrors the server's own math.
+    return Object.keys(catalog).reduce((sum, key) => {
+      const def = catalog[key];
+      const unit = def.purchaseUnit || 1;
+      return sum + (((loadout && loadout[key]) || 0) / unit) * def.cost;
+    }, 0);
   }
 
   function showScreen(name) {
@@ -164,7 +171,10 @@ if (me) {
       info.className = 'info';
       const label = document.createElement('div');
       label.className = 'label';
-      label.textContent = `${def.label} — ${def.cost} pts`;
+      const unit = def.purchaseUnit || 1;
+      label.textContent = unit > 1
+        ? `${def.label} — ${def.cost} pts / pack of ${unit.toLocaleString()}`
+        : `${def.label} — ${def.cost} pts`;
       const stats = document.createElement('div');
       stats.className = 'stats';
       stats.textContent = `Radius ${def.radius} · Fear +${def.fear}`;
@@ -180,7 +190,7 @@ if (me) {
       minusBtn.addEventListener('click', () => buyFirecracker(def.key, -1));
       const count = document.createElement('div');
       count.className = 'count';
-      count.textContent = owned;
+      count.textContent = owned.toLocaleString();
       const plusBtn = document.createElement('button');
       plusBtn.textContent = '+';
       plusBtn.disabled = remaining < def.cost;
@@ -298,7 +308,13 @@ if (me) {
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
       ctx.fillRect(m.x - barW / 2, m.y - 38, barW, 6);
       ctx.fillStyle = '#ff5c5c';
-      ctx.fillRect(m.x - barW / 2, m.y - 38, barW * (m.fear / 100), 6);
+      // m.fear is raw HP dropped now, not a percentage -- scale against maxHp.
+      ctx.fillRect(m.x - barW / 2, m.y - 38, barW * (m.fear / m.maxHp), 6);
+      if (m.roaring) {
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillStyle = '#ffce54';
+        ctx.fillText('🦁 Sư Tử Hống!', m.x, m.y - 50);
+      }
     }
 
     const now = Date.now();
@@ -485,9 +501,14 @@ if (me) {
 
   function renderGame(state) {
     renderHud(state);
-    const fear = state.monster ? state.monster.fear : 0;
-    fearValueEl.textContent = `${fear}%`;
-    fearBarEl.style.width = `${fear}%`;
+    // state.monster.fear is now raw HP dropped (NOT a percentage) -- derive
+    // the percent for display/bar-width from hp/maxHp instead of using it
+    // directly.
+    const maxHp = (state.monster && state.monster.maxHp) || 100000;
+    const hp = state.monster ? state.monster.hp : maxHp;
+    const pctDropped = ((maxHp - hp) / maxHp) * 100;
+    fearValueEl.textContent = `${pctDropped.toFixed(1)}% (${hp.toLocaleString()} / ${maxHp.toLocaleString()} HP)`;
+    fearBarEl.style.width = `${pctDropped}%`;
     lootRemainingEl.textContent = state.lootRemaining;
     renderTurnBanner(state);
     renderThrowTypePicker(state);

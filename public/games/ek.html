@@ -45,25 +45,31 @@
 
     .ek-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
 
-    /* Table: opponent seats around the top, deck/discard piles in the
-       middle, your own hand fanned out below — same spatial idea as UNO's
-       table, just simpler (no fixed seating geometry, a plain row). */
+    /* Table: everyone (including you) seated around an oval, deck/discard
+       piles in the middle — same layout mechanism as UNO's table (seats
+       absolutely positioned by angle around .ek-seats, computed in
+       renderSeats()), just with EK's own per-seat states (dead/out,
+       no turn-order "next" concept). */
     .ek-table {
+      position: relative;
+      height: 300px;
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 14px;
-      padding: 14px;
       margin-bottom: 10px;
     }
-    .ek-seats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 14px; }
+    .ek-seats { position: absolute; inset: 0; }
     .ek-seat {
-      background: #1a1d24;
+      position: absolute;
+      transform: translate(-50%, -50%);
+      background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 8px 12px;
       text-align: center;
       min-width: 84px;
     }
+    .ek-seat.you { border-color: var(--accent); }
     .ek-seat.turn { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); }
     .ek-seat.dead { opacity: 0.4; }
     .ek-seat.offline { opacity: 0.55; }
@@ -71,7 +77,17 @@
     .ek-seat .count { font-size: 12px; color: var(--muted); }
     .ek-seat .dead-tag { color: var(--bad); font-weight: 800; font-size: 11px; margin-top: 2px; }
 
-    .ek-center { display: flex; align-items: center; justify-content: center; gap: 28px; }
+    .ek-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      z-index: 1;
+    }
     .ek-pile-label { text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px; }
 
     .ek-card {
@@ -101,8 +117,13 @@
     .ek-card.playable:hover { transform: translateY(-4px); transition: transform 0.12s ease; }
     .ek-card.disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(60%); }
     .ek-card.selected { outline: 3px solid var(--gold); outline-offset: -3px; transform: translateY(-6px); }
-    .ek-card.back { background: linear-gradient(135deg, #2a2f3a, #12141a); border-color: var(--border); }
-    .ek-card.back .emoji { font-size: 22px; opacity: 0.6; }
+    .ek-card.back {
+      background-image: url('cards/explodingkitten/cardback.png');
+      background-size: cover;
+      background-position: center;
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+    .ek-card.back .emoji { display: none; }
 
     /* Real uploaded card art fills the whole face, so the emoji/label
        overlay (used as a placeholder for types without art) is hidden. */

@@ -24,14 +24,32 @@ const PLAYER_RADIUS = 16;
 const PICKUP_RADIUS = 26;
 
 const MONSTER_RADIUS = 24;
-const MONSTER_WANDER_SPEED = 45;
 const MONSTER_FLEE_SPEED = 190;
 const MONSTER_FLEE_MS = 2200;
 const MONSTER_RESPAWN_DELAY_MS = 60000; // matches the GDD's "every 60 seconds"
+
+// Skill "Sư Tử Hống" (Lion's Roar): every LION_ROAR_HP_STEP of raw HP
+// dropped (0.5% of the pool), the Niên Thú roars in place — stunning every
+// player/bot within LION_ROAR_RADIUS for LION_ROAR_STUN_MS, then (once that
+// stun window closes) bolting away at double its normal flee speed. Only
+// fires once per hit even if a single huge hit crosses several 0.5% steps
+// at once — the escape itself doesn't need to repeat.
+const LION_ROAR_HP_STEP = 500;
+const LION_ROAR_RADIUS = 500;
+const LION_ROAR_STUN_MS = 5000;
+const LION_ROAR_FLEE_SPEED_MULTIPLIER = 2;
 // If nobody lands a hit for this long after the Niên Thú becomes visible,
 // it slips back into hiding at its CURRENT position (no teleport — that
 // only happens on a 10%-fear relocation, see DECILE_MILESTONES below).
 const MONSTER_HIDE_AFTER_MS = 10000;
+
+// The instant it STARTS hiding (initial spawn, a decile relocation, giving
+// up on being seen, or settling in after a Lion's Roar bolt), it doesn't
+// immediately go fully still -- it wanders randomly for a few seconds
+// first, confined to whichever zone it just started hiding in, before
+// finally settling down completely for the rest of that hidden stretch.
+const MONSTER_HIDDEN_WANDER_MS = 4000;
+const MONSTER_HIDDEN_WANDER_SPEED = 45;
 
 // The arena is split into 4 quadrants. Every time the Niên Thú appears or
 // relocates, it picks one at random, but the SAME zone can never be
@@ -99,25 +117,51 @@ const SELF_DETONATE_STUN_MS = 3000;
 //   3. nextBurnTime — cooldown, counted from the moment the firecracker
 //      actually leaves their hand (thrown OR self-detonated), before they
 //      can start lighting another one (any type).
+//
+// purchaseUnit (default 1 when omitted) is how many individual firecrackers
+// one shop "click" actually buys/sells — every type here is sold by the
+// pack (100 at a time), same as real Tet stalls, so e.g. 5 points buys a
+// full pack of 100 Pháo tép rather than a single one. cost is always PER
+// PACK (i.e. per purchaseUnit), not per individual firecracker — see
+// totalLoadoutCost().
 const FIRECRACKER_TYPES = {
-  small: { key: 'small', label: 'Pháo tép', emoji: '🧨', radius: 50, fear: 12, cost: 5, timeToBurn: 1, timeBeforeExplosion: 2, nextBurnTime: 0.5 },
-  medium: { key: 'medium', label: 'Pháo chuột', emoji: '🎆', radius: 75, fear: 20, cost: 10, timeToBurn: 2, timeBeforeExplosion: 3, nextBurnTime: 1 },
-  large: { key: 'large', label: 'Pháo cối', emoji: '💣', radius: 110, fear: 35, cost: 25, timeToBurn: 5, timeBeforeExplosion: 5, nextBurnTime: 3 },
+  small: { key: 'small', label: 'Pháo tép', emoji: '🧨', radius: 50, fear: 12, cost: 5, purchaseUnit: 100, timeToBurn: 1, timeBeforeExplosion: 2, nextBurnTime: 0.5 },
+  medium: { key: 'medium', label: 'Pháo chuột', emoji: '🎆', radius: 75, fear: 20, cost: 10, purchaseUnit: 100, timeToBurn: 2, timeBeforeExplosion: 3, nextBurnTime: 1 },
+  large: { key: 'large', label: 'Pháo cối', emoji: '💣', radius: 110, fear: 35, cost: 25, purchaseUnit: 100, timeToBurn: 5, timeBeforeExplosion: 5, nextBurnTime: 3 },
 };
 const FIRECRACKER_KEYS = Object.keys(FIRECRACKER_TYPES);
 const DEFAULT_LOADOUT_BUDGET = 100; // matches the GDD's own example budget
 const LOADOUT_BUDGET_OPTIONS = [50, 100, 150, 200]; // presets the room host can pick from at creation
 
-const FEAR_MILESTONES = [25, 50, 75, 100]; // loot-drop thresholds (unchanged)
+// The Niên Thú's "fear" field is now literal raw HP dropped (0 up to
+// MONSTER_MAX_HP), NOT a percentage — a firecracker's `fear` stat (12/20/35)
+// is exactly how many HP it deals per hit, full stop. This used to be a
+// 0-100 percentage (so a Pháo tép hit dropped 12% = 12,000 HP in one go),
+// which made the very first hit of a match feel absurdly punishing; as raw
+// HP against a 100,000-point pool, the same 12-point hit is what it looks
+// like it should be — a small dent, not a fifth of its health bar.
+const MONSTER_MAX_HP = 100000;
 
-// Every 10% of fear is its own separate milestone system, for the
+// Every whole 1,000 HP dropped (i.e. crossing another 1% of the pool, even
+// though we no longer track fear AS a percentage — a single big firecracker
+// can still cross more than one of these in one hit if it's ever buffed
+// past 1,000) drops loot scaled to how crowded the monster's current spot
+// is: count connected players/bots within this radius and multiply by the
+// rate below. Numbers are placeholders per the design brief ("drop rate
+// will be config later") — easy to retune without touching the logic.
+const MONSTER_LOOT_RADIUS = 300;
+const LOOT_DROP_RATE_PER_NEARBY = 2; // e.g. 10 nearby -> 20 items per 1,000 HP crossed
+const LOOT_MILESTONE_HP = 1000; // one loot-drop milestone per this many raw HP dropped (= 1% of MONSTER_MAX_HP)
+
+// Every 10% of the HP pool is its own separate milestone system, for the
 // recurring "who's scaring it the most RIGHT NOW" mini-competition: each
-// crossing pays out ranked rewards based on fear dealt since the last
+// crossing pays out ranked rewards based on HP damage dealt since the last
 // crossing, then (below 100%) hides + relocates the Niên Thú to a new
 // zone. 100% is shared with the existing "fully scared away" behavior
 // (full disappearance + scheduled respawn), so it doesn't ALSO relocate
-// in place — see scareMonster().
-const DECILE_MILESTONES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+// in place — see scareMonster(). Expressed directly in raw HP now that
+// fear no longer is a percentage.
+const DECILE_MILESTONES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((pct) => (pct / 100) * MONSTER_MAX_HP);
 
 // Ranked reward tiers, evaluated fresh at every decile crossing, based on
 // each player's total fear damage dealt to the Niên Thú since the
@@ -135,10 +179,24 @@ const SCARE_REWARD_ANY = 1;
 // entire match — separate from (and in addition to) the recurring
 // decile-tier rewards above.
 const FIRST_HIT_BONUS = 25;
+// That very first hit is also special in a second way, regardless of which
+// firecracker type landed it: it only "grazes" the Niên Thú for a token
+// amount of HP instead of the firecracker's real damage (so the match
+// doesn't immediately blow past the 10% decile — and its hide + relocate —
+// on turn one, before anyone's even seen it move). It's still a genuine
+// hit: the monster is revealed to everyone exactly like any other. Now that
+// fear IS raw HP, this needs no unit conversion — it's just applied as-is.
+const FIRST_HIT_HP_OVERRIDE = 5;
 
 function totalLoadoutCost(loadout) {
   if (!loadout) return 0;
-  return FIRECRACKER_KEYS.reduce((sum, key) => sum + (loadout[key] || 0) * FIRECRACKER_TYPES[key].cost, 0);
+  // loadout[key] is a raw firecracker count; cost is per PACK (purchaseUnit
+  // firecrackers), so divide back down to packs before pricing.
+  return FIRECRACKER_KEYS.reduce((sum, key) => {
+    const def = FIRECRACKER_TYPES[key];
+    const unit = def.purchaseUnit || 1;
+    return sum + ((loadout[key] || 0) / unit) * def.cost;
+  }, 0);
 }
 
 function emptyLoadout() {
@@ -153,7 +211,9 @@ function emptyLoadout() {
 function autoFillLoadout(budget, { randomized = false } = {}) {
   const loadout = emptyLoadout();
   if (!randomized) {
-    loadout.small = Math.floor(budget / FIRECRACKER_TYPES.small.cost);
+    const def = FIRECRACKER_TYPES.small;
+    const packs = Math.floor(budget / def.cost);
+    loadout.small = packs * (def.purchaseUnit || 1);
     return loadout;
   }
   let remaining = budget;
@@ -163,7 +223,7 @@ function autoFillLoadout(budget, { randomized = false } = {}) {
     const affordable = FIRECRACKER_KEYS.filter((key) => FIRECRACKER_TYPES[key].cost <= remaining);
     if (!affordable.length) break;
     const key = affordable[Math.floor(Math.random() * affordable.length)];
-    loadout[key] += 1;
+    loadout[key] += FIRECRACKER_TYPES[key].purchaseUnit || 1;
     remaining -= FIRECRACKER_TYPES[key].cost;
   }
   return loadout;
@@ -226,7 +286,7 @@ class NienRoom {
     this.botCounter = 0;
     this.mapWidth = 0;
     this.mapHeight = 0;
-    this.monster = null; // { x, y, zone, visible, lastHitAt, fear, fleeDir, fleeUntil, wanderDir, milestonesHit, decileHit, contributions }
+    this.monster = null; // { x, y, zone, visible, lastHitAt, fear, fleeDir, fleeUntil, milestonesHit, decileHit, contributions }
     this.zoneHistory = []; // last 2 zones the monster appeared/relocated in, for the no-3-in-a-row rule
     this.firstHitAwarded = false;
     this.loot = []; // { id, type, label, emoji, value, x, y }
@@ -302,6 +362,17 @@ class NienRoom {
     this.spawnMonster();
   }
 
+  // Single entry point for "it just started being hidden" — arms the brief
+  // random-wander window (see MONSTER_HIDDEN_WANDER_MS) that always kicks
+  // in the instant hiding begins, whatever the reason. Mutates the passed
+  // monster object; does NOT touch m.visible/m.zone/m.x/m.y itself since
+  // callers set those differently (a fresh spot vs. hiding in place).
+  armHiddenWander(m) {
+    m.visible = false;
+    m.hiddenWanderUntil = Date.now() + MONSTER_HIDDEN_WANDER_MS;
+    m.wanderDir = null;
+  }
+
   // A fresh appearance (initial spawn, or the respawn 60s after being
   // fully scared away) — always hidden, always in a freshly-picked zone.
   spawnMonster() {
@@ -310,15 +381,22 @@ class NienRoom {
     this.monster = {
       x, y, zone,
       visible: false,
+      hiddenWanderUntil: 0,
+      wanderDir: null,
       lastHitAt: 0,
       fear: 0,
       fleeDir: null,
       fleeUntil: 0,
-      wanderDir: null,
+      fleeSpeedMultiplier: 1,
+      roaring: false,
+      roarEndsAt: 0,
+      fleeWaypoints: null, // post-roar bolt route: [mapCenter, {x,y,zone}] -- see tick()
+      roarMilestonesHit: [],
       milestonesHit: [],
       decileHit: [],
       contributions: {}, // playerId -> fear damage dealt since the last decile payout
     };
+    this.armHiddenWander(this.monster);
     this.pushLog(`👹 The Niên Thú has appeared somewhere in the ${ZONE_LABELS[zone]} zone!`);
   }
 
@@ -333,22 +411,26 @@ class NienRoom {
     m.zone = zone;
     m.x = x;
     m.y = y;
-    m.visible = false;
+    this.armHiddenWander(m);
     m.fleeDir = null;
     m.fleeUntil = 0;
-    m.wanderDir = null;
+    m.fleeSpeedMultiplier = 1;
+    m.roaring = false;
+    m.roarEndsAt = 0;
+    m.fleeWaypoints = null;
     this.pushLog(`👻 The Niên Thú vanished and reappeared somewhere in the ${ZONE_LABELS[zone]} zone!`);
   }
 
-  // Ranked payout at a single decile crossing, based on each player's
-  // fear damage dealt to the Niên Thú since the PREVIOUS crossing (reset
+  // Ranked payout at a single decile crossing, based on each player's raw
+  // HP damage dealt to the Niên Thú since the PREVIOUS crossing (reset
   // right after — see scareMonster()), not their whole-match total. This
   // is what makes it a fresh mini-competition every 10%, not a single
   // early leader coasting to the same result every time.
-  distributeScareRewards(monster, decileMs) {
+  distributeScareRewards(monster, decileHp) {
     const ranked = Object.entries(monster.contributions)
       .filter(([, amount]) => amount > 0)
       .sort((a, b) => b[1] - a[1]);
+    const pct = Math.round((decileHp / MONSTER_MAX_HP) * 100);
     ranked.forEach(([playerId, amount], idx) => {
       const rank = idx + 1;
       const player = this.findPlayer(playerId);
@@ -356,7 +438,7 @@ class NienRoom {
       const tier = SCARE_REWARD_TIERS.find((t) => rank >= t.minRank && rank <= t.maxRank);
       const points = tier ? tier.points : SCARE_REWARD_ANY;
       player.score += points;
-      this.pushLog(`🏆 ${player.name} ranked #${rank} scaring the Niên Thú to ${decileMs}% (dealt ${amount.toFixed(1)} fear) — +${points} pts!`);
+      this.pushLog(`🏆 ${player.name} ranked #${rank} scaring the Niên Thú to ${pct}% (dealt ${Math.round(amount).toLocaleString()} HP) — +${points} pts!`);
     });
   }
 
@@ -385,7 +467,11 @@ class NienRoom {
     const def = FIRECRACKER_TYPES[type];
     if (!def || !Number.isInteger(delta) || delta === 0) return { ok: false, error: 'invalid-request' };
     if (!player.loadout) player.loadout = emptyLoadout();
-    const newCount = player.loadout[type] + delta;
+    // delta is in shop CLICKS (+1/-1 per button press); each click buys or
+    // sells a whole pack (purchaseUnit firecrackers), e.g. one click of
+    // Pháo tép is +1000, not +1.
+    const change = delta * (def.purchaseUnit || 1);
+    const newCount = player.loadout[type] + change;
     if (newCount < 0) return { ok: false, error: 'invalid-count' };
     const newLoadout = { ...player.loadout, [type]: newCount };
     if (totalLoadoutCost(newLoadout) > this.loadoutBudget) return { ok: false, error: 'budget-exceeded' };
@@ -411,13 +497,42 @@ class NienRoom {
     }
   }
 
+  // Skill "Sư Tử Hống" (Lion's Roar): stuns everyone currently within
+  // LION_ROAR_RADIUS, then — once that stun window closes, see tick() —
+  // bolts off along a fixed escape route (map center, then a freshly
+  // picked zone) at double speed, arriving there hidden in a whole new
+  // spot. The stun lands immediately and can't be undone; the route
+  // itself is only picked once the roar window actually closes (tick()
+  // needs the monster's position AT THAT TIME as the starting point).
+  triggerLionRoar(m) {
+    const now = Date.now();
+    this.players.forEach((p) => {
+      if (p.connected && distance(p, m) <= LION_ROAR_RADIUS) {
+        p.stunnedUntil = Math.max(p.stunnedUntil || 0, now + LION_ROAR_STUN_MS);
+      }
+    });
+    m.roaring = true;
+    m.roarEndsAt = now + LION_ROAR_STUN_MS;
+    m.fleeWaypoints = null;
+    // The roar supersedes whatever ordinary flee scareMonster() just armed
+    // above -- it stands still and roars first, not flee immediately.
+    m.fleeUntil = 0;
+    this.pushLog(`🦁 The Niên Thú unleashes "Sư Tử Hống"! Everyone within ${LION_ROAR_RADIUS}px is stunned for ${LION_ROAR_STUN_MS / 1000}s!`);
+  }
+
   // playerId identifies who threw the firecracker that landed this hit —
   // used for the first-hit bonus and the decile-tier reward ranking.
   scareMonster(explosionX, explosionY, fearAmount, playerId) {
     const m = this.monster;
     if (!m) return;
+    const isFirstHit = !this.firstHitAwarded;
+    // The very first successful hit of the match only grazes it for a
+    // token amount, no matter which firecracker type actually landed —
+    // see FIRST_HIT_HP_OVERRIDE above. fearAmount/m.fear are raw HP now,
+    // so this needs no scaling.
+    const appliedFearAmount = isFirstHit ? FIRST_HIT_HP_OVERRIDE : fearAmount;
     const oldFear = m.fear;
-    m.fear = Math.min(100, m.fear + fearAmount);
+    m.fear = Math.min(MONSTER_MAX_HP, m.fear + appliedFearAmount);
     const appliedFear = m.fear - oldFear;
 
     // A hit always reveals it (or keeps it revealed) and resets the
@@ -429,12 +544,12 @@ class NienRoom {
       m.contributions[playerId] = (m.contributions[playerId] || 0) + appliedFear;
     }
 
-    if (!this.firstHitAwarded) {
+    if (isFirstHit) {
       this.firstHitAwarded = true;
       const scorer = this.findPlayer(playerId);
       if (scorer) {
         scorer.score += FIRST_HIT_BONUS;
-        this.pushLog(`🥇 ${scorer.name} was the first to land a hit on the Niên Thú! +${FIRST_HIT_BONUS} pts!`);
+        this.pushLog(`🥇 ${scorer.name} was the first to land a hit on the Niên Thú! +${FIRST_HIT_BONUS} pts! (a graze — just ${FIRST_HIT_HP_OVERRIDE} HP — but it's revealed now)`);
       }
     }
 
@@ -443,19 +558,41 @@ class NienRoom {
     const dist = Math.hypot(dx, dy) || 1;
     m.fleeDir = { x: dx / dist, y: dy / dist };
     m.fleeUntil = Date.now() + MONSTER_FLEE_MS;
-    this.pushLog(`😱 The Niên Thú's fear rose to ${m.fear}%!`);
+    m.fleeSpeedMultiplier = 1; // a fresh ordinary flee always resets any leftover roar speed boost
+    m.fleeWaypoints = null; // a fresh hit interrupts any in-progress post-roar bolt journey
+    const hpRemaining = MONSTER_MAX_HP - m.fear;
+    this.pushLog(`😱 The Niên Thú's HP dropped to ${Math.round(hpRemaining).toLocaleString()} / ${MONSTER_MAX_HP.toLocaleString()}!`);
 
-    const lootCrossed = FEAR_MILESTONES.filter((ms) => m.fear >= ms && !m.milestonesHit.includes(ms));
-    lootCrossed.forEach((ms) => {
+    // Skill "Sư Tử Hống": every LION_ROAR_HP_STEP of HP dropped, roar --
+    // fires at most once per hit even if this single hit crossed several
+    // steps at once (the escape doesn't need to repeat). Overrides the
+    // ordinary flee started just above: see triggerLionRoar() and tick().
+    const oldRoarStep = Math.floor(oldFear / LION_ROAR_HP_STEP);
+    const newRoarStep = Math.floor(m.fear / LION_ROAR_HP_STEP);
+    if (newRoarStep > oldRoarStep) {
+      this.triggerLionRoar(m);
+    }
+
+    // Every whole LOOT_MILESTONE_HP (1,000 = 1% of the pool) crossed —
+    // not just every hit, in case a future retune makes a single throw
+    // cross more than one at once — drops loot scaled to however many
+    // players/bots are currently standing within MONSTER_LOOT_RADIUS of
+    // it. Nearby count is read once per crossed milestone since it can't
+    // change within this same synchronous hit.
+    const oldMilestone = Math.floor(oldFear / LOOT_MILESTONE_HP);
+    const newMilestone = Math.floor(m.fear / LOOT_MILESTONE_HP);
+    for (let ms = oldMilestone + 1; ms <= newMilestone; ms++) {
+      if (m.milestonesHit.includes(ms)) continue;
       m.milestonesHit.push(ms);
-      this.dropLoot(m.x, m.y, ms === 100 ? 3 : 1);
-    });
+      const nearby = this.players.filter((p) => p.connected && distance(p, m) <= MONSTER_LOOT_RADIUS).length;
+      this.dropLoot(m.x, m.y, nearby * LOOT_DROP_RATE_PER_NEARBY);
+    }
 
-    // Every 10% pays out the ranked "who's scaring it the most right now"
-    // rewards, then resets contributions for the next 10% segment. A
-    // single big hit can cross more than one decile at once (e.g. a
-    // Pháo cối's +35 fear) — each crossed decile gets its own payout
-    // using the same contributions snapshot, then it's reset once.
+    // Every 10% of the pool pays out the ranked "who's scaring it the most
+    // right now" rewards, then resets contributions for the next 10%
+    // segment. A single big hit can cross more than one decile at once —
+    // each crossed decile gets its own payout using the same contributions
+    // snapshot, then it's reset once.
     const decileCrossed = DECILE_MILESTONES.filter((ms) => m.fear >= ms && !m.decileHit.includes(ms));
     decileCrossed.forEach((ms) => {
       m.decileHit.push(ms);
@@ -463,7 +600,7 @@ class NienRoom {
     });
     if (decileCrossed.length) m.contributions = {};
 
-    if (m.fear >= 100) {
+    if (m.fear >= MONSTER_MAX_HP) {
       this.pushLog('🏃 The Niên Thú fled completely! It will return in 60 seconds.');
       this.monster = null;
       this.scheduleMonsterSpawn();
@@ -665,6 +802,105 @@ class NienRoom {
     return explosions;
   }
 
+  // One tick's worth of Niên Thú movement/state, factored out of tick()
+  // itself purely to keep that function's branching manageable. Handles,
+  // in priority order: standing still mid-roar (then arming the post-roar
+  // bolt route once the roar window closes), chasing that route waypoint
+  // by waypoint, an ordinary hit-triggered flee, and finally the "gave up
+  // being seen" auto-hide check.
+  // While hiding (whichever way it got there), it doesn't stop dead right
+  // away -- it keeps shuffling around at random for a few more seconds,
+  // strictly confined to the zone it started hiding in, before finally
+  // going fully still. See MONSTER_HIDDEN_WANDER_MS/armHiddenWander().
+  wanderWithinZone(m, dt) {
+    if (!m.wanderDir || Math.random() < 0.05) {
+      const angle = Math.random() * Math.PI * 2;
+      m.wanderDir = { x: Math.cos(angle), y: Math.sin(angle) };
+    }
+    const origin = zoneOrigin(this.mapWidth, this.mapHeight, m.zone);
+    const xMin = origin.x + MONSTER_RADIUS;
+    const xMax = origin.x + this.mapWidth / 2 - MONSTER_RADIUS;
+    const yMin = origin.y + MONSTER_RADIUS;
+    const yMax = origin.y + this.mapHeight / 2 - MONSTER_RADIUS;
+    m.x = clamp(m.x + m.wanderDir.x * MONSTER_HIDDEN_WANDER_SPEED * dt, xMin, xMax);
+    m.y = clamp(m.y + m.wanderDir.y * MONSTER_HIDDEN_WANDER_SPEED * dt, yMin, yMax);
+  }
+
+  // Once the roar's stun window closes, arms the fixed escape route --
+  // straight through the middle of the map, then on into a freshly-picked
+  // (different) zone to hide in, not just a random direction away from
+  // wherever it was hit.
+  armPostRoarBolt(m) {
+    m.roaring = false;
+    m.fleeSpeedMultiplier = LION_ROAR_FLEE_SPEED_MULTIPLIER;
+    const newZone = pickZone(this);
+    const dest = randomPositionInZone(this.mapWidth, this.mapHeight, newZone, MONSTER_RADIUS);
+    m.fleeWaypoints = [
+      { x: this.mapWidth / 2, y: this.mapHeight / 2 },
+      { x: dest.x, y: dest.y, zone: newZone },
+    ];
+    this.pushLog('🐆 The Niên Thú bolts through the center of the map at double speed!');
+  }
+
+  // Chases the post-roar escape route one waypoint at a time (called only
+  // while m.fleeWaypoints is non-empty).
+  chaseFleeWaypoint(m, dt) {
+    const speed = MONSTER_FLEE_SPEED * (m.fleeSpeedMultiplier || 1);
+    const step = speed * dt;
+    const target = m.fleeWaypoints[0];
+    const dx = target.x - m.x;
+    const dy = target.y - m.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > step) {
+      m.x = clamp(m.x + (dx / dist) * step, MONSTER_RADIUS, this.mapWidth - MONSTER_RADIUS);
+      m.y = clamp(m.y + (dy / dist) * step, MONSTER_RADIUS, this.mapHeight - MONSTER_RADIUS);
+      return;
+    }
+    m.x = target.x;
+    m.y = target.y;
+    m.fleeWaypoints.shift();
+    if (target.zone) {
+      // Arrived at the final waypoint -- settle into hiding there, same
+      // end state relocateMonster() reaches via teleport.
+      m.zone = target.zone;
+      this.armHiddenWander(m);
+      m.fleeSpeedMultiplier = 1;
+      this.pushLog(`👻 The Niên Thú slips into hiding in the ${ZONE_LABELS[target.zone]} zone.`);
+    }
+  }
+
+  advanceMonster(now, dt) {
+    const m = this.monster;
+    if (m.roaring) {
+      // Standing completely still mid-roar -- the stun already landed the
+      // instant triggerLionRoar() fired; this is just the window players
+      // have to watch it happen before it bolts.
+      if (now >= m.roarEndsAt) this.armPostRoarBolt(m);
+    } else if (m.fleeWaypoints?.length) {
+      this.chaseFleeWaypoint(m, dt);
+    } else if (m.fleeUntil && now < m.fleeUntil) {
+      // It only ever moves while actively fleeing a fresh hit (or the
+      // post-roar bolt above). Otherwise — whether hidden or just sitting
+      // there revealed waiting to be found again — it stays completely
+      // put at its current spot in the zone until something scares it (a
+      // firecracker hit) or relocateMonster() teleports it (a 10% HP dip).
+      const speed = MONSTER_FLEE_SPEED * (m.fleeSpeedMultiplier || 1);
+      m.x = clamp(m.x + m.fleeDir.x * speed * dt, MONSTER_RADIUS, this.mapWidth - MONSTER_RADIUS);
+      m.y = clamp(m.y + m.fleeDir.y * speed * dt, MONSTER_RADIUS, this.mapHeight - MONSTER_RADIUS);
+    } else if (!m.visible && m.hiddenWanderUntil && now < m.hiddenWanderUntil) {
+      this.wanderWithinZone(m, dt);
+    }
+    // Nobody's landed a hit in a while — it gives up being seen and slips
+    // back into hiding right where it currently is (no teleport; that
+    // only happens via relocateMonster() on a 10% dip, or by actually
+    // arriving somewhere new via the roar's bolt above).
+    const midBolt = m.roaring || m.fleeWaypoints?.length;
+    if (!midBolt && m.visible && now - m.lastHitAt >= MONSTER_HIDE_AFTER_MS) {
+      this.armHiddenWander(m);
+      this.pushLog(`👻 The Niên Thú slipped back into hiding in the ${ZONE_LABELS[m.zone]} zone...`);
+    }
+  }
+
   // Advances the world by one tick's worth of time. Deliberately takes no
   // arguments and does no broadcasting — kept pure so tests can call it
   // directly without real timers or a live Socket.IO server. Returns any
@@ -685,27 +921,7 @@ class NienRoom {
       p.y = clamp(p.y + p.dir.y * PLAYER_SPEED * dt, PLAYER_RADIUS, this.mapHeight - PLAYER_RADIUS);
     });
 
-    if (this.monster) {
-      const m = this.monster;
-      if (m.fleeUntil && now < m.fleeUntil) {
-        m.x = clamp(m.x + m.fleeDir.x * MONSTER_FLEE_SPEED * dt, MONSTER_RADIUS, this.mapWidth - MONSTER_RADIUS);
-        m.y = clamp(m.y + m.fleeDir.y * MONSTER_FLEE_SPEED * dt, MONSTER_RADIUS, this.mapHeight - MONSTER_RADIUS);
-      } else {
-        if (!m.wanderDir || Math.random() < 0.02) {
-          const angle = Math.random() * Math.PI * 2;
-          m.wanderDir = { x: Math.cos(angle), y: Math.sin(angle) };
-        }
-        m.x = clamp(m.x + m.wanderDir.x * MONSTER_WANDER_SPEED * dt, MONSTER_RADIUS, this.mapWidth - MONSTER_RADIUS);
-        m.y = clamp(m.y + m.wanderDir.y * MONSTER_WANDER_SPEED * dt, MONSTER_RADIUS, this.mapHeight - MONSTER_RADIUS);
-      }
-      // Nobody's landed a hit in a while — it gives up being seen and
-      // slips back into hiding right where it currently is (no
-      // teleport; that only happens via relocateMonster() on a 10% dip).
-      if (m.visible && now - m.lastHitAt >= MONSTER_HIDE_AFTER_MS) {
-        m.visible = false;
-        this.pushLog(`👻 The Niên Thú slipped back into hiding in the ${ZONE_LABELS[m.zone]} zone...`);
-      }
-    }
+    if (this.monster) this.advanceMonster(now, dt);
 
     const { selfDetonations } = this.resolveFirecrackers(now);
 
@@ -787,8 +1003,11 @@ class NienRoom {
       // notification told everyone when it last appeared/relocated there.
       monster: this.monster ? {
         fear: this.monster.fear,
+        maxHp: MONSTER_MAX_HP,
+        hp: Math.round(MONSTER_MAX_HP - this.monster.fear),
         zone: this.monster.zone,
         visible: this.monster.visible,
+        roaring: this.monster.roaring,
         x: this.monster.visible ? this.monster.x : null,
         y: this.monster.visible ? this.monster.y : null,
       } : null,
@@ -1014,7 +1233,10 @@ module.exports = attachNien;
 module.exports.NienRoom = NienRoom;
 module.exports.computeMapSize = computeMapSize;
 module.exports.computeLootBudget = computeLootBudget;
-module.exports.FEAR_MILESTONES = FEAR_MILESTONES;
+module.exports.MONSTER_MAX_HP = MONSTER_MAX_HP;
+module.exports.MONSTER_LOOT_RADIUS = MONSTER_LOOT_RADIUS;
+module.exports.LOOT_DROP_RATE_PER_NEARBY = LOOT_DROP_RATE_PER_NEARBY;
+module.exports.LOOT_MILESTONE_HP = LOOT_MILESTONE_HP;
 module.exports.FIRECRACKER_RANGE = FIRECRACKER_RANGE;
 module.exports.FIRECRACKER_TYPES = FIRECRACKER_TYPES;
 module.exports.FIRECRACKER_KEYS = FIRECRACKER_KEYS;
@@ -1033,7 +1255,15 @@ module.exports.DECILE_MILESTONES = DECILE_MILESTONES;
 module.exports.SCARE_REWARD_TIERS = SCARE_REWARD_TIERS;
 module.exports.SCARE_REWARD_ANY = SCARE_REWARD_ANY;
 module.exports.FIRST_HIT_BONUS = FIRST_HIT_BONUS;
+module.exports.FIRST_HIT_HP_OVERRIDE = FIRST_HIT_HP_OVERRIDE;
 module.exports.MONSTER_HIDE_AFTER_MS = MONSTER_HIDE_AFTER_MS;
+module.exports.LION_ROAR_HP_STEP = LION_ROAR_HP_STEP;
+module.exports.LION_ROAR_RADIUS = LION_ROAR_RADIUS;
+module.exports.LION_ROAR_STUN_MS = LION_ROAR_STUN_MS;
+module.exports.LION_ROAR_FLEE_SPEED_MULTIPLIER = LION_ROAR_FLEE_SPEED_MULTIPLIER;
+module.exports.MONSTER_FLEE_SPEED = MONSTER_FLEE_SPEED;
+module.exports.MONSTER_HIDDEN_WANDER_MS = MONSTER_HIDDEN_WANDER_MS;
+module.exports.MONSTER_HIDDEN_WANDER_SPEED = MONSTER_HIDDEN_WANDER_SPEED;
 module.exports.MONSTER_RADIUS = MONSTER_RADIUS;
 module.exports.pickZone = pickZone;
 module.exports.zoneOrigin = zoneOrigin;

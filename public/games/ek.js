@@ -450,17 +450,39 @@ if (me) {
     return state.players.find((p) => p.id === state.yourId);
   }
 
+  // Seats sit around an oval, same layout mechanism as UNO's table: you're
+  // always placed at the bottom (90°) with everyone else filled in evenly
+  // around the rest of the circle in fixed seating order, positioned via
+  // absolute left/top % (see .ek-seat in ek.html) rather than plain flex.
   function renderSeats(state) {
     seatsRowEl.innerHTML = '';
-    state.players.forEach((p) => {
+    const n = state.players.length;
+    if (!n) return;
+    const youIndex = state.players.findIndex((p) => p.id === state.yourId);
+    const startIndex = youIndex === -1 ? 0 : youIndex;
+
+    for (let seat = 0; seat < n; seat++) {
+      const p = state.players[(startIndex + seat) % n];
+      const isYou = p.id === state.yourId;
+
+      const angleDeg = 90 + seat * (360 / n);
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const x = 50 + 42 * Math.cos(angleRad);
+      const y = 50 + 38 * Math.sin(angleRad);
+
       const el = document.createElement('div');
       el.className = 'ek-seat'
+        + (isYou ? ' you' : '')
         + (p.id === state.currentPlayerId ? ' turn' : '')
         + (!p.alive ? ' dead' : '')
         + (!p.connected ? ' offline' : '');
+      el.dataset.playerId = p.id;
+      el.style.left = x + '%';
+      el.style.top = y + '%';
+
       const name = document.createElement('div');
       name.className = 'name';
-      name.textContent = p.name + (p.id === state.yourId ? ' (You)' : '');
+      name.textContent = p.name + (isYou ? ' (You)' : '');
       const count = document.createElement('div');
       count.className = 'count';
       count.textContent = `${p.cardCount} card${p.cardCount === 1 ? '' : 's'}`;
@@ -472,7 +494,7 @@ if (me) {
         el.appendChild(tag);
       }
       seatsRowEl.appendChild(el);
-    });
+    }
   }
 
   function renderPiles(state) {
