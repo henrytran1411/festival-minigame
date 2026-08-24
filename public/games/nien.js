@@ -48,6 +48,12 @@ if (me) {
   const leaveBtn = document.getElementById('leave-btn');
   const gameLogEl = document.getElementById('game-log');
 
+  // Arena backdrop -- drawn scaled to cover the canvas each frame once
+  // loaded; a flat fill (see drawArena) covers the gap before then so
+  // there's never a blank frame.
+  const arenaBg = new Image();
+  arenaBg.src = '../assets/nien-bg.png';
+
   const winnerTextEl = document.getElementById('winner-text');
   const scoreListEl = document.getElementById('score-list');
   const newGameBtn = document.getElementById('new-game-btn');
@@ -216,9 +222,37 @@ if (me) {
     });
   }
 
+  // Read in quadrant order (top-left, top-right, bottom-left,
+  // bottom-right) these spell out "Trung Thu Vui Vẻ" (Happy Mid-Autumn
+  // Festival) -- matches the server's own ZONE_LABELS (nien-server.js).
   const ZONE_LABELS = {
-    topLeft: 'Top-Left', topRight: 'Top-Right', bottomLeft: 'Bottom-Left', bottomRight: 'Bottom-Right',
+    topLeft: 'Trung', topRight: 'Thu', bottomLeft: 'Vui', bottomRight: 'Vẻ',
   };
+  const ZONE_KEYS = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'];
+
+  // Rect (in canvas pixel space) for one of the 4 quadrants -- mirrors
+  // nien-server.js's zoneOrigin()/randomPositionInZone() math.
+  function zoneRect(zone, width, height) {
+    const halfW = width / 2;
+    const halfH = height / 2;
+    return {
+      x: (zone === 'topRight' || zone === 'bottomRight') ? halfW : 0,
+      y: (zone === 'bottomLeft' || zone === 'bottomRight') ? halfH : 0,
+      w: halfW,
+      h: halfH,
+    };
+  }
+
+  // Which quadrant a point falls in -- used to find which zone a currently
+  // burning firecracker is standing in.
+  function zoneAt(x, y, width, height) {
+    const right = x >= width / 2;
+    const bottom = y >= height / 2;
+    if (!right && !bottom) return 'topLeft';
+    if (right && !bottom) return 'topRight';
+    if (!right && bottom) return 'bottomLeft';
+    return 'bottomRight';
+  }
 
   function renderTurnBanner(state) {
     if (state.status !== 'playing') { turnBannerEl.textContent = ''; return; }
@@ -261,8 +295,30 @@ if (me) {
     }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Flat fallback fill first (covers the gap before the image loads),
+    // then the real backdrop scaled to cover the whole arena on top.
     ctx.fillStyle = '#25361f';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (arenaBg.complete && arenaBg.naturalWidth) {
+      ctx.drawImage(arenaBg, 0, 0, canvas.width, canvas.height);
+    }
+
+    // A shadow over the backdrop for contrast against the loot/monster/
+    // player art on top -- darker over the 3 "quiet" zones, lighter over
+    // whichever zone currently has something going on: the Niên Thú's
+    // current zone, or a zone where someone's actively lighting a
+    // firecracker (both are worth drawing the eye toward).
+    const litZones = new Set();
+    if (state.monster) litZones.add(state.monster.zone);
+    (state.players || []).forEach((p) => {
+      if (p.connected && p.burning) litZones.add(zoneAt(p.x, p.y, canvas.width, canvas.height));
+    });
+    ZONE_KEYS.forEach((zone) => {
+      const r = zoneRect(zone, canvas.width, canvas.height);
+      ctx.fillStyle = litZones.has(zone) ? 'rgba(255, 209, 102, 0.10)' : 'rgba(0, 0, 0, 0.45)';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+    });
+
     ctx.strokeStyle = 'rgba(255,255,255,0.05)';
     ctx.lineWidth = 1;
     const gridStep = 60;
@@ -273,10 +329,9 @@ if (me) {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
     }
 
-    // A persistent dashed cross dividing the arena into the 4 search
-    // zones (Top-Left / Top-Right / Bottom-Left / Bottom-Right) — purely
-    // a visual aid so the "hiding in the X zone" hint text maps onto an
-    // actual part of the screen.
+    // A persistent dashed cross dividing the arena into the 4 named zones
+    // (Trung / Thu / Vui / Vẻ) — purely a visual aid so the "hiding in
+    // the X zone" hint text maps onto an actual part of the screen.
     ctx.save();
     ctx.strokeStyle = 'rgba(255, 209, 102, 0.25)';
     ctx.lineWidth = 2;
@@ -288,6 +343,15 @@ if (me) {
     ctx.lineTo(canvas.width, canvas.height / 2);
     ctx.stroke();
     ctx.restore();
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ZONE_KEYS.forEach((zone) => {
+      const r = zoneRect(zone, canvas.width, canvas.height);
+      ctx.fillStyle = litZones.has(zone) ? 'rgba(255, 209, 102, 0.9)' : 'rgba(255, 255, 255, 0.35)';
+      ctx.fillText(ZONE_LABELS[zone], r.x + r.w / 2, r.y + 10);
+    });
 
     (state.loot || []).forEach((item) => {
       ctx.font = '26px sans-serif';

@@ -56,8 +56,11 @@ const MONSTER_HIDDEN_WANDER_SPEED = 45;
 // picked 3 times in a row — after landing in the same zone twice
 // consecutively, the third pick is forced to exclude it.
 const ZONE_KEYS = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'];
+// Themed zone names -- read in quadrant order (top-left, top-right,
+// bottom-left, bottom-right) they spell out "Trung Thu Vui Vẻ" (Happy
+// Mid-Autumn Festival).
 const ZONE_LABELS = {
-  topLeft: 'Top-Left', topRight: 'Top-Right', bottomLeft: 'Bottom-Left', bottomRight: 'Bottom-Right',
+  topLeft: 'Trung', topRight: 'Thu', bottomLeft: 'Vui', bottomRight: 'Vẻ',
 };
 
 function pickZone(room) {
