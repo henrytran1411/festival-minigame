@@ -69,6 +69,34 @@ if (me) {
     return characterImageCache[def.key];
   }
 
+  // Loot art -- cached per TYPE (not per item instance), since many
+  // dropped items share the same picture (e.g. every "Nến" on the
+  // ground). characterImageUrl() works here too -- it just reads
+  // `.image` off whatever object it's given.
+  const lootImageCache = {};
+  function getLootImage(item) {
+    if (!item || !item.image) return null;
+    if (!lootImageCache[item.type]) {
+      const img = new Image();
+      img.src = characterImageUrl(item);
+      lootImageCache[item.type] = img;
+    }
+    return lootImageCache[item.type];
+  }
+
+  // Draws an image centered on (cx, cy), scaled so its LONGER side is
+  // maxDim, preserving the source's aspect ratio -- forcing a fixed
+  // square (the original approach here) badly squishes anything that
+  // isn't already square, which is exactly what made the wide "Trung/
+  // Thu/Vui/Vẻ" text-logo art unreadable once it replaced the plain
+  // canvas-drawn text.
+  function drawImageFit(img, cx, cy, maxDim) {
+    const ratio = img.naturalWidth / img.naturalHeight;
+    const w = ratio >= 1 ? maxDim : maxDim * ratio;
+    const h = ratio >= 1 ? maxDim / ratio : maxDim;
+    ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+  }
+
   const winnerTextEl = document.getElementById('winner-text');
   const scoreListEl = document.getElementById('score-list');
   const newGameBtn = document.getElementById('new-game-btn');
@@ -427,10 +455,15 @@ if (me) {
     ctx.restore();
 
     (state.loot || []).forEach((item) => {
-      ctx.font = '26px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(item.emoji, item.x, item.y);
+      const lootImg = getLootImage(item);
+      if (lootImg && lootImg.complete && lootImg.naturalWidth) {
+        drawImageFit(lootImg, item.x, item.y, 40);
+      } else {
+        ctx.font = '26px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(item.emoji, item.x, item.y);
+      }
     });
 
     // Only draw the monster when it's actually visible -- while hidden the
@@ -478,8 +511,7 @@ if (me) {
       // Falls back to the emoji if the image hasn't loaded yet (or failed).
       const charImg = getCharacterImage(charDef);
       if (charImg && charImg.complete && charImg.naturalWidth) {
-        const size = 36;
-        ctx.drawImage(charImg, p.x - size / 2, p.y - size / 2, size, size);
+        drawImageFit(charImg, p.x, p.y, 36);
       } else {
         ctx.font = '26px sans-serif';
         ctx.textAlign = 'center';

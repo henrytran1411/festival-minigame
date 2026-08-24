@@ -265,16 +265,43 @@ const FINAL_CALL_MS = 8000;
 // don't let a room run forever.
 const MAX_GAME_DURATION_MS = 6 * 60 * 1000;
 
-// Loot is always themed to whichever zone the Niên Thú is currently in
-// when it drops (see dropLoot()) -- collecting a full "Trung Thu Vui Vẻ"
-// set across all 4 zones is the point, not a random prize pool. `emoji`
-// doubles as the on-canvas glyph AND the collectible's actual name (see
-// nien.js's loot-drawing code, which just fillText()s this string) — no
-// separate art asset needed for these.
+// The classic Mid-Autumn prizes, alongside the zone-text tiles below --
+// each drop independently rolls between these 3 AND the current zone's
+// tile (see pickLootType()), so a single batch comes out as a mix of
+// both kinds rather than one or the other. `image` is the real portrait
+// drawn on the arena (nien.js); `emoji` is the fallback if that image
+// ever fails to load. Paths are relative to public/games/ (same
+// convention as the character portraits under characters/nienmonster/).
+const CLASSIC_LOOT_TYPES = [
+  { type: 'denOngSao', label: 'Đèn Ông Sao', emoji: '⭐', image: 'cards/nienmonster/Đèn Ông Sao.png', value: 10, weight: 3 },
+  { type: 'banhTrungThu', label: 'Bánh Trung Thu', emoji: '🥮', image: 'cards/nienmonster/Bánh Trung Thu.png', value: 20, weight: 1 },
+  { type: 'nen', label: 'Nến', emoji: '🕯️', image: 'cards/nienmonster/Nến.png', value: 5, weight: 3 },
+];
+
+// Themed to whichever zone the Niên Thú is currently in when it drops
+// (see dropLoot()) -- collecting a full "Trung Thu Vui Vẻ" set across all
+// 4 zones is the point. `image` is the real portrait for the tile;
+// `emoji` (the zone's own text) is the fallback if it fails to load.
 const ZONE_LOOT_TYPES = {};
 ZONE_KEYS.forEach((zone) => {
-  ZONE_LOOT_TYPES[zone] = { type: `zone_${zone}`, label: ZONE_LABELS[zone], emoji: ZONE_LABELS[zone], value: 10 };
+  ZONE_LOOT_TYPES[zone] = {
+    type: `zone_${zone}`, label: ZONE_LABELS[zone], emoji: ZONE_LABELS[zone],
+    image: `cards/nienmonster/${ZONE_LABELS[zone]}.png`, value: 15, weight: 2,
+  };
 });
+
+// Rolls one item for a single drop, mixing the 3 classic prizes with
+// whichever zone's tile is currently in play.
+function pickLootType(zone) {
+  const pool = [...CLASSIC_LOOT_TYPES, ZONE_LOOT_TYPES[zone] || ZONE_LOOT_TYPES.topLeft];
+  const totalWeight = pool.reduce((sum, t) => sum + t.weight, 0);
+  let roll = Math.random() * totalWeight;
+  for (const t of pool) {
+    roll -= t.weight;
+    if (roll <= 0) return t;
+  }
+  return pool[0];
+}
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
@@ -517,12 +544,12 @@ class NienRoom {
   }
 
   dropLoot(centerX, centerY, count) {
-    // Themed to whichever zone the Niên Thú is in RIGHT NOW (it may have
-    // relocated since this exact spot was last checked, but centerX/
-    // centerY always come from its current position anyway -- see
-    // scareMonster()) -- falls back to topLeft's item in the never-happens
-    // case this is called with no monster at all.
-    const zoneType = (this.monster && ZONE_LOOT_TYPES[this.monster.zone]) || ZONE_LOOT_TYPES.topLeft;
+    // Zone tile is themed to whichever zone the Niên Thú is in RIGHT NOW
+    // (it may have relocated since this exact spot was last checked, but
+    // centerX/centerY always come from its current position anyway -- see
+    // scareMonster()) -- falls back to topLeft's tile in the
+    // never-happens case this is called with no monster at all.
+    const zone = (this.monster && this.monster.zone) || 'topLeft';
     // LOOT_DROP_RADIUS (500) is tuned for a full, large table (maps scale
     // up to 1400px). Smaller tables (as few as 1-2 players) play on maps
     // as small as 520px, where a flat 500px offset from the monster would
@@ -536,12 +563,13 @@ class NienRoom {
     const effectiveRadius = Math.min(LOOT_DROP_RADIUS, Math.min(this.mapWidth, this.mapHeight) * 0.4);
     for (let i = 0; i < count; i++) {
       if (this.lootRemaining <= 0) break;
+      const t = pickLootType(zone);
       const angle = Math.random() * Math.PI * 2;
       const dist = Math.max(60, effectiveRadius + (Math.random() - 0.5) * (effectiveRadius * 0.2));
       const x = clamp(centerX + Math.cos(angle) * dist, 10, this.mapWidth - 10);
       const y = clamp(centerY + Math.sin(angle) * dist, 10, this.mapHeight - 10);
       this.lootCounter += 1;
-      this.loot.push({ id: `loot_${this.lootCounter}`, type: zoneType.type, label: zoneType.label, emoji: zoneType.emoji, value: zoneType.value, x, y });
+      this.loot.push({ id: `loot_${this.lootCounter}`, type: t.type, label: t.label, emoji: t.emoji, image: t.image || null, value: t.value, x, y });
       this.lootRemaining -= 1;
     }
     if (this.lootRemaining <= 0 && !this.finalCallDeadline) {
@@ -1095,7 +1123,7 @@ class NienRoom {
         x: this.monster.visible ? this.monster.x : null,
         y: this.monster.visible ? this.monster.y : null,
       } : null,
-      loot: this.loot.map((l) => ({ id: l.id, type: l.type, label: l.label, emoji: l.emoji, value: l.value, x: l.x, y: l.y })),
+      loot: this.loot.map((l) => ({ id: l.id, type: l.type, label: l.label, emoji: l.emoji, image: l.image || null, value: l.value, x: l.x, y: l.y })),
       lootRemaining: this.lootRemaining,
       finalCallDeadline: this.finalCallDeadline,
       log: this.log,
@@ -1349,6 +1377,8 @@ module.exports.PLAYER_SPEED = PLAYER_SPEED;
 module.exports.PICKUP_RADIUS = PICKUP_RADIUS;
 module.exports.TICK_MS = TICK_MS;
 module.exports.ZONE_LOOT_TYPES = ZONE_LOOT_TYPES;
+module.exports.CLASSIC_LOOT_TYPES = CLASSIC_LOOT_TYPES;
+module.exports.pickLootType = pickLootType;
 module.exports.LOOT_DROP_RADIUS = LOOT_DROP_RADIUS;
 module.exports.PICKUP_HOLD_MS = PICKUP_HOLD_MS;
 module.exports.ZONE_KEYS = ZONE_KEYS;
