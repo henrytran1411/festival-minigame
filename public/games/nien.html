@@ -60,6 +60,23 @@
     .budget-options input:checked + span { color: var(--gold); font-weight: 700; }
     .budget-options label:has(input:checked) { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.3); }
 
+    .character-options { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .character-btn {
+      flex: 1;
+      min-width: 90px;
+      text-align: center;
+      padding: 10px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .character-btn .emoji { font-size: 28px; display: block; margin-bottom: 4px; }
+    .character-btn .portrait { width: 48px; height: 48px; object-fit: contain; display: block; margin: 0 auto 4px; }
+    .character-btn.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.3); color: var(--gold); font-weight: 700; }
+
     .shop-card {
       background: var(--panel);
       border: 1px solid var(--border);
@@ -195,6 +212,12 @@
         <button id="start-btn" disabled>▶ Start Chase</button>
       </div>
       <p style="color:var(--muted); font-size:12px; text-align:center; margin-top:8px;">No one else around? Add bots and test with multiple players at once.</p>
+
+      <div class="shop-card">
+        <h3 style="margin:0 0 8px; text-align:center; font-size:14px;">🎭 Choose Your Character</h3>
+        <div class="character-options" id="character-list"></div>
+        <p style="color:var(--muted); font-size:11px; text-align:center; margin:8px 0 0;">Didn't pick one? You'll get a random character when the chase starts.</p>
+      </div>
 
       <div class="shop-card">
         <h3 style="margin:0 0 4px; text-align:center; font-size:14px;">🛒 Firecracker Shop</h3>

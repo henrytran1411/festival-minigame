@@ -22,6 +22,14 @@ const BOT_NAMES = ['🤖 Bot An', '🤖 Bot Bình', '🤖 Bot Chi', '🤖 Bot D�
 const PLAYER_SPEED = 160; // px/sec
 const PLAYER_RADIUS = 16;
 const PICKUP_RADIUS = 26;
+// Standing still inside PICKUP_RADIUS of an item for this long actually
+// collects it — walking through it, or switching to a different item,
+// resets the hold rather than grabbing it on the fly (see tick()).
+const PICKUP_HOLD_MS = 500;
+// How far from the Niên Thú dropped loot lands -- far enough that players
+// have to actually run to it rather than it landing right in the middle
+// of the fight.
+const LOOT_DROP_RADIUS = 500;
 
 const MONSTER_RADIUS = 24;
 const MONSTER_FLEE_SPEED = 190;
@@ -136,6 +144,22 @@ const FIRECRACKER_KEYS = Object.keys(FIRECRACKER_TYPES);
 const DEFAULT_LOADOUT_BUDGET = 100; // matches the GDD's own example budget
 const LOADOUT_BUDGET_OPTIONS = [50, 100, 150, 200]; // presets the room host can pick from at creation
 
+// Playable characters, picked pre-game (see nien:selectCharacter). `image`
+// is the static portrait drawn on the arena and in the character picker
+// (see nien.js); `emoji` is the fallback used if that image ever fails to
+// load, and stays the stand-in for any distinct move/burn/throw/stun
+// animations per character — planned, but not built yet. Not exclusive:
+// more than one player can pick the same one. Paths are relative to
+// public/games/ (same convention as EK's cards/explodingkitten/ art).
+const CHARACTERS = {
+  chiHang: { key: 'chiHang', label: 'Chị Hằng', emoji: '🌕', image: 'characters/nienmonster/chị hằng.png' },
+  chuCuoi: { key: 'chuCuoi', label: 'Chú Cuội', emoji: '🌳', image: 'characters/nienmonster/chú cuội.png' },
+  ongDia: { key: 'ongDia', label: 'Ông Địa', emoji: '👴', image: 'characters/nienmonster/ông địa.png' },
+  thoNgoc: { key: 'thoNgoc', label: 'Thỏ Ngọc', emoji: '🐇', image: 'characters/nienmonster/thỏ ngọc.png' },
+};
+const CHARACTER_KEYS = Object.keys(CHARACTERS);
+const DEFAULT_CHARACTER = CHARACTER_KEYS[0];
+
 // The Niên Thú's "fear" field is now literal raw HP dropped (0 up to
 // MONSTER_MAX_HP), NOT a percentage — a firecracker's `fear` stat (12/20/35)
 // is exactly how many HP it deals per hit, full stop. This used to be a
@@ -241,21 +265,16 @@ const FINAL_CALL_MS = 8000;
 // don't let a room run forever.
 const MAX_GAME_DURATION_MS = 6 * 60 * 1000;
 
-const LOOT_TYPES = [
-  { type: 'starLantern', label: 'Star Lantern', emoji: '⭐', value: 10, weight: 3 },
-  { type: 'mooncake', label: 'Mooncake', emoji: '🥮', value: 20, weight: 1 },
-  { type: 'redCandle', label: 'Red Candle', emoji: '🕯️', value: 5, weight: 3 },
-];
-const LOOT_WEIGHT_TOTAL = LOOT_TYPES.reduce((sum, t) => sum + t.weight, 0);
-
-function pickLootType() {
-  let roll = Math.random() * LOOT_WEIGHT_TOTAL;
-  for (const t of LOOT_TYPES) {
-    roll -= t.weight;
-    if (roll <= 0) return t;
-  }
-  return LOOT_TYPES[0];
-}
+// Loot is always themed to whichever zone the Niên Thú is currently in
+// when it drops (see dropLoot()) -- collecting a full "Trung Thu Vui Vẻ"
+// set across all 4 zones is the point, not a random prize pool. `emoji`
+// doubles as the on-canvas glyph AND the collectible's actual name (see
+// nien.js's loot-drawing code, which just fillText()s this string) — no
+// separate art asset needed for these.
+const ZONE_LOOT_TYPES = {};
+ZONE_KEYS.forEach((zone) => {
+  ZONE_LOOT_TYPES[zone] = { type: `zone_${zone}`, label: ZONE_LABELS[zone], emoji: ZONE_LABELS[zone], value: 10 };
+});
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
@@ -340,6 +359,7 @@ class NienRoom {
       p.armed = null;
       p.stunnedUntil = 0;
       p.nextBurnAt = 0;
+      p.pickupProgress = null;
       // Anyone (human or bot) who never spent any points at the shop gets
       // an automatic loadout so nobody starts the match with zero
       // firecrackers just because they forgot to visit the shop.
@@ -347,6 +367,12 @@ class NienRoom {
         p.loadout = autoFillLoadout(this.loadoutBudget, { randomized: Boolean(p.isBot) });
       }
       p.inventory = { ...p.loadout };
+      // Same idea for character: anyone who never picked one (forgot, or
+      // joined after the picker existed) gets a random one so the arena
+      // never has to render an unset character.
+      if (!p.character || !CHARACTERS[p.character]) {
+        p.character = CHARACTER_KEYS[Math.floor(Math.random() * CHARACTER_KEYS.length)];
+      }
     });
     this.loot = [];
     this.lootCounter = 0;
@@ -482,16 +508,40 @@ class NienRoom {
     return { ok: true, loadout: newLoadout };
   }
 
+  // Cosmetic pre-game pick, not exclusive -- more than one player can pick
+  // the same character (see CHARACTERS above).
+  selectCharacter(player, character) {
+    if (!CHARACTERS[character]) return { ok: false, error: 'invalid-character' };
+    player.character = character;
+    return { ok: true, character };
+  }
+
   dropLoot(centerX, centerY, count) {
+    // Themed to whichever zone the Niên Thú is in RIGHT NOW (it may have
+    // relocated since this exact spot was last checked, but centerX/
+    // centerY always come from its current position anyway -- see
+    // scareMonster()) -- falls back to topLeft's item in the never-happens
+    // case this is called with no monster at all.
+    const zoneType = (this.monster && ZONE_LOOT_TYPES[this.monster.zone]) || ZONE_LOOT_TYPES.topLeft;
+    // LOOT_DROP_RADIUS (500) is tuned for a full, large table (maps scale
+    // up to 1400px). Smaller tables (as few as 1-2 players) play on maps
+    // as small as 520px, where a flat 500px offset from the monster would
+    // push almost every drop straight into a clamped map edge/corner
+    // regardless of the random angle -- landing them all on top of each
+    // other instead of spread around the arena, which reads as "nothing
+    // dropped" even though it technically did. Scale the radius down to a
+    // fraction of the smaller map dimension so it always lands well
+    // inside the arena; the clamp() below is just the final safety net
+    // for a monster that's already near an actual edge.
+    const effectiveRadius = Math.min(LOOT_DROP_RADIUS, Math.min(this.mapWidth, this.mapHeight) * 0.4);
     for (let i = 0; i < count; i++) {
       if (this.lootRemaining <= 0) break;
-      const t = pickLootType();
       const angle = Math.random() * Math.PI * 2;
-      const dist = 20 + Math.random() * 60;
+      const dist = Math.max(60, effectiveRadius + (Math.random() - 0.5) * (effectiveRadius * 0.2));
       const x = clamp(centerX + Math.cos(angle) * dist, 10, this.mapWidth - 10);
       const y = clamp(centerY + Math.sin(angle) * dist, 10, this.mapHeight - 10);
       this.lootCounter += 1;
-      this.loot.push({ id: `loot_${this.lootCounter}`, type: t.type, label: t.label, emoji: t.emoji, value: t.value, x, y });
+      this.loot.push({ id: `loot_${this.lootCounter}`, type: zoneType.type, label: zoneType.label, emoji: zoneType.emoji, value: zoneType.value, x, y });
       this.lootRemaining -= 1;
     }
     if (this.lootRemaining <= 0 && !this.finalCallDeadline) {
@@ -743,15 +793,22 @@ class NienRoom {
       }
 
       let target = null;
+      let targetIsLoot = false;
       if (this.monster) {
         target = this.monster.visible ? this.monster : searchPoint;
       } else if (this.loot.length) {
         target = this.loot.reduce((closest, item) => (
           !closest || distance(p, item) < distance(p, closest) ? item : closest
         ), null);
+        targetIsLoot = true;
       }
 
-      if (target) {
+      if (target && targetIsLoot && distance(p, target) <= PICKUP_RADIUS) {
+        // Close enough to grab it -- stand still so the stationary pickup
+        // hold (see tick()) can actually complete, instead of endlessly
+        // re-aiming a tiny step closer every tick.
+        this.setPlayerInput(p, 0, 0);
+      } else if (target) {
         this.setPlayerInput(p, target.x - p.x, target.y - p.y);
       } else {
         if (!p.botWanderDir || Math.random() < 0.03) {
@@ -928,10 +985,29 @@ class NienRoom {
 
     const { selfDetonations } = this.resolveFirecrackers(now);
 
+    // Collecting an item takes standing still (no movement input) inside
+    // PICKUP_RADIUS of it for PICKUP_HOLD_MS -- walking through it, or
+    // switching which item is nearest, resets the hold rather than
+    // grabbing it on the fly. Each player tracks their own progress
+    // toward their own current item independently.
+    this.players.forEach((p) => {
+      if (!p.connected) { p.pickupProgress = null; return; }
+      const stationary = Boolean(p.dir) && p.dir.x === 0 && p.dir.y === 0;
+      const nearby = stationary ? this.loot.find((item) => distance(p, item) <= PICKUP_RADIUS) : null;
+      if (!nearby) {
+        p.pickupProgress = null;
+      } else if (!p.pickupProgress || p.pickupProgress.itemId !== nearby.id) {
+        p.pickupProgress = { itemId: nearby.id, startedAt: now };
+      }
+    });
     this.loot = this.loot.filter((item) => {
-      const collector = this.players.find((p) => p.connected && distance(p, item) <= PICKUP_RADIUS);
+      const collector = this.players.find((p) => (
+        p.connected && p.pickupProgress && p.pickupProgress.itemId === item.id
+        && now - p.pickupProgress.startedAt >= PICKUP_HOLD_MS
+      ));
       if (collector) {
         collector.score += item.value;
+        collector.pickupProgress = null;
         this.pushLog(`${collector.name} collected a ${item.label} (+${item.value})!`);
         return false;
       }
@@ -986,6 +1062,7 @@ class NienRoom {
       mapHeight: this.mapHeight,
       loadoutBudget: this.loadoutBudget,
       firecrackerTypes: FIRECRACKER_TYPES,
+      characters: CHARACTERS,
       players: this.players.map((p) => ({
         id: p.id,
         name: p.name,
@@ -994,12 +1071,16 @@ class NienRoom {
         score: p.score,
         connected: p.connected,
         isBot: Boolean(p.isBot),
+        character: p.character || null,
         loadout: p.loadout || emptyLoadout(),
         inventory: p.inventory || null,
         burning: p.burning ? { type: p.burning.type, burnEndsAt: p.burning.burnEndsAt } : null,
         armed: p.armed ? { type: p.armed.type, readyUntil: p.armed.readyUntil } : null,
         stunnedUntil: p.stunnedUntil || 0,
         nextBurnAt: p.nextBurnAt || 0,
+        // When they're mid-hold picking up an item: the timestamp the
+        // hold finishes at, so the client can draw a progress indicator.
+        pickupHoldUntil: p.pickupProgress ? p.pickupProgress.startedAt + PICKUP_HOLD_MS : null,
       })),
       // x/y are only sent while visible — while hidden, the client (and
       // an honest bot) only gets to know the zone, same as the log
@@ -1014,7 +1095,7 @@ class NienRoom {
         x: this.monster.visible ? this.monster.x : null,
         y: this.monster.visible ? this.monster.y : null,
       } : null,
-      loot: this.loot.map((l) => ({ id: l.id, type: l.type, emoji: l.emoji, value: l.value, x: l.x, y: l.y })),
+      loot: this.loot.map((l) => ({ id: l.id, type: l.type, label: l.label, emoji: l.emoji, value: l.value, x: l.x, y: l.y })),
       lootRemaining: this.lootRemaining,
       finalCallDeadline: this.finalCallDeadline,
       log: this.log,
@@ -1075,7 +1156,7 @@ function attachNien(io) {
       roomCounter += 1;
       const room = new NienRoom(`room_${roomCounter}`, cleanRoomName, cleanPassword, loadoutBudget);
       const clean = String(name || 'Player').trim().slice(0, 20) || 'Player';
-      room.players.push({ id: playerId, name: clean, connected: true, socketId: socket.id, isBot: false, x: 0, y: 0, dir: { x: 0, y: 0 }, score: 0, burning: null, armed: null, stunnedUntil: 0, nextBurnAt: 0, loadout: emptyLoadout() });
+      room.players.push({ id: playerId, name: clean, connected: true, socketId: socket.id, isBot: false, x: 0, y: 0, dir: { x: 0, y: 0 }, score: 0, burning: null, armed: null, stunnedUntil: 0, nextBurnAt: 0, loadout: emptyLoadout(), character: null, pickupProgress: null });
       room.pushLog(`${clean} created the room.`);
       rooms.set(room.id, room);
 
@@ -1101,7 +1182,7 @@ function attachNien(io) {
         if (String(password || '') !== room.password) { if (typeof callback === 'function') callback({ ok: false, error: 'wrong-password' }); return; }
         if (room.status !== 'waiting') { if (typeof callback === 'function') callback({ ok: false, error: 'game-in-progress' }); return; }
         if (room.players.length >= MAX_PLAYERS) { if (typeof callback === 'function') callback({ ok: false, error: 'room-full' }); return; }
-        room.players.push({ id: playerId, name: clean, connected: true, socketId: socket.id, isBot: false, x: 0, y: 0, dir: { x: 0, y: 0 }, score: 0, burning: null, armed: null, stunnedUntil: 0, nextBurnAt: 0, loadout: emptyLoadout() });
+        room.players.push({ id: playerId, name: clean, connected: true, socketId: socket.id, isBot: false, x: 0, y: 0, dir: { x: 0, y: 0 }, score: 0, burning: null, armed: null, stunnedUntil: 0, nextBurnAt: 0, loadout: emptyLoadout(), character: null, pickupProgress: null });
         room.pushLog(`${clean} joined the room.`);
       }
 
@@ -1128,6 +1209,8 @@ function attachNien(io) {
         room.players.push({
           id: `bot_${room.id}_${room.botCounter}`, name: botName, connected: true, socketId: null, isBot: true,
           x: 0, y: 0, dir: { x: 0, y: 0 }, score: 0, burning: null, armed: null, stunnedUntil: 0, nextBurnAt: 0, loadout: emptyLoadout(),
+          character: CHARACTER_KEYS[room.botCounter % CHARACTER_KEYS.length],
+          pickupProgress: null,
         });
         room.pushLog(`${botName} joined the table.`);
       }
@@ -1143,6 +1226,17 @@ function attachNien(io) {
       const player = room.findPlayer(socket.playerId);
       if (!player) { if (typeof callback === 'function') callback({ ok: false, error: 'no-player' }); return; }
       const result = room.adjustLoadout(player, type, Number(delta));
+      if (typeof callback === 'function') callback(result);
+      if (result.ok) room.broadcast(nsp);
+    });
+
+    socket.on('nien:selectCharacter', ({ character }, callback) => {
+      const room = myRoom();
+      if (!room) { if (typeof callback === 'function') callback({ ok: false, error: 'no-room' }); return; }
+      if (room.status !== 'waiting') { if (typeof callback === 'function') callback({ ok: false, error: 'already-started' }); return; }
+      const player = room.findPlayer(socket.playerId);
+      if (!player) { if (typeof callback === 'function') callback({ ok: false, error: 'no-player' }); return; }
+      const result = room.selectCharacter(player, character);
       if (typeof callback === 'function') callback(result);
       if (result.ok) room.broadcast(nsp);
     });
@@ -1242,6 +1336,9 @@ module.exports.LOOT_DROP_RATE_PER_NEARBY = LOOT_DROP_RATE_PER_NEARBY;
 module.exports.LOOT_MILESTONE_HP = LOOT_MILESTONE_HP;
 module.exports.FIRECRACKER_RANGE = FIRECRACKER_RANGE;
 module.exports.FIRECRACKER_TYPES = FIRECRACKER_TYPES;
+module.exports.CHARACTERS = CHARACTERS;
+module.exports.CHARACTER_KEYS = CHARACTER_KEYS;
+module.exports.DEFAULT_CHARACTER = DEFAULT_CHARACTER;
 module.exports.FIRECRACKER_KEYS = FIRECRACKER_KEYS;
 module.exports.SELF_DETONATE_STUN_MS = SELF_DETONATE_STUN_MS;
 module.exports.DEFAULT_LOADOUT_BUDGET = DEFAULT_LOADOUT_BUDGET;
@@ -1251,7 +1348,9 @@ module.exports.autoFillLoadout = autoFillLoadout;
 module.exports.PLAYER_SPEED = PLAYER_SPEED;
 module.exports.PICKUP_RADIUS = PICKUP_RADIUS;
 module.exports.TICK_MS = TICK_MS;
-module.exports.LOOT_TYPES = LOOT_TYPES;
+module.exports.ZONE_LOOT_TYPES = ZONE_LOOT_TYPES;
+module.exports.LOOT_DROP_RADIUS = LOOT_DROP_RADIUS;
+module.exports.PICKUP_HOLD_MS = PICKUP_HOLD_MS;
 module.exports.ZONE_KEYS = ZONE_KEYS;
 module.exports.ZONE_LABELS = ZONE_LABELS;
 module.exports.DECILE_MILESTONES = DECILE_MILESTONES;

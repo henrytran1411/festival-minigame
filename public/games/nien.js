@@ -4,6 +4,7 @@ if (me) {
   const socket = io('/nien');
   const LAST_ROOM_KEY = 'nien_last_room_id';
   const EXPLOSION_DURATION_MS = 450;
+  const PICKUP_HOLD_MS = 500; // must match nien-server.js's own PICKUP_HOLD_MS -- only used here to size the progress ring below
 
   const lobbyScreen = document.getElementById('lobby-screen');
   const createRoomScreen = document.getElementById('create-room-screen');
@@ -34,6 +35,7 @@ if (me) {
   const waitingLogEl = document.getElementById('waiting-log');
   const leaveWaitingBtn = document.getElementById('leave-waiting-btn');
   const shopListEl = document.getElementById('shop-list');
+  const characterListEl = document.getElementById('character-list');
   const shopRemainingEl = document.getElementById('shop-remaining');
   const shopTotalEl = document.getElementById('shop-total');
 
@@ -54,6 +56,19 @@ if (me) {
   const arenaBg = new Image();
   arenaBg.src = '../assets/nien-bg.png';
 
+  // Character portraits -- one Image per character, created once and
+  // reused (mirrors the card-art caching pattern in ek.js/uno.js).
+  const characterImageCache = {};
+  function getCharacterImage(def) {
+    if (!def || !def.image) return null;
+    if (!characterImageCache[def.key]) {
+      const img = new Image();
+      img.src = characterImageUrl(def);
+      characterImageCache[def.key] = img;
+    }
+    return characterImageCache[def.key];
+  }
+
   const winnerTextEl = document.getElementById('winner-text');
   const scoreListEl = document.getElementById('score-list');
   const newGameBtn = document.getElementById('new-game-btn');
@@ -69,6 +84,18 @@ if (me) {
   let lastSentDir = { x: 0, y: 0 };
   let selectedType = null; // client-side only -- toggled by the type icons, confirmed by clicking the arena
   const pressedKeys = new Set();
+
+  // Zone lighting: a zone lights up the instant a firecracker burns out in
+  // it (the lighting/rooted phase finishing, whether or not it's actually
+  // thrown afterward) and stays lit for ZONE_LIGHT_MS after that moment;
+  // with nothing new burning out there, it fades back to shadow. Tracked
+  // per zone key -> the timestamp it should stop being lit.
+  const ZONE_LIGHT_MS = 5000;
+  let zoneLitUntil = {};
+  // Per-player burning flag from the PREVIOUS frame, needed to detect the
+  // burning -> not-burning transition (the "burned out" moment) rather
+  // than just observing an ongoing state.
+  let prevPlayerBurning = {};
 
   function totalLoadoutCost(loadout, catalog) {
     // loadout[key] is a raw firecracker count; cost is per PACK
@@ -139,13 +166,60 @@ if (me) {
     playerListEl.innerHTML = '';
     state.players.forEach((p) => {
       const li = document.createElement('li');
-      li.textContent = p.name + (p.id === state.yourId ? ' (you)' : '') + (p.isBot ? ' 🤖' : '');
+      const charDef = (state.characters && p.character && state.characters[p.character]) || null;
+      const charTag = charDef ? ` ${charDef.emoji} ${charDef.label}` : '';
+      li.textContent = p.name + (p.id === state.yourId ? ' (you)' : '') + (p.isBot ? ' 🤖' : '') + charTag;
       playerListEl.appendChild(li);
     });
     startBtn.disabled = state.players.length < 1;
     addBotsBtn.disabled = state.players.length >= 8;
+    renderCharacterPicker(state);
     renderShop(state);
     renderLog(waitingLogEl, state.log);
+  }
+
+  function selectCharacter(character) {
+    socket.emit('nien:selectCharacter', { character }, (res) => {
+      if (!res || !res.ok) {
+        // Nothing to roll back client-side -- picking is cosmetic and
+        // there's no local optimistic state to undo.
+      }
+    });
+  }
+
+  // Portrait paths (public/games/characters/nienmonster/*.png) have spaces
+  // and Vietnamese diacritics in them -- encodeURI so they resolve as a
+  // single path segment instead of breaking on the raw spaces.
+  function characterImageUrl(def) {
+    return def && def.image ? encodeURI(def.image) : null;
+  }
+
+  function renderCharacterPicker(state) {
+    if (!state.characters) return;
+    const myPlayer = state.players.find((p) => p.id === state.yourId);
+    const myCharacter = myPlayer && myPlayer.character;
+    characterListEl.innerHTML = '';
+    Object.values(state.characters).forEach((def) => {
+      const btn = document.createElement('button');
+      btn.className = 'character-btn' + (myCharacter === def.key ? ' selected' : '');
+      btn.type = 'button';
+      const portrait = document.createElement('img');
+      portrait.className = 'portrait';
+      portrait.src = characterImageUrl(def);
+      portrait.alt = def.label;
+      // Falls back to the emoji token if the portrait ever fails to load.
+      portrait.addEventListener('error', () => {
+        const fallback = document.createElement('span');
+        fallback.className = 'emoji';
+        fallback.textContent = def.emoji;
+        portrait.replaceWith(fallback);
+      }, { once: true });
+      const label = document.createElement('span');
+      label.textContent = def.label;
+      btn.append(portrait, label);
+      btn.addEventListener('click', () => selectCharacter(def.key));
+      characterListEl.appendChild(btn);
+    });
   }
 
   function buyFirecracker(type, delta) {
@@ -293,6 +367,7 @@ if (me) {
       canvas.width = state.mapWidth;
       canvas.height = state.mapHeight;
     }
+    const now = Date.now();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Flat fallback fill first (covers the gap before the image loads),
@@ -304,15 +379,20 @@ if (me) {
     }
 
     // A shadow over the backdrop for contrast against the loot/monster/
-    // player art on top -- darker over the 3 "quiet" zones, lighter over
-    // whichever zone currently has something going on: the Niên Thú's
-    // current zone, or a zone where someone's actively lighting a
-    // firecracker (both are worth drawing the eye toward).
-    const litZones = new Set();
-    if (state.monster) litZones.add(state.monster.zone);
+    // player art on top. A zone lights up the instant a firecracker
+    // BURNS OUT in it (the burning -> armed/rooted phase finishing --
+    // detected by edge, not by the ongoing p.burning state) and fades
+    // back to shadow ZONE_LIGHT_MS later if nothing else burns out there
+    // in the meantime.
     (state.players || []).forEach((p) => {
-      if (p.connected && p.burning) litZones.add(zoneAt(p.x, p.y, canvas.width, canvas.height));
+      const wasBurning = Boolean(prevPlayerBurning[p.id]);
+      const isBurningNow = Boolean(p.connected && p.burning);
+      if (wasBurning && !isBurningNow) {
+        zoneLitUntil[zoneAt(p.x, p.y, canvas.width, canvas.height)] = now + ZONE_LIGHT_MS;
+      }
+      prevPlayerBurning[p.id] = isBurningNow;
     });
+    const litZones = new Set(ZONE_KEYS.filter((zone) => (zoneLitUntil[zone] || 0) > now));
     ZONE_KEYS.forEach((zone) => {
       const r = zoneRect(zone, canvas.width, canvas.height);
       ctx.fillStyle = litZones.has(zone) ? 'rgba(255, 209, 102, 0.10)' : 'rgba(0, 0, 0, 0.45)';
@@ -329,9 +409,11 @@ if (me) {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
     }
 
-    // A persistent dashed cross dividing the arena into the 4 named zones
-    // (Trung / Thu / Vui / Vẻ) — purely a visual aid so the "hiding in
-    // the X zone" hint text maps onto an actual part of the screen.
+    // A persistent dashed cross dividing the arena into the 4 zones
+    // (Trung / Thu / Vui / Vẻ — named and drawn directly into the
+    // background art now, so no text label is drawn here) — purely a
+    // visual aid so the "hiding in the X zone" hint text maps onto an
+    // actual part of the screen.
     ctx.save();
     ctx.strokeStyle = 'rgba(255, 209, 102, 0.25)';
     ctx.lineWidth = 2;
@@ -343,15 +425,6 @@ if (me) {
     ctx.lineTo(canvas.width, canvas.height / 2);
     ctx.stroke();
     ctx.restore();
-
-    ctx.font = 'bold 15px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ZONE_KEYS.forEach((zone) => {
-      const r = zoneRect(zone, canvas.width, canvas.height);
-      ctx.fillStyle = litZones.has(zone) ? 'rgba(255, 209, 102, 0.9)' : 'rgba(255, 255, 255, 0.35)';
-      ctx.fillText(ZONE_LABELS[zone], r.x + r.w / 2, r.y + 10);
-    });
 
     (state.loot || []).forEach((item) => {
       ctx.font = '26px sans-serif';
@@ -381,33 +454,69 @@ if (me) {
       }
     }
 
-    const now = Date.now();
     (state.players || []).forEach((p) => {
       if (!p.connected) return;
       const mine = p.id === state.yourId;
       const stunned = Boolean(p.stunnedUntil && now < p.stunnedUntil);
+      const charDef = (state.characters && p.character && state.characters[p.character]) || null;
+
+      // Colored ring behind the character token -- still the "is this me /
+      // is this player stunned" indicator the plain dot used to be.
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, 18, 0, Math.PI * 2);
+      ctx.globalAlpha = 0.35;
       ctx.fillStyle = stunned ? '#666' : (mine ? '#5b8cff' : '#e0a94b');
       ctx.fill();
+      ctx.globalAlpha = 1;
       ctx.lineWidth = 2;
       ctx.strokeStyle = 'rgba(255,255,255,0.8)';
       ctx.stroke();
+
+      // Character token: the same portrait stands in for move/burn/throw/
+      // stun alike (see CHARACTERS in nien-server.js) until each
+      // character's own animations/effects for those 4 states are built.
+      // Falls back to the emoji if the image hasn't loaded yet (or failed).
+      const charImg = getCharacterImage(charDef);
+      if (charImg && charImg.complete && charImg.naturalWidth) {
+        const size = 36;
+        ctx.drawImage(charImg, p.x - size / 2, p.y - size / 2, size, size);
+      } else {
+        ctx.font = '26px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(charDef ? charDef.emoji : '🧑', p.x, p.y);
+      }
+
+      // Picking up an item: a filling gold ring showing progress toward
+      // the ~0.5s stationary hold required to actually collect it (see
+      // PICKUP_HOLD_MS in nien-server.js). Moving away cancels the hold
+      // server-side, which simply stops sending pickupHoldUntil.
+      if (p.pickupHoldUntil) {
+        const remaining = p.pickupHoldUntil - now;
+        const progress = Math.min(1, Math.max(0, 1 - remaining / PICKUP_HOLD_MS));
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 22, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+        ctx.strokeStyle = '#ffd166';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
       ctx.font = '11px sans-serif';
       ctx.fillStyle = '#fff';
       ctx.textAlign = 'center';
-      ctx.fillText(p.name.slice(0, 10), p.x, p.y - 24);
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(p.name.slice(0, 10), p.x, p.y - 26);
       // Visible to everyone, not just the player themselves, so opponents
       // can see the tension (or the mistake) building.
       if (p.burning) {
         ctx.font = '18px sans-serif';
-        ctx.fillText('🔥', p.x, p.y - 40);
+        ctx.fillText('🔥', p.x, p.y - 42);
       } else if (p.armed) {
         ctx.font = '18px sans-serif';
-        ctx.fillText('🎇', p.x, p.y - 40);
+        ctx.fillText('🎇', p.x, p.y - 42);
       } else if (stunned) {
         ctx.font = '18px sans-serif';
-        ctx.fillText('💫', p.x, p.y - 40);
+        ctx.fillText('💫', p.x, p.y - 42);
       }
     });
 
@@ -617,6 +726,8 @@ if (me) {
     explosions = [];
     selfPuffs = [];
     selectedType = null;
+    zoneLitUntil = {};
+    prevPlayerBurning = {};
     localStorage.removeItem(LAST_ROOM_KEY);
     createRoomScreen.classList.add('hidden');
     socket.emit('nien:listRooms', {}, (res) => {
