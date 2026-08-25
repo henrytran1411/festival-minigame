@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ô Ăn Quan — Autumn Festival</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .oaq-wrap { max-width: 760px; }
+
+    .oaq-log {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 14px;
+    }
+    .oaq-log div { padding: 2px 0; }
+
+    .oaq-player-list { list-style: none; padding: 0; margin: 12px 0; }
+    .oaq-player-list li { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .oaq-player-list li:last-child { border-bottom: none; }
+
+    .room-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; }
+    .room-row .room-info { display: flex; flex-direction: column; }
+    .room-row .room-name { font-weight: 600; font-size: 14px; }
+    .room-row .room-meta { font-size: 12px; color: var(--muted); }
+    .room-row .room-meta.playing { color: var(--gold); }
+    .room-row button { padding: 6px 14px; font-size: 13px; }
+
+    #lobby-screen input, #create-room-screen input, #create-room-screen select, #password-modal input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .oaq-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+
+    .oaq-table {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .oaq-seats { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+    .oaq-seat {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      text-align: center;
+      min-width: 120px;
+      flex: 1;
+    }
+    .oaq-seat.turn { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); }
+    .oaq-seat.offline { opacity: 0.55; }
+    .oaq-seat .name { font-size: 13px; font-weight: 600; }
+    .oaq-seat .score { font-size: 15px; color: var(--gold); font-weight: 700; }
+
+    /* Board: 2 rows of 5 dân pits between a tall Quan pit at each end,
+       matching the physical layout the sowing loop is defined around
+       (see oaq-server.js's header comment). */
+    #board-wrap { display: flex; justify-content: center; margin: 10px 0; }
+    .oaq-board { display: flex; align-items: stretch; gap: 10px; width: 100%; max-width: 640px; }
+    .oaq-quan {
+      flex: 0 0 76px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #1a1d24;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 4px;
+      gap: 4px;
+    }
+    .oaq-quan .label { font-size: 11px; color: var(--muted); }
+    .oaq-quan .breakdown { font-size: 10px; color: var(--muted); }
+    .oaq-quan .lock-note { font-size: 10px; color: var(--bad); text-align: center; line-height: 1.2; }
+    .oaq-quan.eaten .label { color: var(--muted); font-style: italic; }
+    .oaq-quan.unripe { border-color: rgba(255, 107, 107, 0.4); }
+    .oaq-rows { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+    .oaq-row { display: flex; gap: 10px; }
+    .oaq-pit, .oaq-quan { position: relative; }
+    .oaq-pit {
+      flex: 1;
+      background: #1a1d24;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 4px;
+      text-align: center;
+      cursor: default;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .oaq-pit.mine { border-color: rgba(91, 140, 255, 0.5); }
+    .oaq-pit.playable { cursor: pointer; }
+    .oaq-pit.playable:hover { border-color: var(--accent); }
+    .oaq-pit.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); }
+    .oaq-pit.empty { min-height: 34px; }
+
+    /* Gemstones replace the plain seed-count number: one small gem per
+       seed (capped, with a "+N" overflow badge for very large piles),
+       colored by the pit's on-screen column so the same 5 colors repeat
+       symmetrically on both rows. Quan pits use real diamonds instead. */
+    .gem-cluster {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 3px;
+      min-height: 18px;
+      padding: 2px 0;
+    }
+    .gem {
+      width: 13px;
+      height: 13px;
+      clip-path: polygon(50% 0%, 100% 38%, 80% 100%, 20% 100%, 0% 38%);
+      box-shadow: inset -2px -2px 3px rgba(0, 0, 0, 0.35), inset 1px 1px 2px rgba(255, 255, 255, 0.5), 0 0 3px rgba(0, 0, 0, 0.4);
+    }
+    .gem-ruby { background: linear-gradient(160deg, #ff8fa3, #d81e4b); }
+    .gem-emerald { background: linear-gradient(160deg, #7dffb0, #0e9b52); }
+    .gem-sapphire { background: linear-gradient(160deg, #8fc7ff, #1c5fd8); }
+    .gem-amethyst { background: linear-gradient(160deg, #d9a8ff, #7b2fd1); }
+    .gem-topaz { background: linear-gradient(160deg, #ffe08f, #e08c1c); }
+    .diamond-gem { font-size: 15px; line-height: 1; filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.5)); }
+    .gem-overflow { font-size: 11px; font-weight: 700; color: var(--muted); align-self: center; }
+
+    /* A pile gets visibly more precious as it grows -- see gemTierClass()
+       in oaq.js. 5-8 gems pick up a brighter shine; 9+ gets the brightest
+       shine plus a twinkle animation, staggered per gem via nth-child so
+       they sparkle out of sync rather than all flashing in unison. */
+    .gem-cluster.gems-glow .gem {
+      filter: brightness(1.15) saturate(1.1);
+      box-shadow: inset -2px -2px 3px rgba(0, 0, 0, 0.3), inset 1px 1px 2px rgba(255, 255, 255, 0.75), 0 0 6px rgba(255, 255, 255, 0.4);
+    }
+    .gem-cluster.gems-glow .diamond-gem {
+      filter: brightness(1.3) drop-shadow(0 0 4px rgba(255, 255, 255, 0.65));
+    }
+    .gem-cluster.gems-twinkle .gem {
+      filter: brightness(1.4) saturate(1.3);
+      box-shadow: inset -2px -2px 3px rgba(0, 0, 0, 0.3), inset 1px 1px 2px rgba(255, 255, 255, 0.9), 0 0 9px rgba(255, 255, 255, 0.65);
+      animation: gem-twinkle 1.6s ease-in-out infinite;
+    }
+    .gem-cluster.gems-twinkle .diamond-gem {
+      filter: brightness(1.6) drop-shadow(0 0 7px rgba(255, 255, 255, 0.9));
+      animation: gem-twinkle 1.6s ease-in-out infinite;
+    }
+    .gem-cluster.gems-twinkle .gem:nth-child(2n), .gem-cluster.gems-twinkle .diamond-gem:nth-child(2n) { animation-delay: 0.35s; }
+    .gem-cluster.gems-twinkle .gem:nth-child(3n), .gem-cluster.gems-twinkle .diamond-gem:nth-child(3n) { animation-delay: 0.7s; }
+    .gem-cluster.gems-twinkle .gem:nth-child(4n), .gem-cluster.gems-twinkle .diamond-gem:nth-child(4n) { animation-delay: 1.05s; }
+    @keyframes gem-twinkle {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .gem-cluster.gems-twinkle .gem, .gem-cluster.gems-twinkle .diamond-gem { animation: none; }
+    }
+
+    /* Sowing animation: the pit currently receiving a seed pulses and
+       shows an arrow indicating which way the sow is heading; a
+       captured pit flashes gold just before it empties out. */
+    .oaq-pit.dropping, .oaq-quan.dropping {
+      border-color: var(--accent);
+      transform: scale(1.08);
+      box-shadow: 0 0 0 2px rgba(91, 140, 255, 0.45);
+      transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+    .oaq-pit.capturing {
+      border-color: var(--gold);
+      background: rgba(255, 209, 102, 0.18);
+      box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.6);
+    }
+    /* Relay ("rải nối tiếp"): the pit just got scooped back up to keep
+       sowing, rather than being the final landing spot -- a distinct
+       purple flash + brief scale-down so it visually reads as "picked
+       up and emptied," not a capture (which is permanent) or a normal
+       drop (which stays put). */
+    .oaq-pit.relaying, .oaq-quan.relaying {
+      border-color: #b28dff;
+      background: rgba(178, 141, 255, 0.22);
+      box-shadow: 0 0 0 2px rgba(178, 141, 255, 0.6);
+      transform: scale(0.94);
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    }
+    .oaq-arrow {
+      position: absolute;
+      top: -22px;
+      left: 50%;
+      font-size: 18px;
+      line-height: 1;
+      transform: translateX(-50%);
+      animation: oaq-arrow-pop 0.22s ease;
+      pointer-events: none;
+    }
+    @keyframes oaq-arrow-pop {
+      from { opacity: 0; transform: translate(-50%, 5px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
+
+    .oaq-direction-picker { display: flex; gap: 10px; justify-content: center; margin: 10px 0; }
+    .oaq-direction-picker.hidden { display: none; }
+
+    .oaq-turn-banner { text-align: center; font-weight: 700; margin-bottom: 8px; min-height: 22px; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+    .oaq-turn-banner.mine { color: var(--good); }
+    .oaq-turn-banner.thinking { color: var(--gold); }
+    .oaq-move-counter { text-align: center; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    .thinking-dots { display: inline-block; width: 1.5em; text-align: left; animation: oaq-thinking-dots 1.2s steps(4) infinite; overflow: hidden; white-space: nowrap; }
+    @keyframes oaq-thinking-dots {
+      0% { width: 0; }
+      100% { width: 1.5em; }
+    }
+
+    .oaq-winner { text-align: center; font-size: 22px; font-weight: 800; margin: 10px 0; }
+    .oaq-score-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+    .oaq-score-table th, .oaq-score-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: right; }
+    .oaq-score-table th:first-child, .oaq-score-table td:first-child { text-align: left; }
+  </style>
+</head>
+<body>
+  <div class="wrap oaq-wrap">
+    <div class="top-bar">
+      <h1>🌰 Ô Ăn Quan <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
+      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+    </div>
+
+    <div id="lobby-screen" class="card">
+      <h2 style="margin-top:0; text-align:center;">Ô Ăn Quan Rooms</h2>
+      <ul id="room-list" class="oaq-player-list"></ul>
+      <p id="no-rooms-msg" style="color:var(--muted); font-size:13px; text-align:center; display:none;">No rooms yet — create one to get started.</p>
+      <div class="oaq-actions">
+        <button id="show-create-btn">+ Create Room</button>
+      </div>
+    </div>
+
+    <div id="create-room-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;">Create Room</h2>
+      <p style="font-size:13px; color:var(--muted);">Room name</p>
+      <input type="text" id="room-name-input" maxlength="30" placeholder="e.g. Ô Ăn Quan Table 1" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Password</p>
+      <input type="text" id="room-password-input" maxlength="30" placeholder="Anything — share it with your opponent" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Turn limit</p>
+      <select id="turn-limit-select">
+        <option value="0">No limit (default)</option>
+        <option value="50">50 turns</option>
+        <option value="70">70 turns</option>
+        <option value="100">100 turns</option>
+      </select>
+      <p style="font-size:11px; color:var(--muted); margin-top:4px;">Counts both players' moves combined. When the limit is reached, the game ends immediately and everything left on the board sweeps to its owner.</p>
+      <p id="create-room-error" style="color:var(--bad); font-size:13px; display:none;"></p>
+      <div class="oaq-actions">
+        <button id="create-room-btn">Create &amp; Join</button>
+        <button class="secondary" id="cancel-create-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="waiting-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
+      <ul id="player-list" class="oaq-player-list"></ul>
+      <div class="oaq-actions">
+        <button class="secondary" id="add-bot-btn">🤖 Add Bot Opponent</button>
+        <button id="start-btn" disabled>▶ Start Game</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center; margin-top:8px;">No one else around? Add a bot and play solo.</p>
+      <div class="oaq-actions">
+        <button class="danger" id="leave-waiting-btn">Leave Room</button>
+      </div>
+      <div id="waiting-log" class="oaq-log"></div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+      <div class="oaq-table">
+        <div class="oaq-seats" id="seats-row"></div>
+      </div>
+
+      <div class="oaq-turn-banner" id="turn-banner"></div>
+      <div class="oaq-move-counter" id="move-counter"></div>
+
+      <div id="board-wrap"></div>
+
+      <div class="oaq-direction-picker hidden" id="direction-picker">
+        <button id="dir-left-btn">⬅ Go Left</button>
+        <button id="dir-right-btn">Go Right ➡</button>
+      </div>
+
+      <div class="oaq-actions">
+        <button class="danger" id="leave-btn">Leave Room</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center;">Click one of your own pits (highlighted), then choose to sow it left or right.</p>
+
+      <div id="game-log" class="oaq-log"></div>
+    </div>
+
+    <div id="finished-screen" class="card result-card hidden">
+      <div class="oaq-winner" id="winner-text"></div>
+      <table class="oaq-score-table" id="score-table"></table>
+      <div class="actions">
+        <button id="new-game-btn">Play Again</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 id="password-modal-title">Enter Password</h2>
+      <input type="text" id="join-password-input" placeholder="Room password" />
+      <p id="password-error" style="color:var(--bad); font-size:13px; display:none;">Wrong password.</p>
+      <div class="oaq-actions">
+        <button id="password-submit-btn">Join</button>
+        <button class="secondary" id="password-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>How to Play Ô Ăn Quan</h2>
+      <ul>
+        <li>The board has 2 rows of 5 small "dân" pits (5 seeds each to start) and a big "quan" pit at each end — you own one row and the quan pit at your end. Each quan pit starts loaded with 5 accompanying dân seeds on top of the big stone itself, which is worth 20 points on its own.</li>
+        <li>On your turn, pick one of YOUR OWN dân pits that has seeds in it, scoop them all up, and sow them one-by-one into each pit going around the board — you choose the direction, left or right. Quan pits receive a seed too if you sow through them, but you can never pick them as your starting pit.</li>
+        <li><b>Relay:</b> once your last seed lands in some pit, look at the pit right after it — NOT the one you just landed in. If that next pit is a dân pit with seeds already in it, scoop up ALL of its seeds and keep sowing them starting from the pit after that one. This can chain through several pits before your turn is actually done.</li>
+        <li>If that next pit is a quan pit, it doesn't matter how many seeds it holds — you can never pick it up. Your turn ends immediately, no capture.</li>
+        <li><b>Capturing:</b> sowing only reaches this point once the pit right after your landing spot turns out to be an EMPTY dân pit. Hop over it and capture whatever's in the pit beyond it! If that pit's empty too, nothing is captured.</li>
+        <li>The chain can keep going: after a capture, check the next pit — if it's empty too, hop over it and capture the pit beyond that one as well, and so on, for as long as the empty-then-capture pattern holds (stopping the moment a quan pit or an occupied pit turns up where a gap is expected).</li>
+        <li><b>Không ăn Quan non (no eating an unripe quan):</b> a quan pit is only capturable once it's built up at least 5 accompanying dân seeds — otherwise it's off-limits, exactly like an empty pit, and the chain just stops there. The board shows a 🔒 lock note on any quan pit that isn't ripe yet.</li>
+        <li><b>Opening ban:</b> for the first 8 moves of the game (both players combined), quan pits can't be captured at all no matter how ripe they are — shown with a 🚫 countdown on the board. Once that window passes, ripeness is all that matters.</li>
+        <li>Capturing a quan pit "eats" it for good and banks its full worth (the 20-point stone plus whatever dân had built up in it) — even if it later collects more dân seeds from passing sows, those are just ordinary dân from then on.</li>
+        <li><b>Bón dân (borrowing):</b> if it becomes your turn and all 5 of your own dân pits are empty, you borrow 5 seeds from your own score and drop 1 into each of your pits, then keep playing. If you don't have 5 points to borrow, the game ends.</li>
+        <li><b>Game end:</b> both quan pits being eaten does NOT end the game by itself — play continues over the remaining dân. The game only ends when a player's row is empty and they can't afford to borrow; everything left on the board sweeps to its owner (including a never-eaten quan's full 20+dân value). Highest total wins (a tie is a draw).</li>
+      </ul>
+      <button class="modal-close">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../common.js"></script>
+  <script src="oaq.js"></script>
+</body>
+</html>
