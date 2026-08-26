@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Battleship — Autumn Festival</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .bs-wrap {
+      max-width: 640px;
+      --bs-cell-size: 26px; --bs-label-size: 20px; --bs-cols: 10; --bs-water: #1a1d24; --bs-water-deep: #12242f; --bs-theme-image: none;
+    }
+
+    .bs-header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .bs-my-theme { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .bs-my-theme select {
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .bs-log {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 14px;
+    }
+    .bs-log div { padding: 2px 0; }
+
+    .bs-player-list { list-style: none; padding: 0; margin: 12px 0; }
+    .bs-player-list li { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .bs-player-list li:last-child { border-bottom: none; }
+
+    .room-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; }
+    .room-row .room-info { display: flex; flex-direction: column; }
+    .room-row .room-name { font-weight: 600; font-size: 14px; }
+    .room-row .room-meta { font-size: 12px; color: var(--muted); }
+    .room-row .room-meta.playing { color: var(--gold); }
+    .room-row button { padding: 6px 14px; font-size: 13px; }
+
+    #lobby-screen input, #create-room-screen input, #create-room-screen select, #password-modal input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .bs-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 10px; }
+    @media (max-width: 420px) { .bs-config-grid { grid-template-columns: 1fr; } }
+
+    .bs-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+
+    .bs-clock { font-size: 11px; font-variant-numeric: tabular-nums; }
+    .bs-clock.low { color: var(--bad); font-weight: 700; }
+    .bs-turn-clock { text-align: center; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+    .bs-turn-clock.low { color: var(--bad); font-weight: 700; }
+
+    .bs-turn-banner { text-align: center; font-weight: 700; margin-bottom: 8px; min-height: 22px; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+    .bs-turn-banner.mine { color: var(--good); }
+    .bs-turn-banner.thinking { color: var(--gold); }
+    .bs-thinking-dots { display: inline-block; width: 1.5em; text-align: left; animation: bs-thinking-dots 1.2s steps(4) infinite; overflow: hidden; white-space: nowrap; }
+    @keyframes bs-thinking-dots { 0% { width: 0; } 100% { width: 1.5em; } }
+
+    .bs-fleet-status { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .bs-fleet-seat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      text-align: center;
+      flex: 1;
+    }
+    .bs-fleet-seat.turn { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); }
+    .bs-fleet-seat.offline { opacity: 0.55; }
+    .bs-fleet-seat .name { font-size: 13px; font-weight: 600; }
+    .bs-fleet-seat .ships-left { font-size: 12px; color: var(--muted); }
+
+    .bs-boards {
+      display: flex; flex-direction: column; gap: 20px; align-items: center;
+      background-image: linear-gradient(rgba(8, 10, 14, 0.22), rgba(8, 10, 14, 0.22)), var(--bs-theme-image);
+      background-size: cover;
+      background-position: center;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      padding: 18px 14px;
+    }
+    .bs-board-block { text-align: center; }
+    .bs-board-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; color: var(--muted); }
+    /* --bs-cell-size / --bs-label-size / --bs-cols (declared on .bs-wrap
+       above) are set from JS once the room's gridSize is known (10/15/20)
+       -- a bigger arena needs smaller cells to still fit on screen.
+       --bs-water/--bs-water-deep/--bs-theme-image reflect the active map
+       theme (each player's own choice -- see THEME_COLORS/THEME_IMAGES
+       and the #my-theme-select handling in battleship.js). Water/miss
+       cells are semi-transparent so the theme's background photo (applied
+       on .bs-boards) shows through underneath the grid. */
+    .bs-grid {
+      display: grid;
+      grid-template-columns: var(--bs-label-size) repeat(var(--bs-cols), var(--bs-cell-size));
+      grid-template-rows: var(--bs-label-size) repeat(var(--bs-cols), var(--bs-cell-size));
+      gap: 2px;
+      justify-content: center;
+    }
+    .bs-cell {
+      width: var(--bs-cell-size);
+      height: var(--bs-cell-size);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      border-radius: 4px;
+      background: var(--bs-water);
+      border: 1px solid var(--border);
+      box-sizing: border-box;
+      position: relative;
+    }
+    .bs-cell.label { background: transparent; border: none; color: var(--muted); font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+    .bs-cell.water { cursor: default; }
+    .bs-cell.fireable { cursor: pointer; }
+    .bs-cell.fireable:hover { border-color: var(--accent); background: rgba(91, 140, 255, 0.18); }
+    .bs-cell.ship { background: #3a4658; border-color: #55677f; }
+    .bs-cell.miss { background: var(--bs-water-deep); }
+    .bs-cell.miss::after { content: '•'; color: #6fb0d8; font-size: 16px; }
+    .bs-cell.hit { background: #4a1414; border-color: #a33; }
+    .bs-cell.hit::after { content: '✕'; color: #ff6b6b; font-weight: 800; }
+    .bs-cell.sunk { background: #2a0d0d; border-color: #661d1d; }
+    .bs-cell.sunk::after { content: '☒'; color: #ff8f8f; font-weight: 800; }
+    .bs-cell.placing-preview-ok { background: rgba(107, 227, 145, 0.35); border-color: var(--good); }
+    .bs-cell.placing-preview-bad { background: rgba(255, 107, 107, 0.35); border-color: var(--bad); }
+    .bs-cell.just-fired { animation: bs-flash 0.5s ease; }
+    @keyframes bs-flash { from { transform: scale(1.35); } to { transform: scale(1); } }
+    /* A discovered supply drop always sits on plain water (never on top of
+       a ship), so it only ever combines with .miss in practice -- the
+       other combinators are here defensively, cheap to keep correct. */
+    .bs-cell.supply-found { border-color: #ffd166; box-shadow: 0 0 4px rgba(255, 209, 102, 0.6); }
+    .bs-cell.miss.supply-found::after,
+    .bs-cell.hit.supply-found::after,
+    .bs-cell.sunk.supply-found::after { content: '🎁'; font-size: 13px; color: initial; }
+
+    .bs-weapon-picker { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+    .bs-weapon-btn { font-size: 12px; padding: 6px 10px; }
+    .bs-weapon-btn.armed { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); color: var(--gold); }
+
+    .bs-placement-layout { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
+    .bs-ship-list { list-style: none; padding: 0; margin: 0; min-width: 150px; }
+    .bs-ship-list li {
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 6px;
+      font-size: 13px;
+      background: #1a1d24;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .bs-ship-list li.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.35); }
+    .bs-ship-list li.placed { color: var(--muted); text-decoration: line-through; opacity: 0.7; }
+    .bs-ship-list li .dots { display: flex; gap: 2px; }
+    .bs-ship-list li .dots span { width: 8px; height: 8px; border-radius: 2px; background: #55677f; }
+    .bs-ship-list li.placed .dots span { background: var(--muted); }
+
+    #rules-modal ul { padding-left: 18px; }
+    #rules-modal li { margin-bottom: 8px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap bs-wrap">
+    <div class="top-bar">
+      <h1>🚢 Battleship <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
+      <div class="bs-header-right">
+        <label class="bs-my-theme">
+          <span>🖼️ My map</span>
+          <select id="my-theme-select">
+            <option value="">🔄 Same as room</option>
+            <option value="bachdang">Sông Bạch Đằng</option>
+            <option value="benhai">Sông Bến Hải</option>
+            <option value="songgianh">Sông Gianh</option>
+            <option value="songhan">Sông Hàn</option>
+            <option value="songhuong">Sông Hương</option>
+            <option value="songhong">Sông Hồng</option>
+            <option value="songlam">Sông Lam</option>
+            <option value="songlo">Sông Lô</option>
+            <option value="thubon">Sông Thu Bồn</option>
+            <option value="songda">Sông Đà</option>
+            <option value="songday">Sông Đáy</option>
+          </select>
+        </label>
+        <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+      </div>
+    </div>
+
+    <div id="lobby-screen" class="card">
+      <h2 style="margin-top:0; text-align:center;">Battleship Rooms</h2>
+      <ul id="room-list" class="bs-player-list"></ul>
+      <p id="no-rooms-msg" style="color:var(--muted); font-size:13px; text-align:center; display:none;">No rooms yet — create one to get started.</p>
+      <div class="bs-actions">
+        <button id="show-create-btn">+ Create Room</button>
+      </div>
+    </div>
+
+    <div id="create-room-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;">Create Room</h2>
+      <p style="font-size:13px; color:var(--muted);">Room name</p>
+      <input type="text" id="room-name-input" maxlength="30" placeholder="e.g. Battleship Table 1" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Password</p>
+      <input type="text" id="room-password-input" maxlength="30" placeholder="Anything — share it with your opponent" />
+
+      <div class="bs-config-grid">
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Arena size</p>
+          <select id="grid-size-select">
+            <option value="10">10x10 (standard)</option>
+            <option value="15">15x15</option>
+            <option value="20">20x20</option>
+          </select>
+        </div>
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Default map <span style="font-weight:400;">(each player can override their own — top right)</span></p>
+          <select id="map-theme-select">
+            <option value="bachdang">Sông Bạch Đằng</option>
+            <option value="benhai">Sông Bến Hải</option>
+            <option value="songgianh">Sông Gianh</option>
+            <option value="songhan">Sông Hàn</option>
+            <option value="songhuong">Sông Hương</option>
+            <option value="songhong">Sông Hồng</option>
+            <option value="songlam">Sông Lam</option>
+            <option value="songlo">Sông Lô</option>
+            <option value="thubon">Sông Thu Bồn</option>
+            <option value="songda">Sông Đà</option>
+            <option value="songday">Sông Đáy</option>
+          </select>
+        </div>
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Time per turn</p>
+          <select id="time-per-turn-select">
+            <option value="0">Unlimited</option>
+            <option value="30">30s</option>
+            <option value="60">60s</option>
+            <option value="90">90s</option>
+            <option value="120">120s</option>
+          </select>
+        </div>
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Minutes per player</p>
+          <select id="time-bank-select">
+            <option value="0">Unlimited</option>
+            <option value="3">3m</option>
+            <option value="5">5m</option>
+            <option value="8">8m</option>
+            <option value="15">15m</option>
+            <option value="30">30m</option>
+            <option value="60">60m</option>
+          </select>
+        </div>
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Who plays first?</p>
+          <select id="first-player-select">
+            <option value="random">Random</option>
+            <option value="host">I go first</option>
+            <option value="opponent">Opponent goes first</option>
+          </select>
+        </div>
+      </div>
+
+      <p id="create-room-error" style="color:var(--bad); font-size:13px; display:none;"></p>
+      <div class="bs-actions">
+        <button id="create-room-btn">Create &amp; Join</button>
+        <button class="secondary" id="cancel-create-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="waiting-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
+      <p id="waiting-config" style="text-align:center; font-size:12px; color:var(--muted); margin-top:-6px;"></p>
+      <ul id="player-list" class="bs-player-list"></ul>
+      <div class="bs-actions">
+        <button class="secondary" id="add-bot-btn">🤖 Add Bot Opponent</button>
+        <button id="start-btn" disabled>▶ Start Game</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center; margin-top:8px;">No one else around? Add a bot and play solo.</p>
+      <div class="bs-actions">
+        <button class="danger" id="leave-waiting-btn">Leave Room</button>
+      </div>
+      <div id="waiting-log" class="bs-log"></div>
+    </div>
+
+    <div id="placement-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;">Place Your Fleet</h2>
+      <p id="placement-hint" style="color:var(--muted); font-size:13px; text-align:center;">Click a cell to place the selected ship. Click a placed ship to pick it up again.</p>
+      <div class="bs-placement-layout">
+        <ul class="bs-ship-list" id="ship-list"></ul>
+        <div class="bs-board-block bs-boards">
+          <div id="placement-grid" class="bs-grid"></div>
+        </div>
+      </div>
+      <div class="bs-actions">
+        <button class="secondary" id="rotate-btn">🔄 Rotate: Horizontal</button>
+        <button class="secondary" id="randomize-btn">🎲 Randomize</button>
+        <button class="secondary" id="reset-placement-btn">Reset</button>
+        <button id="confirm-fleet-btn" disabled>✅ Confirm Fleet</button>
+      </div>
+      <p id="placement-status" style="text-align:center; color:var(--muted); font-size:13px; display:none;">Waiting for your opponent to finish placing their fleet...</p>
+      <div class="bs-actions">
+        <button class="danger" id="leave-placement-btn">Leave Room</button>
+      </div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+      <div class="bs-fleet-status" id="fleet-status"></div>
+      <div class="bs-turn-banner" id="turn-banner"></div>
+      <div class="bs-turn-clock" id="turn-clock"></div>
+      <div class="bs-weapon-picker" id="weapon-picker"></div>
+      <div class="bs-boards">
+        <div class="bs-board-block">
+          <div class="bs-board-title">Enemy Waters</div>
+          <div id="enemy-grid" class="bs-grid"></div>
+        </div>
+        <div class="bs-board-block">
+          <div class="bs-board-title">Your Fleet</div>
+          <div id="own-grid" class="bs-grid"></div>
+        </div>
+      </div>
+      <div class="bs-actions">
+        <button class="danger" id="leave-btn">Leave Room</button>
+      </div>
+      <div id="game-log" class="bs-log"></div>
+    </div>
+
+    <div id="finished-screen" class="card result-card hidden">
+      <div class="bs-winner" id="winner-text" style="text-align:center; font-size:22px; font-weight:800; margin:10px 0;"></div>
+      <div class="bs-boards">
+        <div class="bs-board-block">
+          <div class="bs-board-title" id="finished-enemy-title">Enemy Fleet (revealed)</div>
+          <div id="finished-enemy-grid" class="bs-grid"></div>
+        </div>
+        <div class="bs-board-block">
+          <div class="bs-board-title">Your Fleet</div>
+          <div id="finished-own-grid" class="bs-grid"></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="new-game-btn">Play Again</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 id="password-modal-title">Enter Password</h2>
+      <input type="text" id="join-password-input" placeholder="Room password" />
+      <p id="password-error" style="color:var(--bad); font-size:13px; display:none;">Wrong password.</p>
+      <div class="bs-actions">
+        <button id="password-submit-btn">Join</button>
+        <button class="secondary" id="password-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>How to Play Battleship</h2>
+      <ul>
+        <li>Each player secretly places a fleet of 5 ships on a 10x10 grid: Carrier (5 cells), Battleship (4), Cruiser (3), Submarine (3), Destroyer (2) — each ship is a straight, unbroken line, and ships can't overlap.</li>
+        <li>Once both fleets are placed, players fire one shot at a time at a cell on the opponent's grid.</li>
+        <li>A shot is either a <b>miss</b> (empty water) or a <b>hit</b> (part of a ship). <b>A hit keeps your turn — fire again!</b> A miss passes the turn to your opponent.</li>
+        <li>When every cell of a ship has been hit, that ship is <b>sunk</b> and revealed to both players.</li>
+        <li>You only ever see hit/miss markers on the enemy grid, plus the full outline of any of their ships you've sunk — never their still-afloat ship positions.</li>
+        <li><b>🎁 Supply drops:</b> each board secretly hides a few extra cells (always plain water). Hit one and you instantly gain a charge of a random special weapon — you can hold at most 1 of each type at a time; finding a duplicate while already holding one is wasted.</li>
+        <li><b>Special ammo</b> — spend a charge instead of firing normally by arming it before you click a cell:
+          <ul>
+            <li><b>➕ Cross Shot:</b> hits the target cell plus every orthogonal neighbor (up to 4 extra, fewer at the edges).</li>
+            <li><b>☢️ Nuclear Bomb:</b> hits the target cell plus its 4 orthogonal neighbors.</li>
+            <li><b>💫 Scatter Shot:</b> hits the target cell plus 3–7 other random cells anywhere still unfired.</li>
+          </ul>
+          Landing at least one hit anywhere in a special weapon's blast still earns you the bonus turn, same as a normal hit.
+        </li>
+        <li><b>Game end:</b> the first player to sink every one of the opponent's ships wins. Both fleets are fully revealed once the game is over.</li>
+        <li><b>Room settings</b> (chosen by whoever creates the room, fixed for that room including rematches): arena size (10x10/15x15/20x20 — the fleet stays the same 5 ships regardless), a default map theme, an optional per-turn clock (if you don't fire in time, the game fires a reasonable shot for you automatically — it doesn't end your game), an optional total time bank per player (chess-clock style — run yours out and you lose immediately), and who takes the first shot.</li>
+        <li><b>🖼️ Map themes</b> are purely a visual backdrop — no gameplay effect. The room's default map is just a starting point: use the "My map" picker (top-right, next to Rules) to see the board over any of the 5 real-world locations, independently of what your opponent has chosen — you don't need to match each other.</li>
+      </ul>
+      <button class="modal-close">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../common.js"></script>
+  <script src="battleship.js"></script>
+</body>
+</html>

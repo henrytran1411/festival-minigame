@@ -18,6 +18,7 @@ require('./ek-server.js')(io);
 require('./go-server.js')(io);
 require('./nien-server.js')(io);
 require('./oaq-server.js')(io);
+require('./battleship-server.js')(io);
 
 const GAMES = ['sudoku', 'scramble', 'memory', 'proverb'];
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'trungthu2026!@';
