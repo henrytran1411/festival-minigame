@@ -3,30 +3,62 @@
 // those: its own Socket.IO namespace, no leaderboard, no admin open/close
 // gating (see server.js).
 //
-// Rules: each player secretly places the same standard 5-ship fleet
-// (Carrier 5, Battleship 4, Cruiser 3, Submarine 3, Destroyer 2 — 17
-// cells total, regardless of board size) on a host-chosen NxN grid, then
-// players fire single shots at each other's grid. A HIT keeps the turn
-// with the same player (fire again); a MISS passes the turn. Fog of war
-// is enforced server-side: a player's own state never includes the
+// Rules: each player secretly places the same standard 6-ship fleet
+// (Carrier 5, Battleship 4, Cruiser 3, Submarine 3, Destroyer 2, King 1 —
+// 18 cells total, regardless of board size) on a host-chosen NxN grid,
+// then players fire single shots at each other's grid. A HIT keeps the
+// turn with the same player (fire again); a MISS passes the turn. Fog of
+// war is enforced server-side: a player's own state never includes the
 // opponent's unsunk ship positions — only shot results (hit/miss) and,
 // once a ship is fully sunk, that one ship's cells.
+//
+// The King (1 cell) sinks the instant it's hit, same as any ship -- it
+// has no defense of its own. But its death opens a "grave" at that exact
+// cell, defensible in up to 3 successive stages -- one each by Cruiser,
+// Submarine, and Destroyer. Each time the grave's current occupant (the
+// King itself, the first time) is fully sunk, whichever of those three
+// are STILL fully undamaged right now (judged independently -- one
+// already having taken a hit elsewhere doesn't disqualify the other two,
+// and whichever ship just vacated the grave is automatically excluded,
+// since sinking made it fully hit) become candidates; one, picked at
+// random, swaps into a straight-line placement CENTERED on the grave cell
+// (e.g. a 3-cell ship becomes [grave-1, grave, grave+1] along whichever
+// axis has room), inheriting the hit that just vacated the grave as its
+// own first hit right there -- "explode replace for the King". Everything
+// in a Nuclear-Bomb-shaped area around the grave that isn't sitting under
+// a ship is healed back to unfired water each time this succeeds. The
+// grave is lost for good once no candidate remains undamaged, or no
+// centered placement fits anywhere (every direction blocked by another
+// ship, the board edge, or an already-fired cell) -- so it can never
+// defend more than 3 times, since each of the three can only ever fill it
+// once (a ship that's already taken a hit is never a candidate again).
 //
 // Special ammunition (inspired by papergames.io's Battleship, with this
 // project's own chosen shapes/rates -- see battleship.html's rules
 // modal): each player's own board secretly hides a few "supply drop"
 // cells (plain water, never on top of a ship -- the count scales with
-// board area). If the OPPONENT hits one, they immediately gain one
-// charge of a randomly-chosen special weapon (capped at 1 charge held
-// per type at a time -- finding a duplicate while already holding one is
-// wasted). Before firing, a player holding a charge may spend it instead
-// of firing a normal single shot:
+// board area), each pre-assigned one of the 3 weapon types at seed time.
+// If the OPPONENT hits one, they immediately gain a charge of that cell's
+// weapon (capped per type at whatever the room's starting loadout is,
+// minimum 1 -- finding a duplicate once already at the cap is wasted).
+// Two more ways to learn where a hidden drop is, both purely informative
+// (the attacker still has to actually hit the cell to claim it):
+//   - Sinking a ship reveals one still-hidden drop of a type keyed to
+//     that ship's size (Carrier/Battleship -> Cross Shot, Cruiser/
+//     Submarine -> Scatter Shot, Destroyer -> Nuclear Bomb) on the
+//     opponent's board, to the sinker only.
+//   - 3 consecutive misses BY THE SAME PLAYER (streak resets the moment
+//     they land a hit) reveals one random still-hidden drop (any type)
+//     on the opponent's board, to that player only -- a small "pity"
+//     mechanic for a cold streak.
+// Before firing, a player holding a charge may spend it instead of firing
+// a normal single shot:
 //   - Cross shot: the target cell plus every orthogonal neighbor that
 //     exists (up to 4 extra, a "+" shape, fewer at edges/corners).
-//   - Nuclear bomb: the target cell plus its 4 orthogonal neighbors (the
-//     same footprint as a cross shot, per this project's own weapon
-//     design -- the two are currently equal in blast radius; only their
-//     rarity/name differ. Widen this shape here if that's ever revisited).
+//   - Nuclear bomb: a bigger blast than Cross Shot -- orthogonal out to 2
+//     cells in every direction (8 cells) plus the 4 immediate diagonal
+//     corners (13 cells total including the target). E.g. firing at C3
+//     also hits C1/C2/C4/C5, A3/B3/D3/E3, and B2/B4/D2/D4.
 //   - Scatter shot: the target cell plus a random 3-7 OTHER cells chosen
 //     from anywhere still unfired on the board.
 // A special weapon's hit/miss/turn-continuation rules are identical to a
@@ -35,7 +67,7 @@
 //
 // Host-configurable room settings (chosen at oaq:createRoom time, fixed
 // for that room's whole lifetime including rematches):
-//   - Board size: 10x10 / 15x15 / 20x20. The fleet stays the same 17
+//   - Board size: 10x10 / 15x15 / 20x20. The fleet stays the same 18
 //     cells regardless -- a bigger board is proportionally easier to
 //     defend, which is the expected/natural consequence of that choice.
 //   - Time per turn: a per-shot clock (30/60/90/120s, or unlimited). If a
@@ -55,6 +87,9 @@
 //     DEFAULT; each player can independently override it client-side to
 //     any theme (localStorage, never touches the server) to see the board
 //     over a different background image than their opponent does.
+//   - Starting ammo: 0-3 charges of each special weapon, granted to BOTH
+//     players the moment placement begins (and every rematch) -- on top
+//     of whatever they find via supply drops during play.
 // Bots are never subject to the per-turn clock or time bank -- they
 // already act on their own short "thinking" delay regardless.
 
@@ -72,15 +107,24 @@ const FLEET_SPEC = [
   { name: 'Cruiser', size: 3 },
   { name: 'Submarine', size: 3 },
   { name: 'Destroyer', size: 2 },
+  { name: 'King', size: 1 },
 ];
 const TOTAL_SHIP_CELLS = FLEET_SPEC.reduce((sum, s) => sum + s.size, 0);
+// Ships the King's grave can be defended by -- see handleGraveVacancy().
+const KING_PROTECTS = ['Cruiser', 'Submarine', 'Destroyer'];
 
 // -- Special ammunition -----------------------------------------------
 const WEAPON_TYPES = ['cross', 'nuclear', 'scatter'];
 const WEAPON_LABELS = { cross: 'Cross Shot', nuclear: 'Nuclear Bomb', scatter: 'Scatter Shot' };
-const MAX_AMMO_PER_TYPE = 1; // charges of the same weapon a player can hold at once
+const MAX_AMMO_PER_TYPE = 1; // floor for the per-type hold cap -- see startingAmmo below
 const SCATTER_MIN_EXTRA = 3;
 const SCATTER_MAX_EXTRA = 7;
+const STARTING_AMMO_MAX = 3; // host can configure 0-3 starting charges of each weapon
+// Sinking a ship hints one still-hidden supply drop of this weapon type
+// on the opponent's board (to the sinker only) -- keyed by ship SIZE, so
+// Cruiser and Submarine (both size 3) share a hint type.
+const SHIP_SIZE_TO_HINT_WEAPON = { 5: 'cross', 4: 'cross', 3: 'scatter', 2: 'nuclear' };
+const MISS_STREAK_HINT_THRESHOLD = 3;
 
 // -- Room configuration options -----------------------------------------
 const TURN_TIME_OPTIONS = [30, 60, 90, 120]; // seconds; not in this list (incl. 0/null) means unlimited
@@ -98,6 +142,13 @@ const MAP_THEMES = {
   thubon: 'Sông Thu Bồn',
   songda: 'Sông Đà',
   songday: 'Sông Đáy',
+  cuulong: 'Sông Cửu Long',
+  saigon: 'Sông Sài Gòn',
+  serepok: 'Sông Sêrêpôk',
+  vamco: 'Sông Vàm Cỏ',
+  dongnai: 'Sông Đồng Nai',
+  hoangsa: 'Hoàng Sa',
+  truongsa: 'Trường Sa',
 };
 const DEFAULT_MAP_THEME = 'bachdang';
 
@@ -113,11 +164,14 @@ function supplyDropCountFor(size) {
 }
 
 // Seeds hidden pickup cells on plain water (never atop a ship) for one
-// player's board. Rejection sampling, same spirit as randomFleet() --
-// trivially converges given how few cells are needed relative to the
-// board area.
+// player's board, each pre-assigned one of the 3 weapon types (so a
+// sink/streak hint can name exactly what a cell holds without having to
+// wait for it to actually be found). Rejection sampling, same spirit as
+// randomFleet() -- trivially converges given how few cells are needed
+// relative to the board area. A cell holds either null (nothing) or a
+// weapon-type string.
 function seedSupplyDrops(shipGrid, size) {
-  const supplyGrid = freshGrid(size, false);
+  const supplyGrid = freshGrid(size);
   const dropCount = supplyDropCountFor(size);
   let placed = 0;
   let attempts = 0;
@@ -126,13 +180,42 @@ function seedSupplyDrops(shipGrid, size) {
     const r = Math.floor(Math.random() * size);
     const c = Math.floor(Math.random() * size);
     if (shipGrid[r][c] !== null || supplyGrid[r][c]) continue;
-    supplyGrid[r][c] = true;
+    supplyGrid[r][c] = WEAPON_TYPES[Math.floor(Math.random() * WEAPON_TYPES.length)];
     placed += 1;
   }
   return supplyGrid;
 }
 
+// Picks one still-hidden supply-drop cell on `defender`'s board to reveal
+// as a hint -- of the given weapon type if one is provided (sink hint),
+// or any type if `weapon` is null (miss-streak hint). Skips cells already
+// hinted (so repeat sinks of the same-size ship surface a fresh cell
+// rather than repeating one). Returns null if nothing qualifies.
+function pickHintCell(defender, weapon) {
+  const candidates = [];
+  for (let r = 0; r < defender.supplyGrid.length; r += 1) {
+    for (let c = 0; c < defender.supplyGrid[r].length; c += 1) {
+      const w = defender.supplyGrid[r][c];
+      if (!w) continue;
+      if (weapon && w !== weapon) continue;
+      if (defender.hintedCells.some((h) => h.r === r && h.c === c)) continue;
+      candidates.push({ r, c, weapon: w });
+    }
+  }
+  if (!candidates.length) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
 const NEIGHBOR_DELTAS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+// Nuclear Bomb's footprint: orthogonal out to 2 cells in every direction
+// (8 cells) plus the 4 immediate diagonal corners (1 cell out) -- e.g.
+// firing at C3 also hits C1/C2/C4/C5, A3/B3/D3/E3, and B2/B4/D2/D4. A
+// bigger, differently-shaped blast than Cross Shot's plain 5-cell "+".
+const NUCLEAR_DELTAS = [
+  [-2, 0], [-1, 0], [1, 0], [2, 0],
+  [0, -2], [0, -1], [0, 1], [0, 2],
+  [-1, -1], [-1, 1], [1, -1], [1, 1],
+];
 
 // The cell set a given weapon affects when fired at (r, c). `shotsGrid`
 // (the defender's incoming-shots record) is only needed by scatter shot,
@@ -141,8 +224,9 @@ const NEIGHBOR_DELTAS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 // with no point to it. A plain (no-weapon) shot just hits the one cell.
 function weaponCells(weapon, r, c, shotsGrid, size) {
   if (weapon === 'cross' || weapon === 'nuclear') {
+    const deltas = weapon === 'nuclear' ? NUCLEAR_DELTAS : NEIGHBOR_DELTAS;
     const cells = [{ r, c }];
-    NEIGHBOR_DELTAS.forEach(([dr, dc]) => {
+    deltas.forEach(([dr, dc]) => {
       const nr = r + dr;
       const nc = c + dc;
       if (inBounds(nr, nc, size)) cells.push({ r: nr, c: nc });
@@ -224,7 +308,7 @@ function validateFleet(rawShips, size) {
 // Rejection-sampling random placer -- used for bots (and available to the
 // client as the "Randomize" convenience, though the client does its own
 // equivalent locally rather than round-tripping through the server for
-// it). Only 17 ship cells on even the smallest supported board means
+// it). Only 18 ship cells on even the smallest supported board means
 // this converges in only a few attempts almost always; a generous retry
 // cap keeps it provably terminating rather than a true infinite loop.
 function randomFleet(size) {
@@ -248,6 +332,99 @@ function randomFleet(size) {
     if (!placed) return randomFleet(size); // pathologically unlucky run -- just start over
   }
   return { grid, ships };
+}
+
+// Which index within a straight line of `n` cells is closest to centered
+// -- for odd n there's exactly one (dead center); for even n there are
+// two equally-close candidates (e.g. n=2 -> the king can be either the
+// first or the second cell of the pair).
+function centerIndices(n) {
+  if (n % 2 === 1) return [(n - 1) / 2];
+  return [n / 2 - 1, n / 2];
+}
+
+// Every index a line of length n could sit the anchor at (0..n-1) -- the
+// full, non-centered-only fallback set. See kingReplacementCandidates().
+function allLineIndices(n) {
+  return Array.from({ length: n }, (_, k) => k);
+}
+
+// Every straight-line placement of length `n` that includes (kingR,
+// kingC) somewhere in its span, across both axes, restricted to the
+// given king-index offsets `kOffsets` (defaults to just the centered
+// one(s) -- see centerIndices()). E.g. for n=3 with the default centered
+// offset this is exactly the horizontal and vertical "king is the middle
+// cell" lines (2 candidates); for n=2 it's the 4 ways a 2-cell ship can
+// touch the king's cell while staying as centered as a 2-cell ship can
+// be. Pass allLineIndices(n) to widen the search to every off-center
+// placement too -- used as a fallback in relocateShipToKingsGrave() when
+// earlier grave-chain wreckage crowds out every centered option.
+function kingReplacementCandidates(kingR, kingC, n, kOffsets = centerIndices(n)) {
+  const candidates = [];
+  ['h', 'v'].forEach((axis) => {
+    kOffsets.forEach((k) => {
+      const cells = [];
+      for (let i = 0; i < n; i += 1) {
+        const offset = i - k;
+        cells.push(axis === 'h' ? { r: kingR, c: kingC + offset } : { r: kingR + offset, c: kingC });
+      }
+      candidates.push(cells);
+    });
+  });
+  return candidates;
+}
+
+// A candidate is usable if every cell is in bounds, and every cell OTHER
+// than the king's own death cell is free: not occupied by another ship,
+// and not already fired at (fire() rejects re-targeting an already-shot
+// cell, so landing there would make that cell of the ship permanently
+// unfireable). The king's own cell is exempt from the "not already
+// fired" check -- it's *always* already fired at (that's how the king
+// just died), and that's exactly the hit this mechanic hands off to the
+// replacement ship.
+function isValidKingReplacement(defender, cells, kingR, kingC, size) {
+  return cells.every(({ r, c }) => {
+    if (!inBounds(r, c, size)) return false;
+    if (r === kingR && c === kingC) return true;
+    if (defender.grid[r][c] !== null) return false;
+    if (defender.shotsAtMe[r][c] !== null) return false;
+    return true;
+  });
+}
+
+// The King's sacrifice: relocates `defender`'s ship at `shipIndex` onto a
+// straight-line placement centered on the King's own death cell
+// (kingR, kingC) -- e.g. a 3-cell ship becomes [king-1, king, king+1]
+// along whichever axis has room. The king's death cell is deliberately
+// part of the new footprint: the hit that just killed the King stays
+// recorded in shotsAtMe there, so it's inherited as the replacement's
+// first hit the instant it takes the King's place. Prefers a CENTERED
+// placement, but falls back to any off-center placement that still
+// includes the anchor cell if no centered one fits -- this matters for
+// grave-chain stages 2 and 3, where earlier occupants' wreckage (still
+// sitting in the grid, since a sunk ship's revealed cells must never be
+// disturbed) can crowd out the centered option even though room still
+// exists slightly off-center. Returns true on success (ship relocated);
+// false if NOTHING fits anywhere (blocked on every side by another ship,
+// the edge of the board, or an already-fired cell) -- the grave "can't
+// teleport" and stays vacant.
+function relocateShipToKingsGrave(defender, shipIndex, kingR, kingC, size) {
+  const ship = defender.ships[shipIndex];
+  ship.cells.forEach(({ r, c }) => { defender.grid[r][c] = null; });
+  let candidates = kingReplacementCandidates(kingR, kingC, ship.size)
+    .filter((cells) => isValidKingReplacement(defender, cells, kingR, kingC, size));
+  if (!candidates.length) {
+    candidates = kingReplacementCandidates(kingR, kingC, ship.size, allLineIndices(ship.size))
+      .filter((cells) => isValidKingReplacement(defender, cells, kingR, kingC, size));
+  }
+  if (!candidates.length) {
+    ship.cells.forEach(({ r, c }) => { defender.grid[r][c] = shipIndex; }); // put it back -- can't teleport
+    return false;
+  }
+  const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+  chosen.forEach(({ r, c }) => { defender.grid[r][c] = shipIndex; });
+  ship.cells = chosen;
+  return true;
 }
 
 // Bot (and auto-fire-on-timeout) targeting: prioritizes unfired cells
@@ -293,7 +470,13 @@ function resolveShot(defenderGrid, defenderShips, shotsGrid, r, c) {
   const ship = defenderShips[shipIndex];
   const sunk = ship.cells.every(({ r: sr, c: sc }) => shotsGrid[sr][sc] === 'hit');
   if (sunk) ship.sunk = true;
-  return { result: 'hit', ship, sunk };
+  return { result: 'hit', ship, shipIndex, sunk };
+}
+
+function sanitizeStartingAmmoCount(v) {
+  const n = Math.floor(Number(v));
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(STARTING_AMMO_MAX, n);
 }
 
 function sanitizeOptions(raw) {
@@ -303,12 +486,19 @@ function sanitizeOptions(raw) {
   const timeBankMinutes = TIME_BANK_MINUTE_OPTIONS.includes(Number(opts.timeBankMinutes)) ? Number(opts.timeBankMinutes) : null;
   const firstPlayer = FIRST_PLAYER_OPTIONS.includes(opts.firstPlayer) ? opts.firstPlayer : 'random';
   const mapTheme = MAP_THEMES[opts.mapTheme] ? opts.mapTheme : DEFAULT_MAP_THEME;
+  const rawStartingAmmo = opts.startingAmmo || {};
+  const startingAmmo = {
+    cross: sanitizeStartingAmmoCount(rawStartingAmmo.cross),
+    nuclear: sanitizeStartingAmmoCount(rawStartingAmmo.nuclear),
+    scatter: sanitizeStartingAmmoCount(rawStartingAmmo.scatter),
+  };
   return {
     gridSize,
     timePerTurn,
     timeBankSeconds: timeBankMinutes ? timeBankMinutes * 60 : null,
     firstPlayer,
     mapTheme,
+    startingAmmo,
   };
 }
 
@@ -317,12 +507,13 @@ class BattleshipRoom {
     this.id = id;
     this.name = name;
     this.password = password;
-    const { gridSize, timePerTurn, timeBankSeconds, firstPlayer, mapTheme } = sanitizeOptions(options);
+    const { gridSize, timePerTurn, timeBankSeconds, firstPlayer, mapTheme, startingAmmo } = sanitizeOptions(options);
     this.gridSize = gridSize;
     this.timePerTurn = timePerTurn; // seconds, or null for unlimited
     this.timeBankSeconds = timeBankSeconds; // seconds, or null for unlimited
     this.firstPlayer = firstPlayer; // 'random' | 'host' | 'opponent'
     this.mapTheme = mapTheme;
+    this.startingAmmo = startingAmmo; // { cross, nuclear, scatter } charges granted at the start of every game
     this.hostPlayerId = null; // set by attachBattleship() right after the creator is pushed into players
     this.status = 'waiting'; // 'waiting' | 'placing' | 'playing' | 'finished'
     this.players = []; // { id, name, connected, socketId, isBot, ships, grid, shotsAtMe, ready, ammo, supplyGrid, foundOnBoard, timeBankMsRemaining }
@@ -404,8 +595,11 @@ class BattleshipRoom {
       p.shotsAtMe = freshGrid(this.gridSize);
       p.ready = false;
       p.supplyGrid = null;
-      p.ammo = freshAmmo();
+      p.ammo = { ...this.startingAmmo };
       p.foundOnBoard = []; // supply drops found ON this player's board (by their opponent)
+      p.hintedCells = []; // cells hinted to this player's OPPONENT, on this player's board
+      p.missStreak = 0; // this player's own consecutive-miss count (resets on any hit)
+      p.kingGrave = null; // { r, c, occupantIndex } once the King dies -- see handleGraveVacancy()
       p.timeBankMsRemaining = (this.timeBankSeconds && !p.isBot) ? this.timeBankSeconds * 1000 : null;
     });
     this.pushLog(`🚢 Place your fleet! (${this.gridSize}x${this.gridSize} — ${MAP_THEMES[this.mapTheme]})`);
@@ -437,6 +631,105 @@ class BattleshipRoom {
     return { ok: true };
   }
 
+  // Resolves one shot cell against `opponent` for `player`: applies the
+  // hit/miss, grants ammo + clears any stale hint if it lands on a supply
+  // drop, and hints a fresh drop of the mapped weapon type if it sinks a
+  // ship. Returns the { r, c, result, sunkShip } entry for shotResults.
+  applyShotToCell(player, opponent, tr, tc) {
+    const res = resolveShot(opponent.grid, opponent.ships, opponent.shotsAtMe, tr, tc);
+    if (opponent.supplyGrid?.[tr][tc]) {
+      const granted = opponent.supplyGrid[tr][tc]; // pre-assigned at seed time -- see seedSupplyDrops
+      opponent.supplyGrid[tr][tc] = null;
+      opponent.hintedCells = opponent.hintedCells.filter((h) => !(h.r === tr && h.c === tc));
+      const cap = Math.max(MAX_AMMO_PER_TYPE, this.startingAmmo[granted]);
+      const wasted = player.ammo[granted] >= cap;
+      player.ammo[granted] = Math.min(cap, player.ammo[granted] + 1);
+      res.suppliesFoundEntry = { r: tr, c: tc, weapon: granted, wasted };
+      opponent.foundOnBoard.push({ r: tr, c: tc, weapon: granted });
+    }
+    if (res.sunk) {
+      const hintWeapon = SHIP_SIZE_TO_HINT_WEAPON[res.ship.size];
+      const hint = hintWeapon ? pickHintCell(opponent, hintWeapon) : null;
+      if (hint) {
+        opponent.hintedCells.push(hint);
+        this.pushLog(`🧭 Sinking the ${res.ship.name} revealed a ${WEAPON_LABELS[hint.weapon]} supply drop on ${opponent.name}'s board!`);
+      }
+      if (res.ship.name === 'King') {
+        this.handleGraveVacancy(opponent, tr, tc); // the King itself just died -- open the grave for the first time
+      } else if (opponent.kingGrave && res.shipIndex === opponent.kingGrave.occupantIndex) {
+        this.handleGraveVacancy(opponent, opponent.kingGrave.r, opponent.kingGrave.c); // the current occupant just fully sank -- try to refill
+      }
+    }
+    return {
+      r: tr, c: tc, result: res.result,
+      sunkShip: res.sunk ? { name: res.ship.name, cells: res.ship.cells } : null,
+      suppliesFoundEntry: res.suppliesFoundEntry || null,
+    };
+  }
+
+  // The King's grave: a fixed anchor cell (wherever the King itself died)
+  // that can be defended in up to 3 successive stages -- one each by
+  // Cruiser, Submarine, and Destroyer. Whichever of those three are STILL
+  // fully undamaged right now (independently judged -- one already being
+  // hit elsewhere doesn't disqualify the other two, and whichever ship
+  // just vacated the grave is automatically excluded, since sinking made
+  // it fully hit) are candidates; one, picked at random, swaps into a
+  // straight-line placement CENTERED on the anchor cell (see
+  // relocateShipToKingsGrave()), inheriting the hit that just vacated the
+  // grave as its own first hit there. On success, everything in a
+  // Nuclear-Bomb-shaped area around the anchor that isn't sitting under a
+  // ship is healed back to unfired water. The grave is lost for good --
+  // `defender.kingGrave` cleared -- once no candidate remains undamaged,
+  // or nothing fits geometrically.
+  handleGraveVacancy(defender, anchorR, anchorC) {
+    const wasAlreadyActive = Boolean(defender.kingGrave);
+    const candidates = defender.ships
+      .map((s, i) => i)
+      .filter((i) => KING_PROTECTS.includes(defender.ships[i].name)
+        && defender.ships[i].cells.every(({ r, c }) => defender.shotsAtMe[r][c] !== 'hit'));
+    if (!candidates.length) {
+      defender.kingGrave = null;
+      if (wasAlreadyActive) this.pushLog(`👑 ${defender.name}'s King's grave has no one left to defend it — lost for good.`);
+      return;
+    }
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const relocated = relocateShipToKingsGrave(defender, pick, anchorR, anchorC, this.gridSize);
+    if (!relocated) {
+      defender.kingGrave = null;
+      this.pushLog(wasAlreadyActive
+        ? `👑 ${defender.name}'s King's grave had nowhere to send another replacement — lost for good.`
+        : `👑 ${defender.name}'s King had nowhere to send a replacement — it fell for nothing.`);
+      return;
+    }
+    defender.kingGrave = { r: anchorR, c: anchorC, occupantIndex: pick };
+    NUCLEAR_DELTAS.forEach(([dr, dc]) => {
+      const nr = anchorR + dr;
+      const nc = anchorC + dc;
+      if (!inBounds(nr, nc, this.gridSize)) return;
+      if (defender.grid[nr][nc] !== null) return; // a ship's here -- leave its shot record alone
+      defender.shotsAtMe[nr][nc] = null; // heal -- back to pristine, unfired water
+    });
+    this.pushLog(wasAlreadyActive
+      ? `👑 ${defender.name}'s King's grave holds again — another ship slipped into place!`
+      : `👑 ${defender.name}'s King sacrificed itself — a ship slipped into its place and the waters nearby were swept clean!`);
+  }
+
+  // Tracks `player`'s own consecutive-miss streak (across their own fire()
+  // calls only, ignoring the opponent's turns in between); reveals one
+  // random still-hidden supply drop on the opponent's board once it hits
+  // the threshold, then resets so it can trigger again later.
+  registerMissStreak(player, opponent, anyHit) {
+    if (anyHit) { player.missStreak = 0; return; }
+    player.missStreak += 1;
+    if (player.missStreak < MISS_STREAK_HINT_THRESHOLD) return;
+    player.missStreak = 0;
+    const hint = pickHintCell(opponent, null);
+    if (hint) {
+      opponent.hintedCells.push(hint);
+      this.pushLog(`🧭 ${player.name}'s cold streak revealed a ${WEAPON_LABELS[hint.weapon]} supply drop on ${opponent.name}'s board!`);
+    }
+  }
+
   // Applies one shot (or, if `weapon` is given and the player holds a
   // charge of it, one special-weapon volley) from `player` at (r, c) on
   // their opponent's grid. A hit anywhere in the volley keeps the turn
@@ -464,26 +757,16 @@ class BattleshipRoom {
 
     const targetCells = weaponCells(usedWeapon, r, c, opponent.shotsAtMe, this.gridSize);
     const shotResults = [];
-    const suppliesFound = [];
     targetCells.forEach(({ r: tr, c: tc }) => {
       if (opponent.shotsAtMe[tr][tc] !== null) return; // secondary blast cell already fired at -- no-op
-      const res = resolveShot(opponent.grid, opponent.ships, opponent.shotsAtMe, tr, tc);
-      shotResults.push({
-        r: tr, c: tc, result: res.result,
-        sunkShip: res.sunk ? { name: res.ship.name, cells: res.ship.cells } : null,
-      });
-      if (opponent.supplyGrid && opponent.supplyGrid[tr][tc]) {
-        opponent.supplyGrid[tr][tc] = false;
-        const granted = WEAPON_TYPES[Math.floor(Math.random() * WEAPON_TYPES.length)];
-        const wasted = player.ammo[granted] >= MAX_AMMO_PER_TYPE;
-        player.ammo[granted] = Math.min(MAX_AMMO_PER_TYPE, player.ammo[granted] + 1);
-        suppliesFound.push({ r: tr, c: tc, weapon: granted, wasted });
-        opponent.foundOnBoard.push({ r: tr, c: tc, weapon: granted });
-      }
+      shotResults.push(this.applyShotToCell(player, opponent, tr, tc));
     });
+    const suppliesFound = shotResults.map((res) => res.suppliesFoundEntry).filter(Boolean);
+    shotResults.forEach((res) => { delete res.suppliesFoundEntry; });
 
     this.moveSeq += 1;
     const anyHit = shotResults.some((res) => res.result === 'hit');
+    this.registerMissStreak(player, opponent, anyHit);
     const gameOver = opponent.ships.every((s) => s.sunk);
     this.lastShot = {
       seq: this.moveSeq,
@@ -636,7 +919,7 @@ class BattleshipRoom {
     this.players.push({
       id: `bot_${this.id}_${this.botCounter}`, name: botName, connected: true, socketId: null, isBot: true,
       ships: null, grid: null, shotsAtMe: freshGrid(this.gridSize), ready: false,
-      supplyGrid: null, ammo: freshAmmo(), foundOnBoard: [], timeBankMsRemaining: null,
+      supplyGrid: null, ammo: freshAmmo(), foundOnBoard: [], hintedCells: [], missStreak: 0, kingGrave: null, timeBankMsRemaining: null,
     });
     this.pushLog(`${botName} joined the table.`);
   }
@@ -671,6 +954,7 @@ class BattleshipRoom {
       firstPlayer: this.firstPlayer,
       mapTheme: this.mapTheme,
       mapThemeLabel: MAP_THEMES[this.mapTheme],
+      startingAmmo: this.startingAmmo,
       hostPlayerId: this.hostPlayerId,
       turnTimeRemainingMs: (this.timePerTurn && isCurrentPlayerTurn)
         ? Math.max(0, this.timePerTurn * 1000 - turnElapsedMs) : null,
@@ -702,6 +986,7 @@ class BattleshipRoom {
         revealedShips: (finished ? opponent.ships : opponent.ships.filter((s) => s.sunk))
           .map((s) => ({ name: s.name, cells: s.cells, sunk: s.sunk })),
         foundOnBoard: opponent.foundOnBoard, // supply drops I have found on THEIR board
+        hintedCells: opponent.hintedCells, // still-hidden drops hinted to ME on THEIR board (sink/streak rewards)
       } : null,
     };
   }
@@ -736,7 +1021,7 @@ function attachBattleship(io) {
     });
 
     socket.on('battleship:createRoom', ({
-      roomName, password, playerId, name, gridSize, timePerTurn, timeBankMinutes, firstPlayer, mapTheme,
+      roomName, password, playerId, name, gridSize, timePerTurn, timeBankMinutes, firstPlayer, mapTheme, startingAmmo,
     }, callback) => {
       const cleanRoomName = String(roomName || '').trim().slice(0, 30);
       const cleanPassword = String(password || '');
@@ -748,7 +1033,7 @@ function attachBattleship(io) {
 
       roomCounter += 1;
       const room = new BattleshipRoom(`room_${roomCounter}`, cleanRoomName, cleanPassword, {
-        gridSize, timePerTurn, timeBankMinutes, firstPlayer, mapTheme,
+        gridSize, timePerTurn, timeBankMinutes, firstPlayer, mapTheme, startingAmmo,
       });
       room.nsp = nsp;
       room.hostPlayerId = playerId;
@@ -756,7 +1041,7 @@ function attachBattleship(io) {
       room.players.push({
         id: playerId, name: clean, connected: true, socketId: socket.id, isBot: false,
         ships: null, grid: null, shotsAtMe: freshGrid(room.gridSize), ready: false,
-        supplyGrid: null, ammo: freshAmmo(), foundOnBoard: [], timeBankMsRemaining: null,
+        supplyGrid: null, ammo: freshAmmo(), foundOnBoard: [], hintedCells: [], missStreak: 0, kingGrave: null, timeBankMsRemaining: null,
       });
       room.pushLog(`${clean} created the room.`);
       rooms.set(room.id, room);
@@ -786,7 +1071,7 @@ function attachBattleship(io) {
         room.players.push({
           id: playerId, name: clean, connected: true, socketId: socket.id, isBot: false,
           ships: null, grid: null, shotsAtMe: freshGrid(room.gridSize), ready: false,
-          supplyGrid: null, ammo: freshAmmo(), foundOnBoard: [], timeBankMsRemaining: null,
+          supplyGrid: null, ammo: freshAmmo(), foundOnBoard: [], hintedCells: [], missStreak: 0, kingGrave: null, timeBankMsRemaining: null,
         });
         room.pushLog(`${clean} joined the room.`);
       }
@@ -897,3 +1182,12 @@ module.exports.FIRST_PLAYER_OPTIONS = FIRST_PLAYER_OPTIONS;
 module.exports.MAP_THEMES = MAP_THEMES;
 module.exports.DEFAULT_MAP_THEME = DEFAULT_MAP_THEME;
 module.exports.sanitizeOptions = sanitizeOptions;
+module.exports.STARTING_AMMO_MAX = STARTING_AMMO_MAX;
+module.exports.SHIP_SIZE_TO_HINT_WEAPON = SHIP_SIZE_TO_HINT_WEAPON;
+module.exports.MISS_STREAK_HINT_THRESHOLD = MISS_STREAK_HINT_THRESHOLD;
+module.exports.pickHintCell = pickHintCell;
+module.exports.relocateShipToKingsGrave = relocateShipToKingsGrave;
+module.exports.kingReplacementCandidates = kingReplacementCandidates;
+module.exports.centerIndices = centerIndices;
+module.exports.allLineIndices = allLineIndices;
+module.exports.KING_PROTECTS = KING_PROTECTS;

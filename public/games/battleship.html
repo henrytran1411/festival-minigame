@@ -130,13 +130,53 @@
     .bs-cell.water { cursor: default; }
     .bs-cell.fireable { cursor: pointer; }
     .bs-cell.fireable:hover { border-color: var(--accent); background: rgba(91, 140, 255, 0.18); }
-    .bs-cell.ship { background: #3a4658; border-color: #55677f; }
+    .bs-cell.ship {
+      background: linear-gradient(135deg, #f2f5f8 0%, #cdd6df 55%, #a9b6c4 100%);
+      border-color: #f5f8fb;
+      box-shadow: inset 0 0 0 1px rgba(20, 28, 38, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.5);
+    }
+    /* Tapers the two true ends of each ship into a boat-like point instead
+       of every cell being an identical square -- classes are computed in
+       battleship.js from the ship's actual cells (shipCellPosition), and
+       apply whether the cell is still afloat (.ship), hit, or sunk, so the
+       hull silhouette stays consistent as it takes damage. */
+    .bs-cell.ship-h.ship-start { clip-path: polygon(30% 0%, 100% 0%, 100% 100%, 30% 100%, 0% 50%); }
+    .bs-cell.ship-h.ship-end { clip-path: polygon(0% 0%, 70% 0%, 100% 50%, 70% 100%, 0% 100%); }
+    .bs-cell.ship-v.ship-start { clip-path: polygon(0% 30%, 50% 0%, 100% 30%, 100% 100%, 0% 100%); }
+    .bs-cell.ship-v.ship-end { clip-path: polygon(0% 0%, 100% 0%, 100% 70%, 50% 100%, 0% 70%); }
     .bs-cell.miss { background: var(--bs-water-deep); }
     .bs-cell.miss::after { content: '•'; color: #6fb0d8; font-size: 16px; }
-    .bs-cell.hit { background: #4a1414; border-color: #a33; }
-    .bs-cell.hit::after { content: '✕'; color: #ff6b6b; font-weight: 800; }
-    .bs-cell.sunk { background: #2a0d0d; border-color: #661d1d; }
+    .bs-cell.hit {
+      background: radial-gradient(circle at 50% 65%, #ff8a3d 0%, #a3311a 45%, #4a1414 100%);
+      border-color: #ff6b35;
+      box-shadow: 0 0 8px rgba(255, 107, 53, 0.55);
+    }
+    .bs-cell.hit::after {
+      content: '🔥';
+      font-size: 13px;
+      filter: drop-shadow(0 0 3px rgba(255, 140, 40, 0.9));
+      animation: bs-flame-flicker 0.9s ease-in-out infinite;
+    }
+    @keyframes bs-flame-flicker {
+      0%, 100% { transform: scale(1) rotate(-3deg); opacity: 0.85; }
+      50% { transform: scale(1.18) rotate(3deg); opacity: 1; }
+    }
+    .bs-cell.sunk { background: radial-gradient(circle at 50% 60%, #4a2a1a 0%, #2a0d0d 60%, #180707 100%); border-color: #661d1d; }
     .bs-cell.sunk::after { content: '☒'; color: #ff8f8f; font-weight: 800; }
+    .bs-cell.sunk::before {
+      content: '';
+      position: absolute;
+      width: 55%;
+      height: 55%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(130, 130, 130, 0.5), transparent 70%);
+      animation: bs-smoke-rise 2.4s ease-out infinite;
+      pointer-events: none;
+    }
+    @keyframes bs-smoke-rise {
+      0% { transform: translateY(0) scale(0.6); opacity: 0.5; }
+      100% { transform: translateY(-140%) scale(1.3); opacity: 0; }
+    }
     .bs-cell.placing-preview-ok { background: rgba(107, 227, 145, 0.35); border-color: var(--good); }
     .bs-cell.placing-preview-bad { background: rgba(255, 107, 107, 0.35); border-color: var(--bad); }
     .bs-cell.just-fired { animation: bs-flash 0.5s ease; }
@@ -148,6 +188,17 @@
     .bs-cell.miss.supply-found::after,
     .bs-cell.hit.supply-found::after,
     .bs-cell.sunk.supply-found::after { content: '🎁'; font-size: 13px; color: initial; }
+
+    /* Hinted cells: revealed by sinking a ship or a 3-miss cold streak
+       (see hintedCells in battleship.js) -- still just unfired water,
+       shown with the weapon icon it holds (data-hint-icon, set in JS)
+       inside a pulsing gold ring so it stands out from a plain miss. */
+    .bs-cell.hinted { border-color: #ffd166; animation: bs-hint-pulse 1.6s ease-in-out infinite; }
+    .bs-cell.hinted::after { content: attr(data-hint-icon); font-size: 12px; }
+    @keyframes bs-hint-pulse {
+      0%, 100% { box-shadow: 0 0 4px 1px rgba(255, 209, 102, 0.5); }
+      50% { box-shadow: 0 0 10px 3px rgba(255, 209, 102, 0.95); }
+    }
 
     .bs-weapon-picker { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
     .bs-weapon-btn { font-size: 12px; padding: 6px 10px; }
@@ -196,6 +247,13 @@
             <option value="thubon">Sông Thu Bồn</option>
             <option value="songda">Sông Đà</option>
             <option value="songday">Sông Đáy</option>
+            <option value="cuulong">Sông Cửu Long</option>
+            <option value="saigon">Sông Sài Gòn</option>
+            <option value="serepok">Sông Sêrêpôk</option>
+            <option value="vamco">Sông Vàm Cỏ</option>
+            <option value="dongnai">Sông Đồng Nai</option>
+            <option value="hoangsa">Hoàng Sa</option>
+            <option value="truongsa">Trường Sa</option>
           </select>
         </label>
         <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
@@ -241,6 +299,13 @@
             <option value="thubon">Sông Thu Bồn</option>
             <option value="songda">Sông Đà</option>
             <option value="songday">Sông Đáy</option>
+            <option value="cuulong">Sông Cửu Long</option>
+            <option value="saigon">Sông Sài Gòn</option>
+            <option value="serepok">Sông Sêrêpôk</option>
+            <option value="vamco">Sông Vàm Cỏ</option>
+            <option value="dongnai">Sông Đồng Nai</option>
+            <option value="hoangsa">Hoàng Sa</option>
+            <option value="truongsa">Trường Sa</option>
           </select>
         </div>
         <div>
@@ -271,6 +336,37 @@
             <option value="random">Random</option>
             <option value="host">I go first</option>
             <option value="opponent">Opponent goes first</option>
+          </select>
+        </div>
+      </div>
+
+      <p style="font-size:13px; color:var(--muted); margin-top:14px;">Starting ammo <span style="font-weight:400;">(both players get the same loadout, on top of anything found in-game)</span></p>
+      <div class="bs-config-grid">
+        <div>
+          <p style="font-size:12px; color:var(--muted);">➕ Cross Shot</p>
+          <select id="start-cross-select">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+          </select>
+        </div>
+        <div>
+          <p style="font-size:12px; color:var(--muted);">☢️ Nuclear Bomb</p>
+          <select id="start-nuclear-select">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+          </select>
+        </div>
+        <div>
+          <p style="font-size:12px; color:var(--muted);">💫 Scatter Shot</p>
+          <select id="start-scatter-select">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
           </select>
         </div>
       </div>
@@ -374,23 +470,31 @@
     <div class="modal-card">
       <h2>How to Play Battleship</h2>
       <ul>
-        <li>Each player secretly places a fleet of 5 ships on a 10x10 grid: Carrier (5 cells), Battleship (4), Cruiser (3), Submarine (3), Destroyer (2) — each ship is a straight, unbroken line, and ships can't overlap.</li>
+        <li>Each player secretly places a fleet of 6 ships on a 10x10 grid: Carrier (5 cells), Battleship (4), Cruiser (3), Submarine (3), Destroyer (2), King (1) — each ship is a straight, unbroken line (the King is just a single cell), and ships can't overlap.</li>
         <li>Once both fleets are placed, players fire one shot at a time at a cell on the opponent's grid.</li>
         <li>A shot is either a <b>miss</b> (empty water) or a <b>hit</b> (part of a ship). <b>A hit keeps your turn — fire again!</b> A miss passes the turn to your opponent.</li>
         <li>When every cell of a ship has been hit, that ship is <b>sunk</b> and revealed to both players.</li>
         <li>You only ever see hit/miss markers on the enemy grid, plus the full outline of any of their ships you've sunk — never their still-afloat ship positions.</li>
-        <li><b>🎁 Supply drops:</b> each board secretly hides a few extra cells (always plain water). Hit one and you instantly gain a charge of a random special weapon — you can hold at most 1 of each type at a time; finding a duplicate while already holding one is wasted.</li>
+        <li><b>👑 The King</b> has no defense of its own — one hit sinks it, same as any 1-cell ship. But its death opens a <b>grave</b> at that exact cell, defensible up to 3 times over — once each by the Cruiser, Submarine, and Destroyer. Each time the grave's current occupant is fully sunk, whichever of those three are <b>still individually undamaged</b> (one already having taken a hit elsewhere doesn't disqualify the other two) become candidates, and one, picked at random, swaps in: it relocates to sit centered on the grave (or as close to centered as the space still allows, if earlier occupants are crowding it), inheriting the sinking hit as its own first hit right there. Everything in a Nuclear-Bomb-shaped area around the grave that isn't sitting under a ship is healed back to unfired water each time this succeeds. The grave is lost for good once no undamaged candidate remains, or nothing fits anywhere — so 3 is a ceiling, not a guarantee, since two size-3 ships defending back to back can leave no room for the Destroyer.</li>
+        <li><b>🎁 Supply drops:</b> each board secretly hides a few extra cells (always plain water), each already holding one specific special weapon. Hit one and you instantly gain a charge of whatever it holds — capped per weapon type at your room's starting loadout (minimum 1 even if the host set that weapon's loadout to 0); finding a duplicate once you're at the cap is wasted.</li>
+        <li><b>🧭 Hints</b> — two ways to learn where a hidden supply drop is before you hit it (you still have to actually fire there to claim it):
+          <ul>
+            <li><b>Sinking a ship</b> reveals one still-hidden drop of a type keyed to that ship's size, on the opponent's board, to you only: Carrier/Battleship → ➕ Cross Shot, Cruiser/Submarine → 💫 Scatter Shot, Destroyer → ☢️ Nuclear Bomb.</li>
+            <li><b>3 misses in a row</b> (just your own shots — resets the moment you land a hit) reveals one random still-hidden drop on the opponent's board, to you only — a little comeback help for a cold streak.</li>
+          </ul>
+          A hinted cell shows a pulsing gold ring with the weapon's icon on the enemy grid until someone fires there.
+        </li>
         <li><b>Special ammo</b> — spend a charge instead of firing normally by arming it before you click a cell:
           <ul>
             <li><b>➕ Cross Shot:</b> hits the target cell plus every orthogonal neighbor (up to 4 extra, fewer at the edges).</li>
-            <li><b>☢️ Nuclear Bomb:</b> hits the target cell plus its 4 orthogonal neighbors.</li>
+            <li><b>☢️ Nuclear Bomb:</b> hits the target cell, out to 2 cells away orthogonally (e.g. targeting C3 also hits C1/C2/C4/C5 and A3/B3/D3/E3), plus its 4 immediate diagonal corners (B2/D2/B4/D4) — 13 cells total.</li>
             <li><b>💫 Scatter Shot:</b> hits the target cell plus 3–7 other random cells anywhere still unfired.</li>
           </ul>
           Landing at least one hit anywhere in a special weapon's blast still earns you the bonus turn, same as a normal hit.
         </li>
         <li><b>Game end:</b> the first player to sink every one of the opponent's ships wins. Both fleets are fully revealed once the game is over.</li>
-        <li><b>Room settings</b> (chosen by whoever creates the room, fixed for that room including rematches): arena size (10x10/15x15/20x20 — the fleet stays the same 5 ships regardless), a default map theme, an optional per-turn clock (if you don't fire in time, the game fires a reasonable shot for you automatically — it doesn't end your game), an optional total time bank per player (chess-clock style — run yours out and you lose immediately), and who takes the first shot.</li>
-        <li><b>🖼️ Map themes</b> are purely a visual backdrop — no gameplay effect. The room's default map is just a starting point: use the "My map" picker (top-right, next to Rules) to see the board over any of the 5 real-world locations, independently of what your opponent has chosen — you don't need to match each other.</li>
+        <li><b>Room settings</b> (chosen by whoever creates the room, fixed for that room including rematches): arena size (10x10/15x15/20x20 — the fleet stays the same 5 ships regardless), a default map theme, an optional per-turn clock (if you don't fire in time, the game fires a reasonable shot for you automatically — it doesn't end your game), an optional total time bank per player (chess-clock style — run yours out and you lose immediately), who takes the first shot, and a starting ammo loadout (0-3 of each weapon, granted to both players the instant placement begins).</li>
+        <li><b>🖼️ Map themes</b> are purely a visual backdrop — no gameplay effect. The room's default map is just a starting point: use the "My map" picker (top-right, next to Rules) to see the board over any of the 18 real-world locations, independently of what your opponent has chosen — you don't need to match each other.</li>
       </ul>
       <button class="modal-close">Close</button>
     </div>

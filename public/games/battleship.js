@@ -13,6 +13,7 @@ if (me) {
     { name: 'Cruiser', size: 3 },
     { name: 'Submarine', size: 3 },
     { name: 'Destroyer', size: 2 },
+    { name: 'King', size: 1 },
   ];
   // Cell pixel size shrinks as the board grows so a 20x20 arena still fits
   // on screen without horizontal scrolling.
@@ -32,6 +33,13 @@ if (me) {
     thubon: { water: 'rgba(38, 40, 18, 0.6)', deep: 'rgba(28, 30, 13, 0.72)' },
     songda: { water: 'rgba(12, 26, 40, 0.6)', deep: 'rgba(8, 19, 30, 0.72)' },
     songday: { water: 'rgba(14, 42, 48, 0.6)', deep: 'rgba(9, 31, 36, 0.72)' },
+    cuulong: { water: 'rgba(45, 38, 22, 0.6)', deep: 'rgba(34, 28, 15, 0.72)' },
+    saigon: { water: 'rgba(20, 34, 44, 0.6)', deep: 'rgba(14, 25, 33, 0.72)' },
+    serepok: { water: 'rgba(24, 42, 28, 0.6)', deep: 'rgba(17, 31, 20, 0.72)' },
+    vamco: { water: 'rgba(30, 40, 26, 0.6)', deep: 'rgba(22, 30, 18, 0.72)' },
+    dongnai: { water: 'rgba(16, 36, 42, 0.6)', deep: 'rgba(11, 27, 31, 0.72)' },
+    hoangsa: { water: 'rgba(8, 34, 52, 0.6)', deep: 'rgba(5, 25, 40, 0.72)' },
+    truongsa: { water: 'rgba(6, 40, 50, 0.6)', deep: 'rgba(4, 30, 38, 0.72)' },
   };
   // Filenames have spaces and Vietnamese diacritics -- percent-encoded so
   // they resolve correctly from a CSS url(...). Paths are relative to this
@@ -48,6 +56,13 @@ if (me) {
     thubon: 'theme/battleship/S%C3%B4ng%20Thu%20B%E1%BB%93n.png',
     songda: 'theme/battleship/S%C3%B4ng%20%C4%90%C3%A0.png',
     songday: 'theme/battleship/S%C3%B4ng%20%C4%90%C3%A1y.png',
+    cuulong: 'theme/battleship/S%C3%B4ng%20C%E1%BB%ADu%20Long.png',
+    saigon: 'theme/battleship/S%C3%B4ng%20S%C3%A0i%20G%C3%B2n.jpg',
+    serepok: 'theme/battleship/S%C3%B4ng%20S%C3%AAr%C3%AAp%C3%B4k.png',
+    vamco: 'theme/battleship/S%C3%B4ng%20V%C3%A0m%20C%E1%BB%8F.png',
+    dongnai: 'theme/battleship/S%C3%B4ng%20%C4%90%E1%BB%93ng%20Nai.png',
+    hoangsa: 'theme/battleship/Ho%C3%A0ng%20Sa.png',
+    truongsa: 'theme/battleship/Tr%C6%B0%E1%BB%9Dng%20sa.png',
   };
   const DEFAULT_THEME = 'bachdang';
   // The room's mapTheme is only a shared DEFAULT -- each player can pick
@@ -105,6 +120,9 @@ if (me) {
   const timePerTurnSelect = document.getElementById('time-per-turn-select');
   const timeBankSelect = document.getElementById('time-bank-select');
   const firstPlayerSelect = document.getElementById('first-player-select');
+  const startCrossSelect = document.getElementById('start-cross-select');
+  const startNuclearSelect = document.getElementById('start-nuclear-select');
+  const startScatterSelect = document.getElementById('start-scatter-select');
   const createRoomErrorEl = document.getElementById('create-room-error');
 
   const passwordModal = document.getElementById('password-modal');
@@ -206,6 +224,20 @@ if (me) {
 
   function cellKey(r, c) { return `${r},${c}`; }
 
+  // Classifies a ship cell so CSS can taper the two true ends of the hull
+  // into a boat-like point (see .ship-h/.ship-v/.ship-start/.ship-end in
+  // battleship.html) instead of every cell just being an identical square.
+  // `sameShipAt(r, c)` should report whether the given cell belongs to the
+  // same ship as the one being classified.
+  function shipCellPosition(sameShipAt, r, c) {
+    const up = sameShipAt(r - 1, c);
+    const down = sameShipAt(r + 1, c);
+    if (up || down) return { orientation: 'v', isStart: !up, isEnd: !down };
+    const left = sameShipAt(r, c - 1);
+    const right = sameShipAt(r, c + 1);
+    return { orientation: 'h', isStart: !left, isEnd: !right };
+  }
+
   function candidateCells(r, c, size, orient) {
     const cells = [];
     for (let k = 0; k < size; k += 1) cells.push(orient === 'horizontal' ? { r, c: c + k } : { r: r + k, c });
@@ -302,6 +334,13 @@ if (me) {
       const shot = shotsGrid[r][c];
       const isSunk = hasShip && ships[shipIndex] && ships[shipIndex].sunk;
       let cls = revealedCellClass(hasShip, shot, isSunk);
+      if (hasShip) {
+        const sameShipAt = (rr, cc) => rr >= 0 && rr < GRID_SIZE && cc >= 0 && cc < GRID_SIZE && grid[rr][cc] === shipIndex;
+        const pos = shipCellPosition(sameShipAt, r, c);
+        cls += ` ship-${pos.orientation}`;
+        if (pos.isStart) cls += ' ship-start';
+        if (pos.isEnd) cls += ' ship-end';
+      }
       if (found.has(cellKey(r, c))) cls += ' supply-found';
       el.className = `bs-cell ${cls}`;
       if (flashBoardKey && isFlashed(flashBoardKey, r, c)) el.classList.add('just-fired');
@@ -312,15 +351,24 @@ if (me) {
   // Renders a fog-of-war board (the enemy's grid, from your point of view):
   // only hit/miss/sunk markers, plus click-to-fire when it's your turn.
   // `foundOnBoard` marks cells where YOU discovered a supply drop.
-  function renderFogGrid(targetEl, shotsGrid, revealedShips, canFire, onCellClick, foundOnBoard) {
+  // `hintedCells` marks cells you've been hinted about (sinking a ship, or
+  // a 3-miss cold streak) but haven't fired at yet -- still just water
+  // until you actually click it.
+  function renderFogGrid(targetEl, shotsGrid, revealedShips, canFire, onCellClick, foundOnBoard, hintedCells) {
     const { sunkCells } = shipCellSets(revealedShips);
     const found = foundCellSet(foundOnBoard);
+    const hintByCell = new Map((hintedCells || []).map((h) => [cellKey(h.r, h.c), h.weapon]));
     buildGrid(targetEl, (r, c) => {
       const el = document.createElement('div');
       const shot = shotsGrid[r][c];
       const baseCls = fogCellClass(shot, sunkCells.has(cellKey(r, c)));
       const clickable = baseCls === 'water' && canFire;
-      const cls = found.has(cellKey(r, c)) ? `${baseCls} supply-found` : baseCls;
+      let cls = found.has(cellKey(r, c)) ? `${baseCls} supply-found` : baseCls;
+      const hintWeapon = hintByCell.get(cellKey(r, c));
+      if (hintWeapon) {
+        cls += ' hinted';
+        el.dataset.hintIcon = WEAPON_ICONS[hintWeapon] || '🎁';
+      }
       el.className = `bs-cell ${cls}${clickable ? ' fireable' : ''}`;
       if (isFlashed('enemy', r, c)) el.classList.add('just-fired');
       if (clickable) el.addEventListener('click', () => onCellClick(r, c));
@@ -397,11 +445,16 @@ if (me) {
   function renderWaiting(state) {
     waitingRoomTitleEl.textContent = state.roomName || 'Waiting Room';
     const firstPlayerLabel = { random: 'Random', host: 'Host', opponent: 'Opponent' }[state.firstPlayer] || 'Random';
+    const ammo = state.startingAmmo || {};
+    const startingAmmoParts = (state.weaponTypes || [])
+      .filter((w) => ammo[w] > 0)
+      .map((w) => `${ammo[w]}x ${WEAPON_ICONS[w] || ''} ${state.weaponLabels?.[w] || w}`);
     waitingConfigEl.textContent = [
       `${state.gridSize}x${state.gridSize} — default map: ${state.mapThemeLabel} (pick your own map top-right)`,
       state.timePerTurn ? `${state.timePerTurn}s per turn` : 'Unlimited time per turn',
       state.timeBankSeconds ? `${Math.round(state.timeBankSeconds / 60)}m per player` : 'Unlimited time per player',
       `${firstPlayerLabel} goes first`,
+      startingAmmoParts.length ? `Start with: ${startingAmmoParts.join(', ')}` : 'No starting ammo (find it in-game)',
     ].join(' · ');
     playerListEl.innerHTML = '';
     state.players.forEach((p) => {
@@ -493,8 +546,16 @@ if (me) {
       const el = document.createElement('div');
       el.dataset.r = String(r);
       el.dataset.c = String(c);
-      const shipHere = placedShips.some((s) => s && s.cells.some((cell) => cell.r === r && cell.c === c));
+      const shipIndex = placedShips.findIndex((s) => s && s.cells.some((cell) => cell.r === r && cell.c === c));
+      const shipHere = shipIndex !== -1;
       let cls = shipHere ? 'ship' : 'water';
+      if (shipHere) {
+        const sameShipAt = (rr, cc) => placedShips[shipIndex].cells.some((cell) => cell.r === rr && cell.c === cc);
+        const pos = shipCellPosition(sameShipAt, r, c);
+        cls += ` ship-${pos.orientation}`;
+        if (pos.isStart) cls += ' ship-start';
+        if (pos.isEnd) cls += ' ship-end';
+      }
       if (hoverPreview && hoverPreview.cells.some((cell) => cell.r === r && cell.c === c)) {
         cls += hoverPreview.valid ? ' placing-preview-ok' : ' placing-preview-bad';
       }
@@ -604,7 +665,7 @@ if (me) {
     tickClocks(); // paint immediately rather than waiting up to 1s for the next interval tick
     renderWeaponPicker(state);
     const canFire = state.status === 'playing' && state.yourId === state.currentPlayerId;
-    renderFogGrid(enemyGridEl, state.opponent.shots, state.opponent.revealedShips, canFire, onEnemyCellClick, state.opponent.foundOnBoard);
+    renderFogGrid(enemyGridEl, state.opponent.shots, state.opponent.revealedShips, canFire, onEnemyCellClick, state.opponent.foundOnBoard, state.opponent.hintedCells);
     renderRevealedGrid(ownGridEl, state.you.grid, state.you.ships, state.you.shots, 'own', state.you.foundOnBoard);
     renderLog(gameLogEl, state.log);
   }
@@ -709,6 +770,9 @@ if (me) {
     timePerTurnSelect.value = '0';
     timeBankSelect.value = '0';
     firstPlayerSelect.value = 'random';
+    startCrossSelect.value = '0';
+    startNuclearSelect.value = '0';
+    startScatterSelect.value = '0';
     createRoomErrorEl.style.display = 'none';
     showScreen('create');
   });
@@ -737,6 +801,11 @@ if (me) {
       timePerTurn: Number(timePerTurnSelect.value) || 0,
       timeBankMinutes: Number(timeBankSelect.value) || 0,
       firstPlayer: firstPlayerSelect.value,
+      startingAmmo: {
+        cross: Number(startCrossSelect.value) || 0,
+        nuclear: Number(startNuclearSelect.value) || 0,
+        scatter: Number(startScatterSelect.value) || 0,
+      },
     }, (res) => {
       if (res && res.ok) {
         enterRoom(res.roomId);
