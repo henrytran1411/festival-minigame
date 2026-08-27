@@ -681,25 +681,52 @@
 
   <div id="rules-modal" class="modal-overlay hidden">
     <div class="modal-card">
-      <h2>🎴 UNO — How to Play</h2>
-      <ol>
-        <li>Match the top card of the discard pile by color or number/symbol, or play a Wild card at any time.</li>
-        <li>Skip, Reverse, and Draw Two affect the next player. Wild Draw Four also makes the next player draw 4 — you choose the new color for any Wild.</li>
-        <li>If you can't (or don't want to) play, click Draw Card, then either play the drawn card or click Pass.</li>
-        <li>Down to 1 card? Click "Call UNO!" — if you forget and someone else notices before your next turn, they can click Catch! and you'll draw 2 penalty cards.</li>
-        <li>First to empty their hand wins. This game is just for fun — it doesn't affect the tournament leaderboard.</li>
-      </ol>
+      <div class="rules-lang-toggle">
+        <button type="button" class="rules-lang-en">English</button>
+        <button type="button" class="rules-lang-vi">Tiếng Việt</button>
+      </div>
+      <div class="lang-en">
+        <h2>🎴 UNO — How to Play</h2>
+        <ol>
+          <li>Match the top card of the discard pile by color or number/symbol, or play a Wild card at any time.</li>
+          <li>Skip, Reverse, and Draw Two affect the next player. Wild Draw Four also makes the next player draw 4 — you choose the new color for any Wild.</li>
+          <li>If you can't (or don't want to) play, click Draw Card, then either play the drawn card or click Pass.</li>
+          <li>Down to 1 card? Click "Call UNO!" — if you forget and someone else notices before your next turn, they can click Catch! and you'll draw 2 penalty cards.</li>
+          <li>First to empty their hand wins. This game is just for fun — it doesn't affect the tournament leaderboard.</li>
+        </ol>
 
-      <h2>🃏 Advance Cards (optional house rules)</h2>
-      <p style="color:var(--muted); font-size:13px; margin-top:-8px;">Picked per-room in the waiting room before start — any subset, not all-or-nothing.</p>
-      <ol>
-        <li><b>-2:</b> Plays like a normal card of its color. If you have 5+ cards (including this one), you may also discard up to 2 more cards of the same color in the same turn.</li>
-        <li><b>Switch Position:</b> No choice involved — 2 random players at the table (possibly including you) permanently swap seats/turn order.</li>
-        <li><b>Action Wild:</b> Choose a color. Repeats whichever of Skip / Reverse / Draw Two was most recently played by anyone this game (no effect if none has been played yet).</li>
-        <li><b>Lock:</b> Choose a color. Rolls a die (1-3, weighted toward 1) and randomly skips that many other players' next turn — players holding fewer cards are more likely to be picked.</li>
-        <li><b>Switch Position Wild:</b> Choose a color, then pick any 2 players at the table (yourself included) — they permanently swap seats/turn order.</li>
-        <li><b>Plus Wild:</b> Choose a color. Every other player immediately draws cards — more if they hold fewer cards (up to 3 for someone at UNO, down to 1 for a big hand). No one is skipped.</li>
-      </ol>
+        <h2>🃏 Advance Cards (optional house rules)</h2>
+        <p style="color:var(--muted); font-size:13px; margin-top:-8px;">Picked per-room in the waiting room before start — any subset, not all-or-nothing.</p>
+        <ol>
+          <li><b>-2:</b> Plays like a normal card of its color. If you have 5+ cards (including this one), you may also discard up to 2 more cards of the same color in the same turn.</li>
+          <li><b>Switch Position:</b> No choice involved — 2 random players at the table (possibly including you) permanently swap seats/turn order.</li>
+          <li><b>Action Wild:</b> Choose a color. Repeats whichever of Skip / Reverse / Draw Two was most recently played by anyone this game (no effect if none has been played yet).</li>
+          <li><b>Lock:</b> Choose a color. Rolls a die (1-3, weighted toward 1) and randomly skips that many other players' next turn — players holding fewer cards are more likely to be picked.</li>
+          <li><b>Switch Position Wild:</b> Choose a color, then pick any 2 players at the table (yourself included) — they permanently swap seats/turn order.</li>
+          <li><b>Plus Wild:</b> Choose a color. Every other player immediately draws cards — more if they hold fewer cards (up to 3 for someone at UNO, down to 1 for a big hand). No one is skipped.</li>
+        </ol>
+      </div>
+      <div class="lang-vi">
+        <h2>🎴 UNO — Cách chơi</h2>
+        <ol>
+          <li>Đánh lá bài trùng màu, trùng số/ký hiệu với lá trên cùng của chồng bài đã đánh, hoặc đánh lá Wild bất cứ lúc nào.</li>
+          <li>Skip, Reverse, và Draw Two ảnh hưởng đến người chơi tiếp theo. Wild Draw Four cũng khiến người tiếp theo bốc 4 lá — bạn chọn màu mới cho bất kỳ lá Wild nào.</li>
+          <li>Nếu không thể (hoặc không muốn) đánh bài, nhấn Draw Card, sau đó có thể đánh lá vừa bốc hoặc nhấn Pass.</li>
+          <li>Còn 1 lá trên tay? Nhấn "Call UNO!" — nếu bạn quên và người khác phát hiện trước lượt tiếp theo của bạn, họ có thể nhấn Catch! và bạn sẽ phải bốc 2 lá phạt.</li>
+          <li>Ai hết bài trước thắng. Trò chơi này chỉ để giải trí — không ảnh hưởng đến bảng xếp hạng giải đấu.</li>
+        </ol>
+
+        <h2>🃏 Lá bài nâng cao (luật tùy chọn)</h2>
+        <p style="color:var(--muted); font-size:13px; margin-top:-8px;">Được chọn riêng cho từng phòng, tại phòng chờ trước khi bắt đầu — có thể chọn bất kỳ tổ hợp nào, không cần chọn tất cả hoặc không chọn gì.</p>
+        <ol>
+          <li><b>-2:</b> Chơi như một lá thường cùng màu. Nếu bạn có từ 5 lá trở lên (tính cả lá này), bạn có thể đánh thêm tối đa 2 lá khác cùng màu trong cùng lượt.</li>
+          <li><b>Switch Position:</b> Không cần chọn gì — 2 người chơi ngẫu nhiên tại bàn (có thể gồm cả bạn) sẽ đổi chỗ/thứ tự lượt chơi vĩnh viễn.</li>
+          <li><b>Action Wild:</b> Chọn một màu. Lặp lại hiệu ứng của lá Skip / Reverse / Draw Two được chơi gần nhất bởi bất kỳ ai trong ván này (không có tác dụng nếu chưa ai chơi lá nào trong số đó).</li>
+          <li><b>Lock:</b> Chọn một màu. Tung xúc xắc (1-3, thiên về số 1) và bỏ qua ngẫu nhiên lượt tiếp theo của từng đó người chơi khác — người đang giữ ít lá hơn có khả năng bị chọn cao hơn.</li>
+          <li><b>Switch Position Wild:</b> Chọn một màu, sau đó chọn 2 người chơi bất kỳ tại bàn (kể cả bạn) — họ sẽ đổi chỗ/thứ tự lượt chơi vĩnh viễn.</li>
+          <li><b>Plus Wild:</b> Chọn một màu. Mọi người chơi khác lập tức bốc bài — bốc nhiều hơn nếu họ đang giữ ít lá hơn (tối đa 3 lá cho người đang ở mức UNO, tối thiểu 1 lá cho người có nhiều bài). Không ai bị bỏ qua lượt.</li>
+        </ol>
+      </div>
       <button class="modal-close secondary">Close</button>
     </div>
   </div>

@@ -59,14 +59,23 @@ if (me) {
   const resultDetailEl = document.getElementById('result-detail');
 
   const meta = window.FESTIVAL_GAMES.find((g) => g.key === 'scramble');
-  document.getElementById('rules-body').innerHTML = meta.rules.map((r) => `<li>${r}</li>`).join('');
+  const rulesModalEl = document.getElementById('rules-modal');
+  function renderRulesBody() {
+    const lang = Festival.getRulesLang();
+    const list = meta.rules[lang] || meta.rules.en;
+    document.getElementById('rules-body').innerHTML = list.map((r) => `<li>${r}</li>`).join('');
+    Festival.applyRulesLang(rulesModalEl, lang);
+  }
+  renderRulesBody();
   document.getElementById('rules-link').addEventListener('click', (e) => {
     e.preventDefault();
-    document.getElementById('rules-modal').classList.remove('hidden');
+    rulesModalEl.classList.remove('hidden');
   });
   document.querySelector('.modal-close').addEventListener('click', () => {
-    document.getElementById('rules-modal').classList.add('hidden');
+    rulesModalEl.classList.add('hidden');
   });
+  rulesModalEl.querySelectorAll('.rules-lang-en').forEach((b) => b.addEventListener('click', () => { Festival.setRulesLang('en'); renderRulesBody(); }));
+  rulesModalEl.querySelectorAll('.rules-lang-vi').forEach((b) => b.addEventListener('click', () => { Festival.setRulesLang('vi'); renderRulesBody(); }));
 
   let words, index, score, solvedCount, savedTime, startTime, roundTimeLeft, roundTimerHandle,
     finished, hintsLeft, hintBonusesGranted, noHintStreak, hintUsedThisWord, transitioning;

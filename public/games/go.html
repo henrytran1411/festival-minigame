@@ -192,17 +192,36 @@
 
   <div id="rules-modal" class="modal-overlay hidden">
     <div class="modal-card">
-      <h2>How to Play Go (Cờ Vây)</h2>
-      <ul>
-        <li>Two players take turns placing stones (Black first) on empty intersections of the board.</li>
-        <li>A stone or connected group of same-colored stones is captured and removed the moment it has no empty neighboring points ("liberties") left.</li>
-        <li>You may not play a move that would leave your own stone/group with zero liberties ("suicide") — unless it captures enemy stones first.</li>
-        <li><b>Ko rule:</b> if your move captures exactly one stone and leaves your own stone alone with exactly one liberty, your opponent cannot immediately play back into that same spot next turn.</li>
-        <li>Instead of placing a stone, you may <b>Pass</b>. When both players pass in a row, the game ends immediately and the board is scored.</li>
-        <li><b>Scoring:</b> each player's score = their stones remaining on the board + empty territory fully surrounded by only their color. White additionally gets a 6.5 point "komi" bonus to offset Black's first-move advantage. Highest score wins.</li>
-        <li>Since there's no separate "removing dead stones" step, make sure to actually capture anything you want off the board before passing!</li>
-        <li>You can <b>Resign</b> at any time to concede the game to your opponent.</li>
-      </ul>
+      <div class="rules-lang-toggle">
+        <button type="button" class="rules-lang-en">English</button>
+        <button type="button" class="rules-lang-vi">Tiếng Việt</button>
+      </div>
+      <div class="lang-en">
+        <h2>How to Play Go (Cờ Vây)</h2>
+        <ul>
+          <li>Two players take turns placing stones (Black first) on empty intersections of the board.</li>
+          <li>A stone or connected group of same-colored stones is captured and removed the moment it has no empty neighboring points ("liberties") left.</li>
+          <li>You may not play a move that would leave your own stone/group with zero liberties ("suicide") — unless it captures enemy stones first.</li>
+          <li><b>Ko rule:</b> if your move captures exactly one stone and leaves your own stone alone with exactly one liberty, your opponent cannot immediately play back into that same spot next turn.</li>
+          <li>Instead of placing a stone, you may <b>Pass</b>. When both players pass in a row, the game ends immediately and the board is scored.</li>
+          <li><b>Scoring:</b> each player's score = their stones remaining on the board + empty territory fully surrounded by only their color. White additionally gets a 6.5 point "komi" bonus to offset Black's first-move advantage. Highest score wins.</li>
+          <li>Since there's no separate "removing dead stones" step, make sure to actually capture anything you want off the board before passing!</li>
+          <li>You can <b>Resign</b> at any time to concede the game to your opponent.</li>
+        </ul>
+      </div>
+      <div class="lang-vi">
+        <h2>Cách chơi Cờ Vây (Go)</h2>
+        <ul>
+          <li>Hai người chơi lần lượt đặt quân cờ (Đen đi trước) lên các giao điểm trống trên bàn cờ.</li>
+          <li>Một quân cờ hoặc một nhóm quân cùng màu liên kết với nhau sẽ bị bắt và loại khỏi bàn cờ ngay khi không còn điểm trống liền kề nào ("khí").</li>
+          <li>Bạn không được đi một nước khiến quân/nhóm quân của chính mình hết sạch khí ("nước tự tử") — trừ khi nước đi đó bắt được quân đối phương trước.</li>
+          <li><b>Luật Ko:</b> nếu nước đi của bạn bắt đúng 1 quân và khiến quân của bạn chỉ còn đúng 1 khí, đối phương không được đi ngay lại vào đúng vị trí đó ở lượt kế tiếp.</li>
+          <li>Thay vì đặt quân, bạn có thể <b>Bỏ lượt (Pass)</b>. Khi cả hai người chơi bỏ lượt liên tiếp, ván cờ kết thúc ngay lập tức và bàn cờ được tính điểm.</li>
+          <li><b>Tính điểm:</b> điểm của mỗi người = số quân còn lại trên bàn cờ + vùng đất trống được bao vây hoàn toàn bởi quân cùng màu. Bên Trắng được cộng thêm 6,5 điểm "komi" để bù cho lợi thế đi trước của Đen. Ai điểm cao hơn thắng.</li>
+          <li>Vì không có bước "loại bỏ quân chết" riêng, hãy nhớ bắt hẳn những quân bạn muốn loại khỏi bàn cờ trước khi bỏ lượt!</li>
+          <li>Bạn có thể <b>Đầu hàng (Resign)</b> bất cứ lúc nào để nhường chiến thắng cho đối phương.</li>
+        </ul>
+      </div>
       <button class="modal-close">Close</button>
     </div>
   </div>

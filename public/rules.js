@@ -1,4 +1,7 @@
 // Central game metadata + "how to play" text, shared by the hub and each game page.
+// Each game's `rules` is bilingual: { en: [...], vi: [...] } — same content,
+// same order, just English vs Tiếng Việt. See index.js's openRules()/
+// renderRulesBody() for how the active language is picked (Festival.getRulesLang()).
 window.FESTIVAL_GAMES = [
   {
     key: 'sudoku',
@@ -6,15 +9,26 @@ window.FESTIVAL_GAMES = [
     icon: '🔢',
     blurb: 'Fill the grid, fast and clean.',
     page: 'games/sudoku.html',
-    rules: [
-      'Fill every empty cell so each row, column, and 3×3 box contains the digits 1-9 exactly once.',
-      'Tap a cell and type a number to fill it in. Correct numbers lock in place.',
-      'A wrong number flashes red and costs you 20 points — think before you type.',
-      'Finishing the puzzle earns 1,200 base points, plus up to 300 speed-bonus points that fade the longer you take (gone after 10 minutes). Maximum possible score: 1,500.',
-      'You get 3 attempts total for this game — choose when to play them wisely.',
-      'Switching to another tab or app during play ends that attempt immediately with no score, so keep this tab focused until you finish.',
-      'Can\'t finish? Click Give Up to end the attempt early — you\'ll score 15 points for every box you filled in correctly, instead of nothing.',
-    ],
+    rules: {
+      en: [
+        'Fill every empty cell so each row, column, and 3×3 box contains the digits 1-9 exactly once.',
+        'Tap a cell and type a number to fill it in. Correct numbers lock in place.',
+        'A wrong number flashes red and costs you 20 points — think before you type.',
+        'Finishing the puzzle earns 1,200 base points, plus up to 300 speed-bonus points that fade the longer you take (gone after 10 minutes). Maximum possible score: 1,500.',
+        'You get 3 attempts total for this game — choose when to play them wisely.',
+        'Switching to another tab or app during play ends that attempt immediately with no score, so keep this tab focused until you finish.',
+        'Can\'t finish? Click Give Up to end the attempt early — you\'ll score 15 points for every box you filled in correctly, instead of nothing.',
+      ],
+      vi: [
+        'Điền vào mọi ô trống sao cho mỗi hàng, mỗi cột và mỗi khối 3×3 chứa đủ các chữ số 1-9, không lặp lại.',
+        'Chạm vào một ô rồi gõ số để điền vào. Số đúng sẽ khóa lại tại chỗ.',
+        'Số sai sẽ nhấp nháy đỏ và trừ 20 điểm — hãy suy nghĩ kỹ trước khi gõ.',
+        'Hoàn thành bài sẽ được 1.200 điểm cơ bản, cộng thêm tối đa 300 điểm thưởng tốc độ, giảm dần theo thời gian làm bài (hết hẳn sau 10 phút). Điểm tối đa có thể đạt: 1.500.',
+        'Bạn có tổng cộng 3 lượt chơi cho trò này — hãy chọn thời điểm chơi thật khôn ngoan.',
+        'Chuyển sang tab hoặc ứng dụng khác trong lúc chơi sẽ kết thúc lượt đó ngay lập tức với 0 điểm, vì vậy hãy giữ tab này ở chế độ tập trung cho đến khi xong.',
+        'Không làm xong? Nhấn Give Up để kết thúc sớm — bạn sẽ được 15 điểm cho mỗi ô đã điền đúng, thay vì không được gì.',
+      ],
+    },
   },
   {
     key: 'scramble',
@@ -22,15 +36,26 @@ window.FESTIVAL_GAMES = [
     icon: '🍂',
     blurb: 'Unscramble 12 Tết Trung Thu words.',
     page: 'games/scramble.html',
-    rules: [
-      'There are 12 Tết Trung Thu (Mid-Autumn Festival) words, 60 seconds each (720 seconds total), shown scrambled with accents and spaces stripped away — e.g. "Chị Hằng" becomes "HCIGNAH".',
-      'Type the correctly spelled, correctly accented word and press Submit (or Enter) — e.g. "CHỊ HẰNG". A correct answer is worth 100 points and moves you to the next word.',
-      'A wrong guess costs 20 points, but you can try again on the same word until time runs out.',
-      'The Hint button unlocks 15 seconds into each word — click it for a clue. Haven\'t clicked it by 40 seconds? The hint shows automatically. You start with 3 hints for the whole game.',
-      'Answer 3 words in a row correctly without using a hint and you earn a bonus hint — this can happen up to twice, for up to 5 hints total.',
-      'Run out of time on a word and it\'s skipped for 0 points. You can also skip manually at any time.',
-      'Finishing words quickly banks a speed bonus of up to 300 points, based on time saved across all 12 words. Maximum possible score: 1,500.',
-    ],
+    rules: {
+      en: [
+        'There are 12 Tết Trung Thu (Mid-Autumn Festival) words, 60 seconds each (720 seconds total), shown scrambled with accents and spaces stripped away — e.g. "Chị Hằng" becomes "HCIGNAH".',
+        'Type the correctly spelled, correctly accented word and press Submit (or Enter) — e.g. "CHỊ HẰNG". A correct answer is worth 100 points and moves you to the next word.',
+        'A wrong guess costs 20 points, but you can try again on the same word until time runs out.',
+        'The Hint button unlocks 15 seconds into each word — click it for a clue. Haven\'t clicked it by 40 seconds? The hint shows automatically. You start with 3 hints for the whole game.',
+        'Answer 3 words in a row correctly without using a hint and you earn a bonus hint — this can happen up to twice, for up to 5 hints total.',
+        'Run out of time on a word and it\'s skipped for 0 points. You can also skip manually at any time.',
+        'Finishing words quickly banks a speed bonus of up to 300 points, based on time saved across all 12 words. Maximum possible score: 1,500.',
+      ],
+      vi: [
+        'Có 12 từ về Tết Trung Thu, mỗi từ 60 giây (tổng cộng 720 giây), hiển thị ở dạng xáo trộn chữ cái, đã bỏ dấu và khoảng trắng — ví dụ "Chị Hằng" thành "HCIGNAH".',
+        'Gõ đúng từ, đúng dấu rồi nhấn Submit (hoặc Enter) — ví dụ "CHỊ HẰNG". Trả lời đúng được 100 điểm và chuyển sang từ tiếp theo.',
+        'Đoán sai bị trừ 20 điểm, nhưng bạn có thể thử lại với cùng từ đó cho đến khi hết giờ.',
+        'Nút Hint (gợi ý) mở khóa sau 15 giây của mỗi từ — nhấn để xem gợi ý. Chưa nhấn khi đến giây 40? Gợi ý sẽ tự động hiện ra. Bạn có sẵn 3 lượt gợi ý cho cả trò chơi.',
+        'Trả lời đúng 3 từ liên tiếp mà không dùng gợi ý sẽ được thưởng thêm 1 lượt gợi ý — có thể xảy ra tối đa 2 lần, tối đa 5 lượt gợi ý tổng cộng.',
+        'Hết giờ ở một từ thì từ đó bị bỏ qua với 0 điểm. Bạn cũng có thể tự bỏ qua bất cứ lúc nào.',
+        'Trả lời nhanh sẽ tích lũy điểm thưởng tốc độ tối đa 300 điểm, dựa trên tổng thời gian tiết kiệm được qua cả 12 từ. Điểm tối đa có thể đạt: 1.500.',
+      ],
+    },
   },
   {
     key: 'memory',
@@ -38,15 +63,26 @@ window.FESTIVAL_GAMES = [
     icon: '🍁',
     blurb: 'Flip cards, find the 64 matching pairs.',
     page: 'games/memory.html',
-    rules: [
-      'Tap two cards to flip them. If they match, they stay revealed. If not, they flip back.',
-      'You have 30 minutes to find all 64 matching pairs (128 cards total). A small badge on each card shows how many times you\'ve opened it.',
-      'Each match earns points based on how many times you\'ve opened those two specific cards in total (including this match): 15 points for 4 or fewer combined opens, 10 points for 5-8, 6 points for 9-12, and 4 points for more than 12.',
-      'Finishing the whole board also earns a time bonus: 400 points in 180 seconds or less, 360 from 181-300s, 300 from 301-600s, 250 from 601-1200s, and 200 beyond that.',
-      'It also earns a moves bonus based on your total moves: 140 points for 200 or fewer, 100 for 201-400, 60 for 401-1000, and 40 beyond that.',
-      'Running out of the 30-minute limit before finishing forfeits both the time bonus and the moves bonus — only the points from pairs you\'ve already matched count.',
-      'Remembering cards you\'ve already seen earns more points per match. Maximum possible score: 1,500 (960 from perfect matching + 400 time bonus + 140 moves bonus).',
-    ],
+    rules: {
+      en: [
+        'Tap two cards to flip them. If they match, they stay revealed. If not, they flip back.',
+        'You have 30 minutes to find all 64 matching pairs (128 cards total). A small badge on each card shows how many times you\'ve opened it.',
+        'Each match earns points based on how many times you\'ve opened those two specific cards in total (including this match): 15 points for 4 or fewer combined opens, 10 points for 5-8, 6 points for 9-12, and 4 points for more than 12.',
+        'Finishing the whole board also earns a time bonus: 400 points in 180 seconds or less, 360 from 181-300s, 300 from 301-600s, 250 from 601-1200s, and 200 beyond that.',
+        'It also earns a moves bonus based on your total moves: 140 points for 200 or fewer, 100 for 201-400, 60 for 401-1000, and 40 beyond that.',
+        'Running out of the 30-minute limit before finishing forfeits both the time bonus and the moves bonus — only the points from pairs you\'ve already matched count.',
+        'Remembering cards you\'ve already seen earns more points per match. Maximum possible score: 1,500 (960 from perfect matching + 400 time bonus + 140 moves bonus).',
+      ],
+      vi: [
+        'Chạm vào 2 lá bài để lật lên. Nếu trùng nhau, chúng sẽ giữ nguyên trạng thái mở. Nếu không, chúng sẽ úp lại.',
+        'Bạn có 30 phút để tìm đủ 64 cặp bài trùng nhau (tổng cộng 128 lá). Một huy hiệu nhỏ trên mỗi lá bài cho biết bạn đã mở nó bao nhiêu lần.',
+        'Mỗi cặp trùng được tính điểm dựa trên tổng số lần bạn đã mở 2 lá bài đó (tính cả lần này): 15 điểm nếu tổng số lần mở là 4 trở xuống, 10 điểm cho 5-8 lần, 6 điểm cho 9-12 lần, và 4 điểm nếu hơn 12 lần.',
+        'Hoàn thành toàn bộ bàn chơi còn được thưởng điểm thời gian: 400 điểm nếu xong trong 180 giây trở xuống, 360 điểm cho 181-300 giây, 300 điểm cho 301-600 giây, 250 điểm cho 601-1200 giây, và 200 điểm nếu lâu hơn nữa.',
+        'Còn được thưởng điểm theo số lượt lật: 140 điểm nếu từ 200 lượt trở xuống, 100 điểm cho 201-400 lượt, 60 điểm cho 401-1000 lượt, và 40 điểm nếu nhiều hơn nữa.',
+        'Hết 30 phút mà chưa xong sẽ mất cả điểm thưởng thời gian lẫn điểm thưởng số lượt — chỉ tính điểm từ những cặp đã tìm được.',
+        'Nhớ được những lá bài đã thấy trước đó sẽ giúp được nhiều điểm hơn mỗi lần trùng. Điểm tối đa có thể đạt: 1.500 (960 điểm ghép hoàn hảo + 400 điểm thưởng thời gian + 140 điểm thưởng số lượt).',
+      ],
+    },
   },
   {
     key: 'proverb',
@@ -54,13 +90,23 @@ window.FESTIVAL_GAMES = [
     icon: '📜',
     blurb: 'Guess 15 ca dao & tục ngữ from emoji clues.',
     page: 'games/proverb.html',
-    rules: [
-      'There are 15 rounds (drawn at random from a pool of 40), 1 minute (60 seconds) each. Each round shows a Vietnamese ca dao or tục ngữ as a string of emoji clues.',
-      'Type the full proverb and press Submit (or Enter). Typing without accent marks is fine (e.g. "an qua nho ke trong cay" is accepted). A correct answer moves you to the next round, and is worth fewer points the longer you take: 40 points for the first 10 seconds, sliding down to 20 by the 20s mark, 10 by 40s, and 5 by the full 60s.',
-      'A wrong typed guess costs 5 points, but you can try again on the same round.',
-      'The Hint button unlocks 20 seconds into each round — click it for the proverb\'s meaning in English. You get 3 hints total for the whole game.',
-      'Still stuck after 40 seconds? 4 multiple-choice options appear automatically, shown in English. Picking any option — right or wrong — reveals the correct proverb and ends the round (a wrong pick still costs 5 points).',
-      'Run out of time on a round and it\'s skipped for 0 points, with the answer revealed. Answering quickly banks a speed bonus of up to 300 points across the game. Maximum possible score: 1,500.',
-    ],
+    rules: {
+      en: [
+        'There are 15 rounds (drawn at random from a pool of 40), 1 minute (60 seconds) each. Each round shows a Vietnamese ca dao or tục ngữ as a string of emoji clues.',
+        'Type the full proverb and press Submit (or Enter). Typing without accent marks is fine (e.g. "an qua nho ke trong cay" is accepted). A correct answer moves you to the next round, and is worth fewer points the longer you take: 40 points for the first 10 seconds, sliding down to 20 by the 20s mark, 10 by 40s, and 5 by the full 60s.',
+        'A wrong typed guess costs 5 points, but you can try again on the same round.',
+        'The Hint button unlocks 20 seconds into each round — click it for the proverb\'s meaning in English. You get 3 hints total for the whole game.',
+        'Still stuck after 40 seconds? 4 multiple-choice options appear automatically, shown in English. Picking any option — right or wrong — reveals the correct proverb and ends the round (a wrong pick still costs 5 points).',
+        'Run out of time on a round and it\'s skipped for 0 points, with the answer revealed. Answering quickly banks a speed bonus of up to 300 points across the game. Maximum possible score: 1,500.',
+      ],
+      vi: [
+        'Có 15 vòng (chọn ngẫu nhiên từ kho 40 câu), mỗi vòng 1 phút (60 giây). Mỗi vòng hiển thị một câu ca dao hoặc tục ngữ Việt Nam dưới dạng chuỗi gợi ý bằng emoji.',
+        'Gõ đầy đủ câu ca dao/tục ngữ rồi nhấn Submit (hoặc Enter). Gõ không dấu vẫn được chấp nhận (ví dụ "an qua nho ke trong cay" vẫn hợp lệ). Trả lời đúng sẽ chuyển sang vòng tiếp theo, và càng trả lời nhanh càng được nhiều điểm: 40 điểm trong 10 giây đầu, giảm dần xuống 20 điểm ở mốc 20 giây, 10 điểm ở mốc 40 giây, và 5 điểm khi gần hết 60 giây.',
+        'Gõ sai bị trừ 5 điểm, nhưng bạn có thể thử lại ở cùng vòng đó.',
+        'Nút Hint (gợi ý) mở khóa sau 20 giây của mỗi vòng — nhấn để xem ý nghĩa câu đó bằng tiếng Anh. Bạn có tổng cộng 3 lượt gợi ý cho cả trò chơi.',
+        'Vẫn chưa đoán được sau 40 giây? 4 lựa chọn trắc nghiệm sẽ tự động hiện ra, bằng tiếng Anh. Chọn bất kỳ đáp án nào — đúng hay sai — đều sẽ hiển thị câu đúng và kết thúc vòng đó (chọn sai vẫn bị trừ 5 điểm).',
+        'Hết giờ ở một vòng thì vòng đó bị bỏ qua với 0 điểm, và đáp án sẽ được hiển thị. Trả lời nhanh sẽ tích lũy điểm thưởng tốc độ tối đa 300 điểm trong suốt trò chơi. Điểm tối đa có thể đạt: 1.500.',
+      ],
+    },
   },
 ];

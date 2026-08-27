@@ -931,6 +931,7 @@ if (me) {
     rulesModal.classList.remove('hidden');
   });
   rulesModal.querySelector('.modal-close').addEventListener('click', () => rulesModal.classList.add('hidden'));
+  Festival.wireRulesLangToggle(rulesModal);
 
   updateSelectedShip();
   showScreen('lobby');

@@ -290,6 +290,49 @@ window.Festival = (function () {
     };
   }
 
+  // -- Rules language (English / Tiếng Việt) ------------------------------
+  // One persisted preference, shared across every page's Rules modal (the
+  // hub's 4 scored games and each of the 6 backup games) -- pick a language
+  // once anywhere and it sticks everywhere. The 6 backup-game modals author
+  // BOTH languages as parallel markup blocks tagged .lang-en/.lang-vi and
+  // just toggle which is visible; the hub's modal is data-driven (rules.js)
+  // and re-renders its list from the right language array instead -- see
+  // wireRulesLangToggle() vs. each page's own re-render call.
+  const RULES_LANG_KEY = 'festival_rules_lang';
+
+  function getRulesLang() {
+    return localStorage.getItem(RULES_LANG_KEY) === 'vi' ? 'vi' : 'en';
+  }
+
+  function setRulesLang(lang) {
+    localStorage.setItem(RULES_LANG_KEY, lang === 'vi' ? 'vi' : 'en');
+  }
+
+  // Shows/hides a modal's .lang-en / .lang-vi blocks and highlights the
+  // matching toggle button (expected classes: .rules-lang-en/.rules-lang-vi,
+  // searched anywhere inside `modalEl`).
+  function applyRulesLang(modalEl, lang) {
+    modalEl.querySelectorAll('.lang-en').forEach((el) => { el.style.display = lang === 'en' ? '' : 'none'; });
+    modalEl.querySelectorAll('.lang-vi').forEach((el) => { el.style.display = lang === 'vi' ? '' : 'none'; });
+    modalEl.querySelectorAll('.rules-lang-en').forEach((b) => b.classList.toggle('active', lang === 'en'));
+    modalEl.querySelectorAll('.rules-lang-vi').forEach((b) => b.classList.toggle('active', lang === 'vi'));
+  }
+
+  // Wires a static (non-data-driven) rules modal's language toggle buttons
+  // and applies the persisted language immediately. Call once, right after
+  // the modal exists in the DOM.
+  function wireRulesLangToggle(modalEl) {
+    modalEl.querySelectorAll('.rules-lang-en').forEach((b) => b.addEventListener('click', () => {
+      setRulesLang('en');
+      applyRulesLang(modalEl, 'en');
+    }));
+    modalEl.querySelectorAll('.rules-lang-vi').forEach((b) => b.addEventListener('click', () => {
+      setRulesLang('vi');
+      applyRulesLang(modalEl, 'vi');
+    }));
+    applyRulesLang(modalEl, getRulesLang());
+  }
+
   return {
     getPlayer,
     setName,
@@ -305,6 +348,10 @@ window.Festival = (function () {
     formatCountdown,
     gateGame,
     GAME_LABELS,
+    getRulesLang,
+    setRulesLang,
+    applyRulesLang,
+    wireRulesLangToggle,
   };
 })();
 

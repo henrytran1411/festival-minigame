@@ -104,11 +104,31 @@ function buildGameGrid() {
   });
 }
 
+let currentRulesGame = null;
+
+function renderRulesBody() {
+  if (!currentRulesGame) return;
+  const lang = Festival.getRulesLang();
+  const list = currentRulesGame.rules[lang] || currentRulesGame.rules.en;
+  rulesBody.innerHTML = list.map((r) => `<li>${r}</li>`).join('');
+  Festival.applyRulesLang(rulesModal, lang);
+}
+
 function openRules(g) {
+  currentRulesGame = g;
   rulesTitle.textContent = `${g.icon} ${g.title}`;
-  rulesBody.innerHTML = g.rules.map((r) => `<li>${r}</li>`).join('');
+  renderRulesBody();
   rulesModal.classList.remove('hidden');
 }
+
+rulesModal.querySelectorAll('.rules-lang-en').forEach((b) => b.addEventListener('click', () => {
+  Festival.setRulesLang('en');
+  renderRulesBody();
+}));
+rulesModal.querySelectorAll('.rules-lang-vi').forEach((b) => b.addEventListener('click', () => {
+  Festival.setRulesLang('vi');
+  renderRulesBody();
+}));
 
 rulesModal.querySelector('.modal-close').addEventListener('click', () => rulesModal.classList.add('hidden'));
 rulesModal.addEventListener('click', (e) => {

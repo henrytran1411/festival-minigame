@@ -282,22 +282,46 @@
 
   <div id="rules-modal" class="modal-overlay hidden">
     <div class="modal-card">
-      <h2>How to Play Đuổi Niên Thú</h2>
-      <ul>
-        <li>Before the chase starts, spend your shared point budget in the <b>Firecracker Shop</b> on a mix of Pháo tép (small/cheap), Pháo chuột (medium), and Pháo cối (large/expensive) — each purchase gives you that many uses of that type.</li>
-        <li>Move around the arena with <b>WASD</b> or the <b>Arrow Keys</b>.</li>
-        <li>Throwing a firecracker is a 4-step dance: (1) <b>select</b> a type by clicking its icon (click it again to unselect — this doesn't cost anything yet); (2) with a type selected, <b>click the arena</b> to confirm and start <b>lighting</b> it — you're rooted and can't move while it burns; (3) once lit, it's <b>armed</b> and you're free to move again while you aim — <b>click the arena</b> again to actually throw it at that spot; (4) if you wait too long without throwing, it goes off in your hands instead — no damage to the Niên Thú, and you're <b>stunned</b> (can't move) for 3 seconds. Bigger firecrackers take longer to light and give you less time to throw before they fizzle, so plan ahead!</li>
-        <li>Just lit or thrown one? There's a brief cooldown (shown as a countdown) before you can select and light another.</li>
-        <li>The arena is split into 4 hidden-search zones: <b>Top-Left, Top-Right, Bottom-Left, Bottom-Right</b> (shown as a faint dashed cross on the map). The Niên Thú always appears/reappears in ONE of these zones (never the same zone 3 times in a row) — and it's <b>invisible</b> the moment it appears. A log message and a banner tell you which zone, but not its exact spot.</li>
-        <li>You can't see it — so you have to throw firecrackers blindly into that zone to find it! The instant a firecracker's blast radius touches its real position, it's <b>revealed</b> for everyone to see and aim at properly.</li>
-        <li>If nobody lands another hit within <b>10 seconds</b>, it slips back into hiding right where it is (no teleport) — you have to land another hit to reveal it again.</li>
-        <li>Once thrown, a firecracker resolves immediately against wherever the Niên Thú currently is — raising its <b>Fear Meter</b> (larger firecrackers hit harder) and making it bolt away from the blast.</li>
-        <li>Every 10% fear, it hides again AND teleports to a freshly-picked zone (same "not 3x in a row" rule) — the chase keeps moving. At 25%, 50%, 75%, and 100% fear it ALSO drops Mid-Autumn gifts nearby. At 100% it flees completely for about a minute before returning.</li>
-        <li><b>Rewards:</b> the very first player to ever land a hit on it gets a one-time bonus. Then, at every 10% fear milestone, whoever dealt the most fear damage to it <i>since the last milestone</i> gets ranked and rewarded (1st place highest, then 2nd-3rd, 4th-10th, 11th-20th, with a small consolation for anyone else who landed at least one hit) — a fresh mini-competition every 10%, not just one big payout at the end.</li>
-        <li>Walk over dropped gifts to collect them automatically: 🕯️ Red Candle (5 pts), ⭐ Star Lantern (10 pts), 🥮 Mooncake (20 pts).</li>
-        <li>There's a limited total amount of loot for the whole game. Once it's all been dropped, there's a short final scramble before the game ends and the highest score wins.</li>
-        <li>This is an early (MVP) version — movement speed and firecracker range are still fixed for everyone; only the firecracker type loadout is customizable so far.</li>
-      </ul>
+      <div class="rules-lang-toggle">
+        <button type="button" class="rules-lang-en">English</button>
+        <button type="button" class="rules-lang-vi">Tiếng Việt</button>
+      </div>
+      <div class="lang-en">
+        <h2>How to Play Đuổi Niên Thú</h2>
+        <ul>
+          <li>Before the chase starts, spend your shared point budget in the <b>Firecracker Shop</b> on a mix of Pháo tép (small/cheap), Pháo chuột (medium), and Pháo cối (large/expensive) — each purchase gives you that many uses of that type.</li>
+          <li>Move around the arena with <b>WASD</b> or the <b>Arrow Keys</b>.</li>
+          <li>Throwing a firecracker is a 4-step dance: (1) <b>select</b> a type by clicking its icon (click it again to unselect — this doesn't cost anything yet); (2) with a type selected, <b>click the arena</b> to confirm and start <b>lighting</b> it — you're rooted and can't move while it burns; (3) once lit, it's <b>armed</b> and you're free to move again while you aim — <b>click the arena</b> again to actually throw it at that spot; (4) if you wait too long without throwing, it goes off in your hands instead — no damage to the Niên Thú, and you're <b>stunned</b> (can't move) for 3 seconds. Bigger firecrackers take longer to light and give you less time to throw before they fizzle, so plan ahead!</li>
+          <li>Just lit or thrown one? There's a brief cooldown (shown as a countdown) before you can select and light another.</li>
+          <li>The arena is split into 4 hidden-search zones: <b>Top-Left, Top-Right, Bottom-Left, Bottom-Right</b> (shown as a faint dashed cross on the map). The Niên Thú always appears/reappears in ONE of these zones (never the same zone 3 times in a row) — and it's <b>invisible</b> the moment it appears. A log message and a banner tell you which zone, but not its exact spot.</li>
+          <li>You can't see it — so you have to throw firecrackers blindly into that zone to find it! The instant a firecracker's blast radius touches its real position, it's <b>revealed</b> for everyone to see and aim at properly.</li>
+          <li>If nobody lands another hit within <b>10 seconds</b>, it slips back into hiding right where it is (no teleport) — you have to land another hit to reveal it again.</li>
+          <li>Once thrown, a firecracker resolves immediately against wherever the Niên Thú currently is — raising its <b>Fear Meter</b> (larger firecrackers hit harder) and making it bolt away from the blast.</li>
+          <li>Every 10% fear, it hides again AND teleports to a freshly-picked zone (same "not 3x in a row" rule) — the chase keeps moving. At 25%, 50%, 75%, and 100% fear it ALSO drops Mid-Autumn gifts nearby. At 100% it flees completely for about a minute before returning.</li>
+          <li><b>Rewards:</b> the very first player to ever land a hit on it gets a one-time bonus. Then, at every 10% fear milestone, whoever dealt the most fear damage to it <i>since the last milestone</i> gets ranked and rewarded (1st place highest, then 2nd-3rd, 4th-10th, 11th-20th, with a small consolation for anyone else who landed at least one hit) — a fresh mini-competition every 10%, not just one big payout at the end.</li>
+          <li>Walk over dropped gifts to collect them automatically: 🕯️ Red Candle (5 pts), ⭐ Star Lantern (10 pts), 🥮 Mooncake (20 pts).</li>
+          <li>There's a limited total amount of loot for the whole game. Once it's all been dropped, there's a short final scramble before the game ends and the highest score wins.</li>
+          <li>This is an early (MVP) version — movement speed and firecracker range are still fixed for everyone; only the firecracker type loadout is customizable so far.</li>
+        </ul>
+      </div>
+      <div class="lang-vi">
+        <h2>Cách chơi Đuổi Niên Thú</h2>
+        <ul>
+          <li>Trước khi cuộc rượt đuổi bắt đầu, hãy dùng ngân sách điểm chung để mua ở <b>Cửa hàng Pháo</b> gồm Pháo tép (nhỏ/rẻ), Pháo chuột (vừa), và Pháo cối (lớn/đắt) — mỗi lần mua sẽ cho bạn thêm số lượt dùng loại pháo đó.</li>
+          <li>Di chuyển trong đấu trường bằng <b>WASD</b> hoặc <b>phím mũi tên</b>.</li>
+          <li>Ném pháo gồm 4 bước: (1) <b>chọn</b> loại pháo bằng cách nhấn vào biểu tượng của nó (nhấn lại để bỏ chọn — chưa tốn gì cả ở bước này); (2) khi đã chọn loại pháo, <b>nhấn vào đấu trường</b> để xác nhận và bắt đầu <b>châm ngòi</b> — bạn sẽ đứng yên tại chỗ, không di chuyển được trong lúc pháo cháy; (3) khi đã châm xong, pháo ở trạng thái <b>sẵn sàng</b> và bạn có thể di chuyển tự do trở lại để ngắm — <b>nhấn vào đấu trường</b> lần nữa để thực sự ném pháo vào vị trí đó; (4) nếu chờ quá lâu mà không ném, pháo sẽ nổ ngay trên tay bạn — không gây sát thương cho Niên Thú, và bạn bị <b>choáng</b> (không di chuyển được) trong 3 giây. Pháo càng lớn thì châm càng lâu và thời gian để ném trước khi tịt ngòi càng ngắn, nên hãy tính toán trước!</li>
+          <li>Vừa châm hoặc vừa ném pháo xong? Sẽ có một khoảng hồi chiêu ngắn (hiển thị dạng đếm ngược) trước khi bạn có thể chọn và châm pháo tiếp theo.</li>
+          <li>Đấu trường được chia thành 4 khu vực tìm kiếm ẩn: <b>Trên-Trái, Trên-Phải, Dưới-Trái, Dưới-Phải</b> (hiển thị bằng đường kẻ chấm mờ hình chữ thập trên bản đồ). Niên Thú luôn xuất hiện/tái xuất hiện ở MỘT trong các khu vực này (không bao giờ cùng khu vực 3 lần liên tiếp) — và nó <b>vô hình</b> ngay khi xuất hiện. Một thông báo và một banner sẽ cho bạn biết khu vực nào, nhưng không cho biết vị trí chính xác.</li>
+          <li>Bạn không thể nhìn thấy nó — nên phải ném pháo mù vào khu vực đó để tìm! Ngay khi bán kính nổ của một quả pháo chạm đến vị trí thật của nó, nó sẽ <b>lộ diện</b> để mọi người nhìn thấy và ngắm bắn chính xác.</li>
+          <li>Nếu không ai bắn trúng thêm phát nào trong vòng <b>10 giây</b>, nó sẽ lẩn trốn trở lại ngay tại chỗ (không dịch chuyển) — bạn phải bắn trúng thêm lần nữa để làm nó lộ diện lại.</li>
+          <li>Khi đã ném, quả pháo sẽ phát nổ ngay tại vị trí hiện tại của Niên Thú — làm tăng <b>Thước đo Sợ hãi</b> của nó (pháo càng lớn gây sợ càng nhiều) và khiến nó chạy trốn khỏi vụ nổ.</li>
+          <li>Cứ mỗi 10% sợ hãi, nó lại ẩn nấp VÀ dịch chuyển đến một khu vực mới được chọn (vẫn theo luật "không lặp cùng khu vực 3 lần liên tiếp") — cuộc rượt đuổi luôn di chuyển. Ở các mốc 25%, 50%, 75%, và 100% sợ hãi, nó CÒN làm rơi quà Trung Thu gần đó. Ở mốc 100%, nó bỏ chạy hoàn toàn khoảng 1 phút trước khi quay lại.</li>
+          <li><b>Phần thưởng:</b> người chơi đầu tiên bắn trúng nó sẽ nhận thưởng một lần. Sau đó, ở mỗi mốc 10% sợ hãi, ai gây nhiều sát thương sợ hãi nhất <i>kể từ mốc trước đó</i> sẽ được xếp hạng và thưởng điểm (hạng 1 cao nhất, rồi đến hạng 2-3, hạng 4-10, hạng 11-20, cùng một phần an ủi nhỏ cho bất kỳ ai khác đã bắn trúng ít nhất 1 lần) — một cuộc thi nhỏ mới mỗi mốc 10%, chứ không phải chỉ 1 lần thưởng lớn ở cuối.</li>
+          <li>Đi qua quà đã rơi để tự động nhặt: 🕯️ Đèn Cầy Đỏ (5 điểm), ⭐ Đèn Ông Sao (10 điểm), 🥮 Bánh Trung Thu (20 điểm).</li>
+          <li>Tổng số quà cho cả ván chơi là có hạn. Khi đã rơi hết, sẽ có một đợt tranh giành cuối cùng ngắn trước khi ván chơi kết thúc và người điểm cao nhất thắng.</li>
+          <li>Đây là phiên bản đầu (MVP) — tốc độ di chuyển và tầm ném pháo hiện vẫn cố định cho mọi người; hiện chỉ có thể tùy chỉnh số lượng từng loại pháo mang theo.</li>
+        </ul>
+      </div>
       <button class="modal-close">Close</button>
     </div>
   </div>
