@@ -1452,6 +1452,13 @@ if (me) {
     if (!joined) render();
   });
 
+  // The server closes a waiting room after 3 minutes with no one hitting
+  // Start -- everyone still sitting in it gets bounced back to the lobby.
+  socket.on('uno:roomTimeout', () => {
+    alert('This room was closed after sitting idle for 3 minutes with no one starting the game.');
+    backToLobby();
+  });
+
   socket.on('uno:state', (state) => {
     latestState = state;
     if (state.players.some((p) => p.id === state.yourId)) joined = true;

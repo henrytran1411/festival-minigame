@@ -43,6 +43,7 @@ if (me) {
   const fearValueEl = document.getElementById('fear-value');
   const fearBarEl = document.getElementById('fear-bar');
   const lootRemainingEl = document.getElementById('loot-remaining');
+  const roundDamageListEl = document.getElementById('round-damage-list');
   const turnBannerEl = document.getElementById('turn-banner');
   const throwTypePickerEl = document.getElementById('throw-type-picker');
   const canvas = document.getElementById('arena-canvas');
@@ -321,6 +322,32 @@ if (me) {
       chip.appendChild(document.createTextNode(p.name + (p.id === state.yourId ? ' (You)' : '') + (p.connected ? '' : ' 💤')));
       chip.appendChild(value);
       hudRowEl.appendChild(chip);
+    });
+  }
+
+  // Live "who's topping this 10% round" standings, from state.players[].
+  // roundDamage (raw HP dealt since the last decile payout -- resets to 0
+  // for everyone the instant a 10% milestone pays out and crosses). The
+  // top 3 shown here are exactly who'll each get a reserved gift tile the
+  // moment this round's milestone is crossed (see the server's
+  // dropReservedZoneTiles()) -- highlighted the same way renderHud
+  // highlights "you", so it reads as "you're currently in line for a
+  // tile" at a glance.
+  function renderRoundDamage(state) {
+    roundDamageListEl.innerHTML = '';
+    const ranked = [...state.players]
+      .filter((p) => p.connected)
+      .sort((a, b) => (b.roundDamage || 0) - (a.roundDamage || 0));
+    ranked.forEach((p, idx) => {
+      const chip = document.createElement('div');
+      const isTopRank = idx < 3 && (p.roundDamage || 0) > 0;
+      chip.className = 'nien-hud-chip' + (p.id === state.yourId ? ' you' : '') + (isTopRank ? ' top-rank' : '');
+      const value = document.createElement('div');
+      value.className = 'value';
+      value.textContent = Math.round(p.roundDamage || 0).toLocaleString();
+      chip.appendChild(document.createTextNode(p.name + (p.id === state.yourId ? ' (You)' : '')));
+      chip.appendChild(value);
+      roundDamageListEl.appendChild(chip);
     });
   }
 
@@ -701,6 +728,7 @@ if (me) {
 
   function renderGame(state) {
     renderHud(state);
+    renderRoundDamage(state);
     // state.monster.fear is now raw HP dropped (NOT a percentage) -- derive
     // the percent for display/bar-width from hp/maxHp instead of using it
     // directly.

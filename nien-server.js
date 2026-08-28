@@ -1198,6 +1198,11 @@ class NienRoom {
         // hold finishes at, so the client can draw a progress indicator.
         pickupHoldUntil: p.pickupProgress ? p.pickupProgress.startedAt + PICKUP_HOLD_MS : null,
         zoneTileCounts: p.zoneTileCounts || { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0 },
+        // Raw HP damage dealt since the last decile payout -- the live "who's
+        // topping this 10% round" standings (see rankContributions()/
+        // distributeScareRewards()). 0 whenever there's no monster to hit
+        // (e.g. the fled window), since no fresh damage is possible then.
+        roundDamage: this.monster ? Math.round(this.monster.contributions[p.id] || 0) : 0,
       })),
       // x/y are only sent while visible — while hidden, the client (and
       // an honest bot) only gets to know the zone, same as the log

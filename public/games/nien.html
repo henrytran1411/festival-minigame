@@ -136,6 +136,9 @@
     }
     .nien-hud-chip .value { font-weight: 700; font-size: 14px; }
     .nien-hud-chip.you { border-color: var(--accent); }
+    .nien-hud-chip.top-rank { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.4); }
+
+    .nien-round-damage-title { font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 4px; }
 
     .nien-fear-wrap {
       background: var(--panel);
@@ -278,6 +281,9 @@
         </div>
         <div class="nien-hud-chip">Loot dropped<div class="value" id="loot-remaining">0</div></div>
       </div>
+
+      <div class="nien-round-damage-title">💢 Damage dealt this 10% round (top 3 = next reserved gift tile)</div>
+      <div class="nien-hud" id="round-damage-list"></div>
 
       <div class="nien-turn-banner" id="turn-banner"></div>
 

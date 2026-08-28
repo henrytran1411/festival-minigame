@@ -171,6 +171,11 @@ function cardPoints(card) {
 // configurable per room in the waiting room (see uno:setTargetScore).
 const DEFAULT_TARGET_SCORE = 500;
 const MIN_TARGET_SCORE = 50;
+
+// A waiting room auto-closes if nobody clicks Start within this long, so an
+// abandoned room doesn't sit in the room list forever (see
+// scheduleWaitingTimeout/expireWaitingRoom).
+const WAITING_ROOM_TIMEOUT_MS = 3 * 60 * 1000;
 const MAX_TARGET_SCORE = 5000;
 
 function cardLabel(card) {
@@ -284,6 +289,22 @@ class UnoRoom {
     // (matchWinnerId null) — a concluded match uses "Play Again"/uno:newGame
     // instead, which goes through the waiting room to allow reconfiguring.
     this.nextMatchReady = new Set();
+    // Fires WAITING_ROOM_TIMEOUT_MS after entering 'waiting' (room creation,
+    // or uno:newGame's return to the waiting room) if nobody has clicked
+    // Start by then -- see scheduleWaitingTimeout/clearWaitingTimeout and
+    // expireWaitingRoom in attachUno(). Cleared the moment the game actually
+    // starts, so it never fires against a room that's playing/finished.
+    this.waitingTimer = null;
+  }
+
+  scheduleWaitingTimeout(onExpire) {
+    clearTimeout(this.waitingTimer);
+    this.waitingTimer = setTimeout(onExpire, WAITING_ROOM_TIMEOUT_MS);
+  }
+
+  clearWaitingTimeout() {
+    clearTimeout(this.waitingTimer);
+    this.waitingTimer = null;
   }
 
   pushLog(message) {
@@ -801,8 +822,22 @@ function attachUno(io) {
     if (room && room.isEmpty()) {
       clearTimeout(room.botTimer);
       room.clearAllUnoWindows();
+      room.clearWaitingTimeout();
       rooms.delete(room.id);
     }
+  }
+
+  // Closes a room that's been sitting in 'waiting' for WAITING_ROOM_TIMEOUT_MS
+  // with nobody starting the game. Kicks everyone still connected back to the
+  // lobby (they never clicked Leave themselves, so the client needs telling)
+  // and removes the room so it stops cluttering the room list.
+  function expireWaitingRoom(room) {
+    if (!rooms.has(room.id) || room.status !== 'waiting') return;
+    room.players.forEach((p) => {
+      if (p.connected && p.socketId) nsp.to(p.socketId).emit('uno:roomTimeout');
+    });
+    rooms.delete(room.id);
+    broadcastRoomList();
   }
 
   nsp.on('connection', (socket) => {
@@ -839,6 +874,7 @@ function attachUno(io) {
       room.players.push({ id: playerId, name: clean, hand: [], calledUno: false, connected: true, socketId: socket.id });
       room.pushLog(`${clean} created the room.`);
       rooms.set(room.id, room);
+      room.scheduleWaitingTimeout(() => expireWaitingRoom(room));
 
       socket.roomId = room.id;
       socket.playerId = playerId;
@@ -996,6 +1032,7 @@ function attachUno(io) {
         if (typeof callback === 'function') callback({ ok: false, error: 'need-more-players' });
         return;
       }
+      room.clearWaitingTimeout();
       room.startGame();
       if (typeof callback === 'function') callback({ ok: true });
       room.broadcast(nsp);
@@ -1192,6 +1229,7 @@ function attachUno(io) {
       room.lastActionType = null;
       room.players.forEach((p) => { p.lockedTurns = 0; });
       room.clearAllUnoWindows();
+      room.scheduleWaitingTimeout(() => expireWaitingRoom(room));
       // The previous hand only ends the whole MATCH once someone's score
       // crosses targetScore — if it hasn't, scores carry into the next hand;
       // if it has, this "Play Again" starts a fresh match from 0.
