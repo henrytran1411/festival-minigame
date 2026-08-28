@@ -362,11 +362,6 @@ if (me) {
       turnBannerEl.textContent = '👻 The Niên Thú fled! It will return in about a minute...';
       return;
     }
-    if (state.finalCallDeadline) {
-      const secsLeft = Math.max(0, Math.ceil((state.finalCallDeadline - Date.now()) / 1000));
-      turnBannerEl.textContent = `🎐 All loot has been released! ${secsLeft}s left to grab what's on the ground!`;
-      return;
-    }
     if (!state.monster.visible) {
       const zoneLabel = ZONE_LABELS[state.monster.zone] || state.monster.zone;
       turnBannerEl.textContent = `❓ The Niên Thú is hiding somewhere in the ${zoneLabel} zone — throw firecrackers to find it!`;
@@ -714,7 +709,7 @@ if (me) {
     const pctDropped = ((maxHp - hp) / maxHp) * 100;
     fearValueEl.textContent = `${pctDropped.toFixed(1)}% (${hp.toLocaleString()} / ${maxHp.toLocaleString()} HP)`;
     fearBarEl.style.width = `${pctDropped}%`;
-    lootRemainingEl.textContent = state.lootRemaining;
+    lootRemainingEl.textContent = state.lootDropped;
     renderTurnBanner(state);
     renderThrowTypePicker(state);
     renderLog(gameLogEl, state.log);
@@ -722,11 +717,13 @@ if (me) {
 
   function render() {
     if (!joined) {
+      syncBgm(null);
       renderLobby();
       showScreen('lobby');
       return;
     }
     if (!latestState) return;
+    syncBgm(latestState.status);
     if (latestState.status === 'waiting') {
       renderWaiting(latestState);
       showScreen('waiting');
@@ -855,11 +852,15 @@ if (me) {
   leaveBtn.addEventListener('click', () => { socket.emit('nien:leave'); backToLobby(); });
 
   // --- Movement input: WASD / Arrow Keys -----------------------------
+  // 'touch-*' entries are synthetic "keys" set by the on-screen D-pad
+  // below (#mobile-dpad) -- they share pressedKeys/currentDir/
+  // sendDirIfChanged with the real keyboard so touch and keyboard input
+  // can even mix (e.g. holding a D-pad direction while also tapping a key).
   const MOVE_KEYS = {
-    w: { x: 0, y: -1 }, ArrowUp: { x: 0, y: -1 },
-    s: { x: 0, y: 1 }, ArrowDown: { x: 0, y: 1 },
-    a: { x: -1, y: 0 }, ArrowLeft: { x: -1, y: 0 },
-    d: { x: 1, y: 0 }, ArrowRight: { x: 1, y: 0 },
+    w: { x: 0, y: -1 }, ArrowUp: { x: 0, y: -1 }, 'touch-up': { x: 0, y: -1 },
+    s: { x: 0, y: 1 }, ArrowDown: { x: 0, y: 1 }, 'touch-down': { x: 0, y: 1 },
+    a: { x: -1, y: 0 }, ArrowLeft: { x: -1, y: 0 }, 'touch-left': { x: -1, y: 0 },
+    d: { x: 1, y: 0 }, ArrowRight: { x: 1, y: 0 }, 'touch-right': { x: 1, y: 0 },
   };
   function currentDir() {
     let x = 0;
@@ -898,6 +899,32 @@ if (me) {
     sendDirIfChanged();
   });
 
+  // --- Movement input: on-screen D-pad, for touch devices with no ------
+  // keyboard (see #mobile-dpad in nien.html -- shown only under
+  // `@media (pointer: coarse)`, i.e. touch-primary devices). Pointer
+  // events cover touch/mouse/pen with one set of listeners; each button
+  // just adds/removes its own synthetic 'touch-<dir>' key, so holding two
+  // adjacent buttons at once (two fingers) still gives diagonal movement
+  // exactly like holding two real keys would.
+  document.querySelectorAll('#mobile-dpad .dpad-btn').forEach((btn) => {
+    const dirKey = `touch-${btn.dataset.dir}`;
+    function press(e) {
+      e.preventDefault();
+      if (!latestState || latestState.status !== 'playing' || myPlayerIsRooted()) return;
+      pressedKeys.add(dirKey);
+      sendDirIfChanged();
+    }
+    function release(e) {
+      e.preventDefault();
+      pressedKeys.delete(dirKey);
+      sendDirIfChanged();
+    }
+    btn.addEventListener('pointerdown', press);
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointercancel', release);
+    btn.addEventListener('pointerleave', release);
+  });
+
   // --- Click the arena to RELEASE an already-armed firecracker ---------
   canvas.addEventListener('click', (e) => {
     if (!latestState || latestState.status !== 'playing') return;
@@ -929,10 +956,12 @@ if (me) {
 
   socket.on('nien:selfdetonate', (ev) => {
     selfPuffs.push({ ...ev, startTime: Date.now() });
+    playExplosionSound(ev.type);
   });
 
   socket.on('nien:boom', (explosion) => {
     explosions.push({ ...explosion, startTime: Date.now() });
+    playExplosionSound(explosion.type);
   });
 
   socket.on('nien:rooms', (rooms) => {
@@ -968,6 +997,51 @@ if (me) {
   });
   rulesModal.querySelector('.modal-close').addEventListener('click', () => rulesModal.classList.add('hidden'));
   Festival.wireRulesLangToggle(rulesModal);
+
+  // --- Sound: looping background music while a chase is in progress. -----
+  const MUSIC_MUTED_KEY = 'nien_music_muted';
+  const bgmAudio = document.getElementById('bgm-audio');
+  const muteBtn = document.getElementById('mute-btn');
+  bgmAudio.volume = 0.35;
+  let musicMuted = localStorage.getItem(MUSIC_MUTED_KEY) === '1';
+
+  function updateMuteBtn() {
+    muteBtn.textContent = musicMuted ? '🔇' : '🔊';
+  }
+  function syncBgm(status) {
+    if (musicMuted || status !== 'playing') {
+      bgmAudio.pause();
+    } else if (bgmAudio.paused) {
+      bgmAudio.play().catch(() => {}); // blocked until a user gesture — fine, next click retries via render()
+    }
+  }
+  muteBtn.addEventListener('click', () => {
+    musicMuted = !musicMuted;
+    localStorage.setItem(MUSIC_MUTED_KEY, musicMuted ? '1' : '0');
+    updateMuteBtn();
+    syncBgm(latestState ? latestState.status : null);
+  });
+  updateMuteBtn();
+
+  // --- Sound: real recorded clip per firecracker type (small/medium/large), ---
+  // triggered off the same 'nien:boom' event that already drives the visual
+  // blast (see explosions.push(...) below). Filenames have spaces and
+  // Vietnamese diacritics -- percent-encoded so they resolve correctly.
+  // A fresh Audio() per play (rather than one shared/reused element) so
+  // rapid-fire explosions overlap instead of cutting each other off.
+  const EXPLOSION_SOUND_FILES = {
+    small: 'nienmonster/sounds/Ph%C3%A1o%20t%C3%A9p.mp3', // Pháo tép
+    medium: 'nienmonster/sounds/Ph%C3%A1o%20chu%E1%BB%99t.mp3', // Pháo chuột
+    large: 'nienmonster/sounds/Ph%C3%A1o%20c%E1%BB%91i.mp3', // Pháo cối
+  };
+  function playExplosionSound(type) {
+    if (musicMuted) return;
+    const src = EXPLOSION_SOUND_FILES[type];
+    if (!src) return;
+    const audio = new Audio(src);
+    audio.volume = 0.7;
+    audio.play().catch(() => {}); // blocked until a user gesture -- fine, the next explosion retries
+  }
 
   showScreen('lobby');
 }
