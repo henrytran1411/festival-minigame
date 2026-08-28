@@ -67,7 +67,7 @@ window.FESTIVAL_GAMES = [
       en: [
         'Tap two cards to flip them. If they match, they stay revealed. If not, they flip back.',
         'You have 30 minutes to find all 64 matching pairs (128 cards total). A small badge on each card shows how many times you\'ve opened it.',
-        'Each match earns points based on how many times you\'ve opened those two specific cards in total (including this match): 15 points for 4 or fewer combined opens, 10 points for 5-8, 6 points for 9-12, and 4 points for more than 12.',
+        'Each match earns points based on how many times you\'ve opened those two specific cards in total (including this match): 15 points for 2 or fewer combined opens, 12 for 3-4, 10 points for 5-8, 6 points for 9-12, and 4 points for more than 12.',
         'Finishing the whole board also earns a time bonus: 400 points in 180 seconds or less, 360 from 181-300s, 300 from 301-600s, 250 from 601-1200s, and 200 beyond that.',
         'It also earns a moves bonus based on your total moves: 140 points for 200 or fewer, 100 for 201-400, 60 for 401-1000, and 40 beyond that.',
         'Running out of the 30-minute limit before finishing forfeits both the time bonus and the moves bonus — only the points from pairs you\'ve already matched count.',
@@ -76,7 +76,7 @@ window.FESTIVAL_GAMES = [
       vi: [
         'Chạm vào 2 lá bài để lật lên. Nếu trùng nhau, chúng sẽ giữ nguyên trạng thái mở. Nếu không, chúng sẽ úp lại.',
         'Bạn có 30 phút để tìm đủ 64 cặp bài trùng nhau (tổng cộng 128 lá). Một huy hiệu nhỏ trên mỗi lá bài cho biết bạn đã mở nó bao nhiêu lần.',
-        'Mỗi cặp trùng được tính điểm dựa trên tổng số lần bạn đã mở 2 lá bài đó (tính cả lần này): 15 điểm nếu tổng số lần mở là 4 trở xuống, 10 điểm cho 5-8 lần, 6 điểm cho 9-12 lần, và 4 điểm nếu hơn 12 lần.',
+        'Mỗi cặp trùng được tính điểm dựa trên tổng số lần bạn đã mở 2 lá bài đó (tính cả lần này): 15 điểm nếu tổng số lần mở là 2 trở xuống, 12 điểm cho 3-4 lần, 10 điểm cho 5-8 lần, 6 điểm cho 9-12 lần, và 4 điểm nếu hơn 12 lần.',
         'Hoàn thành toàn bộ bàn chơi còn được thưởng điểm thời gian: 400 điểm nếu xong trong 180 giây trở xuống, 360 điểm cho 181-300 giây, 300 điểm cho 301-600 giây, 250 điểm cho 601-1200 giây, và 200 điểm nếu lâu hơn nữa.',
         'Còn được thưởng điểm theo số lượt lật: 140 điểm nếu từ 200 lượt trở xuống, 100 điểm cho 201-400 lượt, 60 điểm cho 401-1000 lượt, và 40 điểm nếu nhiều hơn nữa.',
         'Hết 30 phút mà chưa xong sẽ mất cả điểm thưởng thời gian lẫn điểm thưởng số lượt — chỉ tính điểm từ những cặp đã tìm được.',

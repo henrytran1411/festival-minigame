@@ -21,7 +21,8 @@ if (me) {
   // were opened in total (including the opens that completed the match) —
   // fewer combined opens for a pair means a cleaner, more-remembered match.
   const MATCH_POINT_TIERS = [
-    { maxOpens: 4, points: 15 }, // combined opens < 5
+    { maxOpens: 2, points: 15 }, // combined opens <= 2 -- the true best case (each card opened just once)
+    { maxOpens: 4, points: 12 }, // 3-4
     { maxOpens: 8, points: 10 }, // 5-8
     { maxOpens: 12, points: 6 }, // 9-12
     { maxOpens: Infinity, points: 4 }, // > 12
