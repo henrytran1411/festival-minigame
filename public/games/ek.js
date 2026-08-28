@@ -333,7 +333,7 @@ if (me) {
   });
   updateMuteBtn();
 
-  // Card-type -> recorded clip (sounds/callouts/explodingKitten/<slug>.mp3).
+  // Card-type -> recorded clip (explodingkitten/callouts/<slug>.mp3).
   const CARD_SOUND_FILE = {
     attack: 'attack',
     skip: 'skip',
@@ -352,7 +352,7 @@ if (me) {
     const slug = CARD_SOUND_FILE[type];
     if (!slug) return;
     if (!cardSoundCache[slug]) {
-      const audio = new Audio(`sounds/callouts/explodingKitten/${slug}.mp3`);
+      const audio = new Audio(`explodingkitten/callouts/${slug}.mp3`);
       audio.preload = 'auto';
       cardSoundCache[slug] = audio;
     }

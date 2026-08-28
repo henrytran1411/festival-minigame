@@ -150,12 +150,12 @@ const LOADOUT_BUDGET_OPTIONS = [50, 100, 150, 200]; // presets the room host can
 // load, and stays the stand-in for any distinct move/burn/throw/stun
 // animations per character — planned, but not built yet. Not exclusive:
 // more than one player can pick the same one. Paths are relative to
-// public/games/ (same convention as EK's cards/explodingkitten/ art).
+// public/games/ (same convention as EK's explodingkitten/cards/ art).
 const CHARACTERS = {
-  chiHang: { key: 'chiHang', label: 'Chị Hằng', emoji: '🌕', image: 'characters/nienmonster/chị hằng.png' },
-  chuCuoi: { key: 'chuCuoi', label: 'Chú Cuội', emoji: '🌳', image: 'characters/nienmonster/chú cuội.png' },
-  ongDia: { key: 'ongDia', label: 'Ông Địa', emoji: '👴', image: 'characters/nienmonster/ông địa.png' },
-  thoNgoc: { key: 'thoNgoc', label: 'Thỏ Ngọc', emoji: '🐇', image: 'characters/nienmonster/thỏ ngọc.png' },
+  chiHang: { key: 'chiHang', label: 'Chị Hằng', emoji: '🌕', image: 'nienmonster/characters/chị hằng.png' },
+  chuCuoi: { key: 'chuCuoi', label: 'Chú Cuội', emoji: '🌳', image: 'nienmonster/characters/chú cuội.png' },
+  ongDia: { key: 'ongDia', label: 'Ông Địa', emoji: '👴', image: 'nienmonster/characters/ông địa.png' },
+  thoNgoc: { key: 'thoNgoc', label: 'Thỏ Ngọc', emoji: '🐇', image: 'nienmonster/characters/thỏ ngọc.png' },
 };
 const CHARACTER_KEYS = Object.keys(CHARACTERS);
 const DEFAULT_CHARACTER = CHARACTER_KEYS[0];
@@ -271,11 +271,11 @@ const MAX_GAME_DURATION_MS = 6 * 60 * 1000;
 // both kinds rather than one or the other. `image` is the real portrait
 // drawn on the arena (nien.js); `emoji` is the fallback if that image
 // ever fails to load. Paths are relative to public/games/ (same
-// convention as the character portraits under characters/nienmonster/).
+// convention as the character portraits under nienmonster/characters/).
 const CLASSIC_LOOT_TYPES = [
-  { type: 'denOngSao', label: 'Đèn Ông Sao', emoji: '⭐', image: 'cards/nienmonster/Đèn Ông Sao.png', value: 10, weight: 3 },
-  { type: 'banhTrungThu', label: 'Bánh Trung Thu', emoji: '🥮', image: 'cards/nienmonster/Bánh Trung Thu.png', value: 20, weight: 1 },
-  { type: 'nen', label: 'Nến', emoji: '🕯️', image: 'cards/nienmonster/Nến.png', value: 5, weight: 3 },
+  { type: 'denOngSao', label: 'Đèn Ông Sao', emoji: '⭐', image: 'nienmonster/items/Đèn Ông Sao.png', value: 10, weight: 3 },
+  { type: 'banhTrungThu', label: 'Bánh Trung Thu', emoji: '🥮', image: 'nienmonster/items/Bánh Trung Thu.png', value: 20, weight: 1 },
+  { type: 'nen', label: 'Nến', emoji: '🕯️', image: 'nienmonster/items/Nến.png', value: 5, weight: 3 },
 ];
 
 // Themed to whichever zone the Niên Thú is currently in when it drops
@@ -286,7 +286,7 @@ const ZONE_LOOT_TYPES = {};
 ZONE_KEYS.forEach((zone) => {
   ZONE_LOOT_TYPES[zone] = {
     type: `zone_${zone}`, label: ZONE_LABELS[zone], emoji: ZONE_LABELS[zone],
-    image: `cards/nienmonster/${ZONE_LABELS[zone]}.png`, value: 15, weight: 2,
+    image: `nienmonster/items/${ZONE_LABELS[zone]}.png`, value: 15, weight: 2,
   };
 });
 

@@ -215,7 +215,7 @@ if (me) {
     });
   }
 
-  // Portrait paths (public/games/characters/nienmonster/*.png) have spaces
+  // Portrait paths (public/games/nienmonster/characters/*.png) have spaces
   // and Vietnamese diacritics in them -- encodeURI so they resolve as a
   // single path segment instead of breaking on the raw spaces.
   function characterImageUrl(def) {

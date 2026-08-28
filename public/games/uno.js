@@ -190,14 +190,14 @@ if (me) {
     }
   }
 
-  // Prefer a real recorded clip per card type (sounds/callouts/UNO/<value>.mp3)
+  // Prefer a real recorded clip per card type (UNO/callouts/<value>.mp3)
   // over the synthesized voice above; falls back to speakCallout() if that
   // file hasn't been recorded/added yet, or fails to load/play.
   const calloutAudioCache = {};
   function getCalloutAudio(value) {
     const slug = CALLOUT_AUDIO_FILE[value] || value;
     if (!calloutAudioCache[slug]) {
-      const audio = new Audio(`sounds/callouts/UNO/${slug}.mp3`);
+      const audio = new Audio(`UNO/callouts/${slug}.mp3`);
       audio.preload = 'auto';
       calloutAudioCache[slug] = audio;
     }
