@@ -325,7 +325,7 @@ if (me) {
   // opponent's fully revealed fleet): ship outlines are always visible,
   // shots overlay hit/sunk/miss on top. `foundOnBoard` marks cells where a
   // hidden supply drop was discovered (own board: found by the opponent).
-  function renderRevealedGrid(targetEl, grid, ships, shotsGrid, flashBoardKey, foundOnBoard) {
+  function renderRevealedGrid(targetEl, grid, ships, shotsGrid, flashBoardKey, foundOnBoard, kingPosition) {
     const found = foundCellSet(foundOnBoard);
     buildGrid(targetEl, (r, c) => {
       const el = document.createElement('div');
@@ -344,6 +344,16 @@ if (me) {
       if (found.has(cellKey(r, c))) cls += ' supply-found';
       el.className = `bs-cell ${cls}`;
       if (flashBoardKey && isFlashed(flashBoardKey, r, c)) el.classList.add('just-fired');
+      // Wherever the King ship currently sits (it relocates every time it
+      // dodges death -- see trySwapKingToSafety() server-side) -- badges
+      // that one cell so it reads as "the King", not an anonymous ship.
+      if (kingPosition && kingPosition.r === r && kingPosition.c === c) {
+        const badge = document.createElement('span');
+        badge.className = 'king-badge';
+        badge.title = 'The King';
+        badge.textContent = '👑';
+        el.appendChild(badge);
+      }
       return el;
     });
   }
@@ -666,7 +676,7 @@ if (me) {
     renderWeaponPicker(state);
     const canFire = state.status === 'playing' && state.yourId === state.currentPlayerId;
     renderFogGrid(enemyGridEl, state.opponent.shots, state.opponent.revealedShips, canFire, onEnemyCellClick, state.opponent.foundOnBoard, state.opponent.hintedCells);
-    renderRevealedGrid(ownGridEl, state.you.grid, state.you.ships, state.you.shots, 'own', state.you.foundOnBoard);
+    renderRevealedGrid(ownGridEl, state.you.grid, state.you.ships, state.you.shots, 'own', state.you.foundOnBoard, state.you.kingPosition);
     renderLog(gameLogEl, state.log);
   }
 

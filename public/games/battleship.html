@@ -185,6 +185,22 @@
        a ship), so it only ever combines with .miss in practice -- the
        other combinators are here defensively, cheap to keep correct. */
     .bs-cell.supply-found { border-color: #ffd166; box-shadow: 0 0 4px rgba(255, 209, 102, 0.6); }
+
+    /* Marks wherever the King ship currently sits on your own board -- a
+       plain child element (not ::before/::after, both already spoken for
+       by .hit/.sunk) so it reads as "the King", not an anonymous ship
+       cell. Sits in the corner so it never covers the hit/sunk icon. The
+       King relocates every time it dodges death (see
+       trySwapKingToSafety() server-side), so this can move mid-game. */
+    .king-badge {
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      font-size: 10px;
+      line-height: 1;
+      filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+      pointer-events: none;
+    }
     .bs-cell.miss.supply-found::after,
     .bs-cell.hit.supply-found::after,
     .bs-cell.sunk.supply-found::after { content: '🎁'; font-size: 13px; color: initial; }
@@ -480,7 +496,7 @@
           <li>A shot is either a <b>miss</b> (empty water) or a <b>hit</b> (part of a ship). <b>A hit keeps your turn — fire again!</b> A miss passes the turn to your opponent.</li>
           <li>When every cell of a ship has been hit, that ship is <b>sunk</b> and revealed to both players.</li>
           <li>You only ever see hit/miss markers on the enemy grid, plus the full outline of any of their ships you've sunk — never their still-afloat ship positions.</li>
-          <li><b>👑 The King</b> has no defense of its own — one hit sinks it, same as any 1-cell ship. But its death opens a <b>grave</b> at that exact cell, defensible up to 3 times over — once each by the Cruiser, Submarine, and Destroyer. Each time the grave's current occupant is fully sunk, whichever of those three are <b>still individually undamaged</b> (one already having taken a hit elsewhere doesn't disqualify the other two) become candidates, and one, picked at random, swaps in: it relocates to sit centered on the grave (or as close to centered as the space still allows, if earlier occupants are crowding it), inheriting the sinking hit as its own first hit right there. Everything in a Nuclear-Bomb-shaped area around the grave that isn't sitting under a ship is healed back to unfired water each time this succeeds. The grave is lost for good once no undamaged candidate remains, or nothing fits anywhere — so 3 is a ceiling, not a guarantee, since two size-3 ships defending back to back can leave no room for the Destroyer.</li>
+          <li><b>👑 The King</b> has no defense of its own, but doesn't necessarily go down for good on one hit: the instant it's hit, if you still have an undamaged Cruiser, Submarine, or Destroyer somewhere on the board (<b>fully unhit</b>, judged independently of each other), it trades places with the King instead of dying. That undamaged ship relocates to sit centered on the King's cell (inheriting the hit that just landed there as its own first hit), and the King reappears — alive and unhit — at a random one of that ship's own old cells, marked with a crown so you can always spot it. Everything in a Nuclear-Bomb-shaped area around the King's old cell that isn't sitting under a ship is healed back to unfired water so there's room for the swap. This can happen again and again over the course of a game — the King only sinks for good once no undamaged Cruiser/Submarine/Destroyer is left, or nothing fits anywhere.</li>
           <li><b>🎁 Supply drops:</b> each board secretly hides a few extra cells (always plain water), each already holding one specific special weapon. Hit one and you instantly gain a charge of whatever it holds — capped per weapon type at your room's starting loadout (minimum 1 even if the host set that weapon's loadout to 0); finding a duplicate once you're at the cap is wasted.</li>
           <li><b>🧭 Hints</b> — two ways to learn where a hidden supply drop is before you hit it (you still have to actually fire there to claim it):
             <ul>
@@ -510,7 +526,7 @@
           <li>Một phát bắn là <b>trượt</b> (nước trống) hoặc <b>trúng</b> (phần của một tàu). <b>Trúng thì được bắn tiếp!</b> Trượt thì chuyển lượt cho đối phương.</li>
           <li>Khi mọi ô của một tàu đều đã bị trúng, tàu đó <b>chìm</b> và được lộ diện cho cả hai người chơi thấy.</li>
           <li>Bạn chỉ thấy các dấu trúng/trượt trên lưới của đối phương, cộng với hình dạng đầy đủ của bất kỳ tàu nào của họ mà bạn đã đánh chìm — không bao giờ thấy vị trí các tàu còn nguyên vẹn của họ.</li>
-          <li><b>👑 Vua</b> không có khả năng tự vệ — chỉ 1 phát trúng là chìm, như bất kỳ tàu 1 ô nào khác. Nhưng khi Vua chết, một <b>nấm mồ</b> sẽ mở ra ngay tại ô đó, có thể được bảo vệ tối đa 3 lần — mỗi lần bởi một trong ba tàu Tuần Dương Hạm, Tàu Ngầm, và Khu Trục Hạm. Mỗi khi tàu đang chiếm giữ nấm mồ bị đánh chìm hoàn toàn, những tàu nào trong ba tàu đó <b>vẫn còn nguyên vẹn</b> (một tàu đã bị trúng ở nơi khác không loại 2 tàu còn lại) sẽ trở thành ứng viên, và một tàu, chọn ngẫu nhiên, sẽ hoán đổi vào: nó di chuyển đến vị trí căn giữa nấm mồ (hoặc gần giữa nhất có thể, nếu những tàu chiếm giữ trước đó đang choán chỗ), thừa hưởng phát trúng vừa đánh chìm như phát trúng đầu tiên của chính nó ngay tại đó. Mỗi lần thành công, toàn bộ khu vực hình Bom Hạt Nhân quanh nấm mồ mà không có tàu nào chiếm giữ sẽ được hồi phục về nước chưa bắn. Nấm mồ mất vĩnh viễn khi không còn ứng viên nào nguyên vẹn, hoặc không còn chỗ nào vừa — vậy nên 3 lần chỉ là giới hạn tối đa, không phải điều chắc chắn, vì 2 tàu cỡ 3 ô bảo vệ liên tiếp có thể không còn chỗ cho Khu Trục Hạm.</li>
+          <li><b>👑 Vua</b> không có khả năng tự vệ, nhưng không nhất thiết chìm hẳn chỉ sau 1 phát trúng: ngay khi bị bắn trúng, nếu bạn vẫn còn một tàu Tuần Dương Hạm, Tàu Ngầm, hoặc Khu Trục Hạm nào đó trên bàn cờ <b>chưa bị bắn trúng ô nào</b> (xét độc lập từng tàu), tàu đó sẽ hoán đổi vị trí với Vua thay vì để Vua chìm. Tàu chưa bị trúng đó sẽ di chuyển đến vị trí căn giữa ô của Vua (thừa hưởng phát trúng vừa rồi như phát trúng đầu tiên của chính nó ngay tại đó), còn Vua sẽ xuất hiện trở lại — còn sống, chưa bị trúng — tại một trong các ô cũ của tàu đó, chọn ngẫu nhiên, và được đánh dấu bằng biểu tượng vương miện để bạn luôn biết Vua đang ở đâu. Toàn bộ khu vực hình Bom Hạt Nhân quanh ô cũ của Vua mà không có tàu nào chiếm giữ sẽ được hồi phục về nước chưa bắn, để có chỗ cho cuộc hoán đổi. Điều này có thể lặp lại nhiều lần trong suốt ván đấu — Vua chỉ thực sự chìm khi không còn tàu Tuần Dương Hạm/Tàu Ngầm/Khu Trục Hạm nào nguyên vẹn, hoặc không còn chỗ nào vừa để hoán đổi.</li>
           <li><b>🎁 Tiếp tế:</b> mỗi bàn cờ bí mật giấu vài ô đặc biệt (luôn là nước trống), mỗi ô đã sẵn giữ một loại đạn đặc biệt cụ thể. Bắn trúng một ô như vậy sẽ ngay lập tức cho bạn 1 lượt đạn của loại đó — giới hạn theo từng loại đạn bằng số lượng khởi đầu của phòng (tối thiểu là 1 dù chủ phòng đặt loại đạn đó là 0); tìm thấy thêm khi đã đạt giới hạn sẽ bị lãng phí.</li>
           <li><b>🧭 Gợi ý</b> — hai cách để biết vị trí một ô tiếp tế ẩn trước khi bạn bắn trúng nó (bạn vẫn phải thực sự bắn vào đó để nhận được):
             <ul>

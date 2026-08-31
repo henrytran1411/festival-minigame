@@ -103,6 +103,12 @@
     .shop-row .counter .count { min-width: 20px; text-align: center; font-weight: 700; }
 
     .throw-type-picker { display: flex; gap: 8px; justify-content: center; margin-bottom: 8px; }
+    /* Touch devices use the #mobile-fire-circles buttons instead (see
+       nien.js) -- this desktop click-driven picker would just duplicate
+       (and visually clutter) the same controls. */
+    @media (pointer: coarse) {
+      .throw-type-picker { display: none; }
+    }
     .throw-type-btn {
       background: var(--panel);
       border: 1px solid var(--border);
@@ -165,41 +171,73 @@
     }
     #arena-canvas { max-width: 100%; height: auto; border-radius: 8px; cursor: crosshair; touch-action: none; }
 
-    /* On-screen movement D-pad for touch devices -- there's no keyboard
-       for WASD/arrows on a phone, so this is the only way to move there.
-       Hidden by default (mouse/desktop already has the keyboard); shown
+    /* On-screen touch controls -- there's no keyboard/mouse for
+       WASD+click on a phone, so this is the only way to move and fight
+       there. Hidden by default (mouse/desktop already has both); shown
        only under a coarse pointer (touch-primary), regardless of screen
-       width, so it doesn't show up for a mouse user who just has a small
-       window. Fixed-position so it floats over the page and is always
-       reachable without scrolling, even once the arena is long. */
-    #mobile-dpad {
-      display: none;
-      position: fixed;
-      left: 14px;
-      bottom: 14px;
-      z-index: 40;
-      grid-template-columns: repeat(3, 54px);
-      grid-template-rows: repeat(3, 54px);
-      gap: 4px;
-    }
+       width, so a mouse user with a small window never sees them.
+       Fixed-position so they float over the page and stay reachable
+       without scrolling, even once the arena is long. See nien.js's
+       joystick/fire-circle wiring for the drag-to-move and
+       press-then-drag-to-aim-and-throw gestures. */
+    #mobile-joystick, #mobile-fire-circles { display: none; }
     @media (pointer: coarse) {
-      #mobile-dpad { display: grid; }
+      #mobile-joystick { display: block; }
+      #mobile-fire-circles { display: flex; }
     }
-    #mobile-dpad .dpad-btn {
-      font-size: 20px;
-      border-radius: 10px;
+    #mobile-joystick {
+      position: fixed;
+      left: 24px;
+      bottom: 24px;
+      z-index: 40;
+      width: 108px;
+      height: 108px;
+      border-radius: 50%;
+      background: rgba(38, 43, 54, 0.55);
       border: 1px solid var(--border);
+      touch-action: none;
+    }
+    #joystick-thumb {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: rgba(91, 140, 255, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    #mobile-fire-circles {
+      position: fixed;
+      right: 20px;
+      bottom: 24px;
+      z-index: 40;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .fire-circle {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
       background: rgba(38, 43, 54, 0.85);
       color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
     }
-    #mobile-dpad .dpad-btn:active { background: rgba(91, 140, 255, 0.35); }
-    #mobile-dpad .dpad-up { grid-column: 2; grid-row: 1; }
-    #mobile-dpad .dpad-left { grid-column: 1; grid-row: 2; }
-    #mobile-dpad .dpad-right { grid-column: 3; grid-row: 2; }
-    #mobile-dpad .dpad-down { grid-column: 2; grid-row: 3; }
+    .fire-circle .emoji { font-size: 24px; line-height: 1; }
+    .fire-circle .ammo { font-size: 10px; font-weight: 700; color: var(--muted); }
+    .fire-circle.disabled { opacity: 0.35; }
+    .fire-circle.burning { border-color: #ff6b6b; box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.35); animation: fire-circle-pulse 0.6s ease-in-out infinite; }
+    .fire-circle.armed { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.4); animation: fire-circle-pulse 0.6s ease-in-out infinite; }
+    @keyframes fire-circle-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
 
     .nien-winner { text-align: center; font-size: 20px; font-weight: 800; margin: 10px 0; }
     .nien-score-list { list-style: none; padding: 0; margin: 12px 0; }
@@ -293,17 +331,29 @@
         <canvas id="arena-canvas"></canvas>
       </div>
 
-      <div id="mobile-dpad">
-        <button type="button" class="dpad-btn dpad-up" data-dir="up">▲</button>
-        <button type="button" class="dpad-btn dpad-left" data-dir="left">◀</button>
-        <button type="button" class="dpad-btn dpad-right" data-dir="right">▶</button>
-        <button type="button" class="dpad-btn dpad-down" data-dir="down">▼</button>
+      <div id="mobile-joystick">
+        <div id="joystick-thumb"></div>
+      </div>
+
+      <div id="mobile-fire-circles">
+        <button type="button" class="fire-circle" data-type="small">
+          <span class="emoji">🧨</span>
+          <span class="ammo">0</span>
+        </button>
+        <button type="button" class="fire-circle" data-type="medium">
+          <span class="emoji">🎆</span>
+          <span class="ammo">0</span>
+        </button>
+        <button type="button" class="fire-circle" data-type="large">
+          <span class="emoji">💣</span>
+          <span class="ammo">0</span>
+        </button>
       </div>
 
       <div class="nien-actions">
         <button class="danger" id="leave-btn">Leave Room</button>
       </div>
-      <p style="color:var(--muted); font-size:12px; text-align:center;">Move with WASD, Arrow Keys, or the on-screen D-pad (touch devices). Select a firecracker, tap the arena to light it (rooted while it burns), then tap the arena again to throw it once it's armed — wait too long and it goes off in your hands, stunning you! Scare the Niên Thú to make it drop gifts — walk over them to collect!</p>
+      <p style="color:var(--muted); font-size:12px; text-align:center;">Move with WASD, Arrow Keys, or the on-screen joystick (touch devices). Desktop: select a firecracker, tap the arena to light it (rooted while it burns), then tap the arena again to throw it once it's armed. Touch: press a firecracker circle to light it, then press-and-drag from that same circle to aim and release to throw. Wait too long once armed and it goes off in your hands, stunning you! Scare the Niên Thú to make it drop gifts — walk over them to collect!</p>
 
       <div id="game-log" class="nien-log"></div>
     </div>

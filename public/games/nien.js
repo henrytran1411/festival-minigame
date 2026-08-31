@@ -50,6 +50,9 @@ if (me) {
   const ctx = canvas.getContext('2d');
   const leaveBtn = document.getElementById('leave-btn');
   const gameLogEl = document.getElementById('game-log');
+  const mobileJoystickEl = document.getElementById('mobile-joystick');
+  const joystickThumbEl = document.getElementById('joystick-thumb');
+  const fireCircleEls = document.querySelectorAll('#mobile-fire-circles .fire-circle');
 
   // Arena backdrop -- drawn scaled to cover the canvas each frame once
   // loaded; a flat fill (see drawArena) covers the gap before then so
@@ -91,6 +94,10 @@ if (me) {
   // isn't already square, which is exactly what made the wide "Trung/
   // Thu/Vui/Vẻ" text-logo art unreadable once it replaced the plain
   // canvas-drawn text.
+  function clampNum(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+  }
+
   function drawImageFit(img, cx, cy, maxDim) {
     const ratio = img.naturalWidth / img.naturalHeight;
     const w = ratio >= 1 ? maxDim : maxDim * ratio;
@@ -113,6 +120,23 @@ if (me) {
   let lastSentDir = { x: 0, y: 0 };
   let selectedType = null; // client-side only -- toggled by the type icons, confirmed by clicking the arena
   const pressedKeys = new Set();
+
+  // Touch-primary devices get a whole different control scheme (drag
+  // joystick + fire circles, see below) AND a camera that follows the
+  // player instead of shrinking the whole map to fit -- computed once,
+  // since a device's pointer type doesn't change mid-session.
+  const IS_TOUCH = window.matchMedia('(pointer: coarse)').matches;
+  // Fixed on-screen pixel size of the arena viewport on touch devices --
+  // deliberately smaller than the map itself (which ranges 520-1400px
+  // square depending on player count) so tokens stay a sane tap/visual
+  // size instead of shrinking to a few pixels on an 8-player map. Ignored
+  // entirely on desktop, which still shows the whole map like before.
+  const MOBILE_VIEWPORT_SIZE = 380;
+  // How far (in map px) a full-length fire-circle drag throws -- filled
+  // in from the server's own FIRECRACKER_RANGE once state arrives (see
+  // renderGame); 190 is just a same-ballpark fallback before the first
+  // state tick.
+  let firecrackerRange = 190;
 
   // Zone lighting: a zone lights up the instant a firecracker burns out in
   // it (the lighting/rooted phase finishing, whether or not it's actually
@@ -413,19 +437,39 @@ if (me) {
 
   function drawArena(state) {
     if (!state || state.status !== 'playing') return;
-    if (canvas.width !== state.mapWidth || canvas.height !== state.mapHeight) {
-      canvas.width = state.mapWidth;
-      canvas.height = state.mapHeight;
+    const mapW = state.mapWidth;
+    const mapH = state.mapHeight;
+    // On touch devices the canvas is a fixed-size VIEWPORT, not the whole
+    // map -- everything below this point is drawn in MAP coordinates and
+    // panned into view via ctx.translate(-camX, -camY), so the drawing
+    // code for zones/grid/players/loot/etc. never needs to know which
+    // mode it's in. Desktop keeps viewport === map (camX/camY always 0),
+    // i.e. the exact behavior this had before camera-follow existed.
+    const viewW = IS_TOUCH ? Math.min(MOBILE_VIEWPORT_SIZE, mapW) : mapW;
+    const viewH = IS_TOUCH ? Math.min(MOBILE_VIEWPORT_SIZE, mapH) : mapH;
+    if (canvas.width !== viewW || canvas.height !== viewH) {
+      canvas.width = viewW;
+      canvas.height = viewH;
     }
     const now = Date.now();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Flat fallback fill first (covers the gap before the image loads),
     // then the real backdrop scaled to cover the whole arena on top.
+    // Drawn BEFORE the camera translate below, in untransformed canvas
+    // space, so it always covers exactly the visible viewport regardless
+    // of where the camera currently is.
     ctx.fillStyle = '#25361f';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const myPlayer = state.players.find((p) => p.id === state.yourId);
+    const camX = IS_TOUCH ? clampNum((myPlayer ? myPlayer.x : mapW / 2) - viewW / 2, 0, Math.max(0, mapW - viewW)) : 0;
+    const camY = IS_TOUCH ? clampNum((myPlayer ? myPlayer.y : mapH / 2) - viewH / 2, 0, Math.max(0, mapH - viewH)) : 0;
+    ctx.save();
+    ctx.translate(-camX, -camY);
+
     if (arenaBg.complete && arenaBg.naturalWidth) {
-      ctx.drawImage(arenaBg, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(arenaBg, 0, 0, mapW, mapH);
     }
 
     // A shadow over the backdrop for contrast against the loot/monster/
@@ -438,13 +482,13 @@ if (me) {
       const wasBurning = Boolean(prevPlayerBurning[p.id]);
       const isBurningNow = Boolean(p.connected && p.burning);
       if (wasBurning && !isBurningNow) {
-        zoneLitUntil[zoneAt(p.x, p.y, canvas.width, canvas.height)] = now + ZONE_LIGHT_MS;
+        zoneLitUntil[zoneAt(p.x, p.y, mapW, mapH)] = now + ZONE_LIGHT_MS;
       }
       prevPlayerBurning[p.id] = isBurningNow;
     });
     const litZones = new Set(ZONE_KEYS.filter((zone) => (zoneLitUntil[zone] || 0) > now));
     ZONE_KEYS.forEach((zone) => {
-      const r = zoneRect(zone, canvas.width, canvas.height);
+      const r = zoneRect(zone, mapW, mapH);
       ctx.fillStyle = litZones.has(zone) ? 'rgba(255, 209, 102, 0.10)' : 'rgba(0, 0, 0, 0.45)';
       ctx.fillRect(r.x, r.y, r.w, r.h);
     });
@@ -452,11 +496,11 @@ if (me) {
     ctx.strokeStyle = 'rgba(255,255,255,0.05)';
     ctx.lineWidth = 1;
     const gridStep = 60;
-    for (let x = gridStep; x < canvas.width; x += gridStep) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    for (let x = gridStep; x < mapW; x += gridStep) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, mapH); ctx.stroke();
     }
-    for (let y = gridStep; y < canvas.height; y += gridStep) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    for (let y = gridStep; y < mapH; y += gridStep) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(mapW, y); ctx.stroke();
     }
 
     // A persistent dashed cross dividing the arena into the 4 zones
@@ -469,10 +513,10 @@ if (me) {
     ctx.lineWidth = 2;
     ctx.setLineDash([10, 8]);
     ctx.beginPath();
-    ctx.moveTo(canvas.width / 2, 0);
-    ctx.lineTo(canvas.width / 2, canvas.height);
-    ctx.moveTo(0, canvas.height / 2);
-    ctx.lineTo(canvas.width, canvas.height / 2);
+    ctx.moveTo(mapW / 2, 0);
+    ctx.lineTo(mapW / 2, mapH);
+    ctx.moveTo(0, mapH / 2);
+    ctx.lineTo(mapW, mapH / 2);
     ctx.stroke();
     ctx.restore();
 
@@ -598,27 +642,75 @@ if (me) {
       ctx.textBaseline = 'middle';
       ctx.fillText('💥', ex.x, ex.y);
     });
+
+    // Live aim preview while press-dragging a fire circle (touch only --
+    // see the fire-circle wiring below): a dashed line from the player out
+    // to the computed target, plus a faint circle showing that
+    // firecracker's actual blast radius there, so aiming is WYSIWYG
+    // instead of a blind guess.
+    if (aimDrag && myPlayer) {
+      const target = aimDragTarget(aimDrag, myPlayer);
+      const def = state.firecrackerTypes && state.firecrackerTypes[aimDrag.type];
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 209, 102, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.moveTo(myPlayer.x, myPlayer.y);
+      ctx.lineTo(target.x, target.y);
+      ctx.stroke();
+      if (def) {
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(target.x, target.y, def.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 209, 102, 0.15)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 209, 102, 0.6)';
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    ctx.restore(); // matches the camera ctx.save()/translate() above
   }
 
   function startBurn(type) {
+    // Deliberately NOT resetting selectedType on success -- it stays the
+    // type just thrown, so the picker/circles default back to the SAME
+    // type next turn instead of snapping back to the cheapest one every
+    // single time (see throwPickerSignature's fallback below for what
+    // happens once this type actually runs out).
     socket.emit('nien:startBurn', { type }, (res) => {
-      if (res && res.ok) {
-        selectedType = null; // it's lit now -- the selection has done its job
-      } else if (!res || (res.error !== 'cooldown' && res.error !== 'busy' && res.error !== 'stunned')) {
-        console.warn('Could not start lighting a firecracker:', res && res.error);
+      if ((!res || !res.ok) && (!res || (res.error !== 'cooldown' && res.error !== 'busy' && res.error !== 'stunned'))) {
+        console.warn('Could not start lighting a firecracker:', res?.error);
       }
     });
   }
 
   // The cheapest type (by point cost) that the player still has ammo for
-  // — used to auto-arm a sensible default the moment the picker goes
-  // idle (game start, or right after a throw/self-detonation once the
-  // cooldown clears), so players don't have to reselect every single
-  // time if they're happy spamming the cheap one.
+  // — used only as a last-resort default (game start, or every tier at or
+  // below the last-used one has run out too).
   function cheapestAvailableType(state, inventory) {
     return Object.keys(state.firecrackerTypes)
       .filter((k) => (inventory[k] || 0) > 0)
       .sort((a, b) => state.firecrackerTypes[a].cost - state.firecrackerTypes[b].cost)[0] || null;
+  }
+
+  // Once `fromType` (the last type actually thrown) runs dry, step DOWN
+  // to the next cheaper tier still in stock (e.g. Pháo Cối -> Pháo Chuột
+  // -> Pháo Tép) rather than jumping straight to whatever's globally
+  // cheapest -- keeps the player's general "I'm using the big one" intent
+  // instead of silently downgrading further than necessary. Falls back to
+  // cheapestAvailableType() only if fromType and everything cheaper than
+  // it are ALSO empty (the remaining stock, if any, is pricier than fromType).
+  function nextLowerAvailableType(state, inventory, fromType) {
+    const tiersByCostDesc = Object.keys(state.firecrackerTypes)
+      .sort((a, b) => state.firecrackerTypes[b].cost - state.firecrackerTypes[a].cost);
+    const startIdx = Math.max(0, tiersByCostDesc.indexOf(fromType));
+    for (let i = startIdx; i < tiersByCostDesc.length; i += 1) {
+      if ((inventory[tiersByCostDesc[i]] || 0) > 0) return tiersByCostDesc[i];
+    }
+    return cheapestAvailableType(state, inventory);
   }
 
   function throwPickerSignature(state, myPlayer, now) {
@@ -631,7 +723,11 @@ if (me) {
     if (myPlayer.stunnedUntil && now < myPlayer.stunnedUntil) return `stunned:${Math.ceil(Math.max(0, myPlayer.stunnedUntil - now) / 100)}`;
     if (myPlayer.nextBurnAt && now < myPlayer.nextBurnAt) return `cooldown:${Math.ceil(Math.max(0, myPlayer.nextBurnAt - now) / 100)}`;
     const inv = myPlayer.inventory || {};
-    if (!selectedType || !inv[selectedType]) selectedType = cheapestAvailableType(state, inv);
+    if (!selectedType) {
+      selectedType = cheapestAvailableType(state, inv); // nothing picked/thrown yet this game
+    } else if (!inv[selectedType]) {
+      selectedType = nextLowerAvailableType(state, inv, selectedType); // last-used type just ran out
+    }
     const invSig = Object.keys(state.firecrackerTypes).map((k) => `${k}=${inv[k] || 0}`).join(',');
     return `idle:${selectedType}:${invSig}`;
   }
@@ -691,7 +787,10 @@ if (me) {
       status.className = 'burn-status';
       status.textContent = `⏳ You can light another firecracker in ${remaining}s`;
       throwTypePickerEl.appendChild(status);
-      selectedType = null;
+      // NOT resetting selectedType here -- every successful throw goes
+      // through this same cooldown window, so clearing it here would undo
+      // the "keep using the same type next turn" behavior from
+      // startBurn()/throwPickerSignature() the instant the throw lands.
       return;
     }
 
@@ -726,7 +825,45 @@ if (me) {
     }
   }
 
+  // Touch equivalent of renderThrowTypePicker() above, but updates the 3
+  // STATIC #mobile-fire-circles buttons in place rather than recreating
+  // DOM nodes each tick -- an in-progress press-and-drag (see the
+  // fire-circle pointerdown/move/up wiring) must keep the exact same
+  // element across ticks or the drag breaks mid-gesture.
+  function renderFireCircles(state) {
+    const myPlayer = state.players.find((p) => p.id === state.yourId);
+    if (!myPlayer) return;
+    const now = Date.now();
+    const inventory = myPlayer.inventory || {};
+    const stunned = Boolean(myPlayer.stunnedUntil && now < myPlayer.stunnedUntil);
+    const onCooldown = Boolean(myPlayer.nextBurnAt && now < myPlayer.nextBurnAt);
+    fireCircleEls.forEach((btn) => {
+      const type = btn.dataset.type;
+      const def = state.firecrackerTypes[type];
+      const count = inventory[type] || 0;
+      const isBurningThis = Boolean(myPlayer.burning && myPlayer.burning.type === type);
+      const isArmedThis = Boolean(myPlayer.armed && myPlayer.armed.type === type);
+      const busyWithOther = Boolean((myPlayer.burning && !isBurningThis) || (myPlayer.armed && !isArmedThis));
+      const disabled = !isBurningThis && !isArmedThis && (count <= 0 || stunned || onCooldown || busyWithOther);
+      btn.classList.toggle('disabled', disabled);
+      btn.classList.toggle('burning', isBurningThis);
+      btn.classList.toggle('armed', isArmedThis);
+      const ammoEl = btn.querySelector('.ammo');
+      if (isBurningThis) {
+        const remaining = Math.max(0, (myPlayer.burning.burnEndsAt - now) / 1000).toFixed(1);
+        ammoEl.textContent = `🔥${remaining}s`;
+      } else if (isArmedThis) {
+        const remaining = Math.max(0, (myPlayer.armed.readyUntil - now) / 1000).toFixed(1);
+        ammoEl.textContent = `🎯${remaining}s`;
+      } else {
+        ammoEl.textContent = `x${count}`;
+      }
+      btn.title = `${def.label} — ${def.cost} pts`;
+    });
+  }
+
   function renderGame(state) {
+    if (state.firecrackerRange) firecrackerRange = state.firecrackerRange;
     renderHud(state);
     renderRoundDamage(state);
     // state.monster.fear is now raw HP dropped (NOT a percentage) -- derive
@@ -740,6 +877,7 @@ if (me) {
     lootRemainingEl.textContent = state.lootDropped;
     renderTurnBanner(state);
     renderThrowTypePicker(state);
+    if (IS_TOUCH) renderFireCircles(state);
     renderLog(gameLogEl, state.log);
   }
 
@@ -879,16 +1017,12 @@ if (me) {
   leaveWaitingBtn.addEventListener('click', () => { socket.emit('nien:leave'); backToLobby(); });
   leaveBtn.addEventListener('click', () => { socket.emit('nien:leave'); backToLobby(); });
 
-  // --- Movement input: WASD / Arrow Keys -----------------------------
-  // 'touch-*' entries are synthetic "keys" set by the on-screen D-pad
-  // below (#mobile-dpad) -- they share pressedKeys/currentDir/
-  // sendDirIfChanged with the real keyboard so touch and keyboard input
-  // can even mix (e.g. holding a D-pad direction while also tapping a key).
+  // --- Movement input: WASD / Arrow Keys (desktop) ---------------------
   const MOVE_KEYS = {
-    w: { x: 0, y: -1 }, ArrowUp: { x: 0, y: -1 }, 'touch-up': { x: 0, y: -1 },
-    s: { x: 0, y: 1 }, ArrowDown: { x: 0, y: 1 }, 'touch-down': { x: 0, y: 1 },
-    a: { x: -1, y: 0 }, ArrowLeft: { x: -1, y: 0 }, 'touch-left': { x: -1, y: 0 },
-    d: { x: 1, y: 0 }, ArrowRight: { x: 1, y: 0 }, 'touch-right': { x: 1, y: 0 },
+    w: { x: 0, y: -1 }, ArrowUp: { x: 0, y: -1 },
+    s: { x: 0, y: 1 }, ArrowDown: { x: 0, y: 1 },
+    a: { x: -1, y: 0 }, ArrowLeft: { x: -1, y: 0 },
+    d: { x: 1, y: 0 }, ArrowRight: { x: 1, y: 0 },
   };
   function currentDir() {
     let x = 0;
@@ -927,34 +1061,136 @@ if (me) {
     sendDirIfChanged();
   });
 
-  // --- Movement input: on-screen D-pad, for touch devices with no ------
-  // keyboard (see #mobile-dpad in nien.html -- shown only under
-  // `@media (pointer: coarse)`, i.e. touch-primary devices). Pointer
-  // events cover touch/mouse/pen with one set of listeners; each button
-  // just adds/removes its own synthetic 'touch-<dir>' key, so holding two
-  // adjacent buttons at once (two fingers) still gives diagonal movement
-  // exactly like holding two real keys would.
-  document.querySelectorAll('#mobile-dpad .dpad-btn').forEach((btn) => {
-    const dirKey = `touch-${btn.dataset.dir}`;
-    function press(e) {
+  // --- Movement input: drag joystick, for touch devices with no --------
+  // keyboard (see #mobile-joystick in nien.html -- shown only under
+  // `@media (pointer: coarse)`, i.e. touch-primary devices). A floating
+  // analog stick, not discrete directions: the sent vector's magnitude
+  // scales with how far the thumb is dragged from center (capped at 1),
+  // and setPlayerInput() server-side trusts a sub-1 magnitude as-is
+  // instead of renormalizing it to full speed -- so this is genuinely
+  // variable-speed, unlike the keyboard's always-full-speed unit vectors.
+  const JOYSTICK_RADIUS_PX = 46; // matches #mobile-joystick's own CSS radius
+  let joystickPointerId = null;
+  let lastJoystickDir = { x: 0, y: 0 };
+  function sendJoystickDir(x, y) {
+    if (x === lastJoystickDir.x && y === lastJoystickDir.y) return;
+    lastJoystickDir = { x, y };
+    socket.emit('nien:input', { dx: x, dy: y });
+  }
+  function updateJoystick(e) {
+    const rect = mobileJoystickEl.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    let dx = e.clientX - cx;
+    let dy = e.clientY - cy;
+    const dist = Math.hypot(dx, dy);
+    const clamped = Math.min(dist, JOYSTICK_RADIUS_PX);
+    if (dist > 0) { dx = (dx / dist) * clamped; dy = (dy / dist) * clamped; }
+    joystickThumbEl.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    if (!latestState || latestState.status !== 'playing' || myPlayerIsRooted()) { sendJoystickDir(0, 0); return; }
+    sendJoystickDir(dx / JOYSTICK_RADIUS_PX, dy / JOYSTICK_RADIUS_PX);
+  }
+  function resetJoystick() {
+    joystickThumbEl.style.transform = 'translate(-50%, -50%)';
+    sendJoystickDir(0, 0);
+  }
+  mobileJoystickEl.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    joystickPointerId = e.pointerId;
+    mobileJoystickEl.setPointerCapture(e.pointerId);
+    updateJoystick(e);
+  });
+  mobileJoystickEl.addEventListener('pointermove', (e) => {
+    if (joystickPointerId !== e.pointerId) return;
+    e.preventDefault();
+    updateJoystick(e);
+  });
+  function endJoystickDrag(e) {
+    if (joystickPointerId !== e.pointerId) return;
+    joystickPointerId = null;
+    resetJoystick();
+  }
+  mobileJoystickEl.addEventListener('pointerup', endJoystickDrag);
+  mobileJoystickEl.addEventListener('pointercancel', endJoystickDrag);
+
+  // --- Firing input, touch devices: press-and-HOLD a fire circle to -----
+  // light it, then (without necessarily lifting your finger) drag to aim
+  // and release to throw once it's armed (see #mobile-fire-circles in
+  // nien.html). Tracking starts on the VERY FIRST pointerdown -- even
+  // while still idle/burning, before there's anything to aim yet -- so a
+  // single continuous press-hold-drag-release gesture works naturally;
+  // only actually acting on the drag is deferred until release. A second,
+  // separate press-drag-release after letting go mid-burn also still
+  // works (aimDrag just restarts from that fresh touch). `aimDrag` (read
+  // by drawArena's aim-preview and by renderFireCircles' visual state) is
+  // non-null only while a finger is down on this circle.
+  let aimDrag = null; // { type, pointerId, anchorX, anchorY, dx, dy } -- dx/dy are raw SCREEN pixels from the initial touch point
+  const AIM_DRAG_RADIUS_PX = 90; // drag this many screen px for a full-range throw
+  // Screen-space drag direction maps 1:1 onto map-space throw direction --
+  // camera-follow only PANS (never rotates/flips), so "drag right" always
+  // means "throw right" regardless of where the camera currently sits.
+  function aimDragTarget(drag, myPlayer) {
+    const dist = Math.hypot(drag.dx, drag.dy);
+    const dirX = dist > 0 ? drag.dx / dist : 0;
+    const dirY = dist > 0 ? drag.dy / dist : 0;
+    const frac = Math.min(1, dist / AIM_DRAG_RADIUS_PX);
+    return { x: myPlayer.x + dirX * firecrackerRange * frac, y: myPlayer.y + dirY * firecrackerRange * frac };
+  }
+  fireCircleEls.forEach((btn) => {
+    const type = btn.dataset.type;
+    btn.addEventListener('pointerdown', (e) => {
+      if (!latestState || latestState.status !== 'playing') return;
+      const mp = latestState.players.find((p) => p.id === latestState.yourId);
+      if (!mp) return;
       e.preventDefault();
-      if (!latestState || latestState.status !== 'playing' || myPlayerIsRooted()) return;
-      pressedKeys.add(dirKey);
-      sendDirIfChanged();
-    }
-    function release(e) {
+      const alreadyArmedThis = Boolean(mp.armed && mp.armed.type === type);
+      if (!alreadyArmedThis) {
+        if (mp.burning || mp.armed) return; // busy with a different type
+        if (mp.stunnedUntil && Date.now() < mp.stunnedUntil) return;
+        if (mp.nextBurnAt && Date.now() < mp.nextBurnAt) return;
+        if (!(mp.inventory && mp.inventory[type])) return; // out of ammo
+        startBurn(type);
+      }
+      // Start tracking THIS touch as a potential aim drag regardless of
+      // whether it's armed yet -- see the comment above.
+      aimDrag = { type, pointerId: e.pointerId, anchorX: e.clientX, anchorY: e.clientY, dx: 0, dy: 0 };
+      btn.setPointerCapture(e.pointerId);
+    });
+    btn.addEventListener('pointermove', (e) => {
+      if (!aimDrag || aimDrag.pointerId !== e.pointerId || aimDrag.type !== type) return;
       e.preventDefault();
-      pressedKeys.delete(dirKey);
-      sendDirIfChanged();
+      // Absolute offset from the finger's FIRST touch point (not the
+      // circle's center) -- a "floating" drag origin, more forgiving than
+      // requiring the drag to start from an exact fixed point.
+      aimDrag.dx = e.clientX - aimDrag.anchorX;
+      aimDrag.dy = e.clientY - aimDrag.anchorY;
+    });
+    function endAim(e) {
+      if (!aimDrag || aimDrag.pointerId !== e.pointerId || aimDrag.type !== type) return;
+      const mp = latestState && latestState.players.find((p) => p.id === latestState.yourId);
+      const drag = aimDrag;
+      aimDrag = null;
+      // Not armed yet (still burning -- released too early) or already
+      // self-detonated: nothing to throw. The burn itself can't be
+      // cancelled either way -- it just keeps cooking server-side, and a
+      // fresh press once it shows armed will start a new aim drag.
+      if (!mp || !mp.armed || mp.armed.type !== drag.type) return;
+      const target = aimDragTarget(drag, mp);
+      socket.emit('nien:release', { x: target.x, y: target.y }, (res) => {
+        if (!res || !res.ok) {
+          if (res && res.error === 'not-armed') return;
+          console.warn('Could not release firecracker:', res && res.error);
+        }
+      });
     }
-    btn.addEventListener('pointerdown', press);
-    btn.addEventListener('pointerup', release);
-    btn.addEventListener('pointercancel', release);
-    btn.addEventListener('pointerleave', release);
+    btn.addEventListener('pointerup', endAim);
+    btn.addEventListener('pointercancel', endAim);
   });
 
   // --- Click the arena to RELEASE an already-armed firecracker ---------
+  // (desktop only -- touch devices use the fire-circle drag above.)
   canvas.addEventListener('click', (e) => {
+    if (IS_TOUCH) return;
     if (!latestState || latestState.status !== 'playing') return;
     const mp = latestState.players.find((p) => p.id === latestState.yourId);
     if (!mp) return;

@@ -12,26 +12,25 @@
 // opponent's unsunk ship positions — only shot results (hit/miss) and,
 // once a ship is fully sunk, that one ship's cells.
 //
-// The King (1 cell) sinks the instant it's hit, same as any ship -- it
-// has no defense of its own. But its death opens a "grave" at that exact
-// cell, defensible in up to 3 successive stages -- one each by Cruiser,
-// Submarine, and Destroyer. Each time the grave's current occupant (the
-// King itself, the first time) is fully sunk, whichever of those three
-// are STILL fully undamaged right now (judged independently -- one
-// already having taken a hit elsewhere doesn't disqualify the other two,
-// and whichever ship just vacated the grave is automatically excluded,
-// since sinking made it fully hit) become candidates; one, picked at
-// random, swaps into a straight-line placement CENTERED on the grave cell
-// (e.g. a 3-cell ship becomes [grave-1, grave, grave+1] along whichever
-// axis has room), inheriting the hit that just vacated the grave as its
-// own first hit right there -- "explode replace for the King". Everything
-// in a Nuclear-Bomb-shaped area around the grave that isn't sitting under
-// a ship is healed back to unfired water each time this succeeds. The
-// grave is lost for good once no candidate remains undamaged, or no
-// centered placement fits anywhere (every direction blocked by another
-// ship, the board edge, or an already-fired cell) -- so it can never
-// defend more than 3 times, since each of the three can only ever fill it
-// once (a ship that's already taken a hit is never a candidate again).
+// The King (1 cell) has no defense of its own, but it doesn't go down for
+// good on a single hit either: the instant it's hit, if the King's OWNER
+// still has an undamaged Cruiser, Submarine, or Destroyer (fully unhit,
+// judged independently of each other) somewhere on the board, that ship
+// and the King trade places -- see trySwapKingToSafety() /
+// relocatePartnerToKingsSpot(). The undamaged partner relocates onto a
+// straight-line placement CENTERED on the King's old cell (e.g. a 3-cell
+// ship becomes [king-1, king, king+1] along whichever axis has room),
+// inheriting the hit that just landed there as its own first hit -- and
+// the King itself reappears, alive and unhit, at a random one of the
+// partner's own just-vacated cells (the other one or two go back to plain
+// empty water). Everything in a Nuclear-Bomb-shaped area around the
+// King's old cell that isn't sitting under a ship is healed back to
+// unfired water so the partner has room to land. This can repeat any
+// number of times over the course of a game -- every single time the King
+// is hit, it checks again for a still-undamaged partner. The King only
+// sinks for real once no partner is undamaged, or nothing fits anywhere
+// (every direction blocked by another ship, the board edge, or an
+// already-fired cell).
 //
 // Special ammunition (inspired by papergames.io's Battleship, with this
 // project's own chosen shapes/rates -- see battleship.html's rules
@@ -110,7 +109,7 @@ const FLEET_SPEC = [
   { name: 'King', size: 1 },
 ];
 const TOTAL_SHIP_CELLS = FLEET_SPEC.reduce((sum, s) => sum + s.size, 0);
-// Ships the King's grave can be defended by -- see handleGraveVacancy().
+// Ships the King can trade places with to dodge death -- see trySwapKingToSafety().
 const KING_PROTECTS = ['Cruiser', 'Submarine', 'Destroyer'];
 
 // -- Special ammunition -----------------------------------------------
@@ -357,8 +356,8 @@ function allLineIndices(n) {
 // cell" lines (2 candidates); for n=2 it's the 4 ways a 2-cell ship can
 // touch the king's cell while staying as centered as a 2-cell ship can
 // be. Pass allLineIndices(n) to widen the search to every off-center
-// placement too -- used as a fallback in relocateShipToKingsGrave() when
-// earlier grave-chain wreckage crowds out every centered option.
+// placement too -- used as a fallback in relocatePartnerToKingsSpot() when
+// something else already crowds out every centered option.
 function kingReplacementCandidates(kingR, kingC, n, kOffsets = centerIndices(n)) {
   const candidates = [];
   ['h', 'v'].forEach((axis) => {
@@ -392,23 +391,20 @@ function isValidKingReplacement(defender, cells, kingR, kingC, size) {
   });
 }
 
-// The King's sacrifice: relocates `defender`'s ship at `shipIndex` onto a
-// straight-line placement centered on the King's own death cell
-// (kingR, kingC) -- e.g. a 3-cell ship becomes [king-1, king, king+1]
-// along whichever axis has room. The king's death cell is deliberately
-// part of the new footprint: the hit that just killed the King stays
-// recorded in shotsAtMe there, so it's inherited as the replacement's
-// first hit the instant it takes the King's place. Prefers a CENTERED
-// placement, but falls back to any off-center placement that still
-// includes the anchor cell if no centered one fits -- this matters for
-// grave-chain stages 2 and 3, where earlier occupants' wreckage (still
-// sitting in the grid, since a sunk ship's revealed cells must never be
-// disturbed) can crowd out the centered option even though room still
-// exists slightly off-center. Returns true on success (ship relocated);
-// false if NOTHING fits anywhere (blocked on every side by another ship,
-// the edge of the board, or an already-fired cell) -- the grave "can't
-// teleport" and stays vacant.
-function relocateShipToKingsGrave(defender, shipIndex, kingR, kingC, size) {
+// Relocates `defender`'s undamaged partner ship at `shipIndex` onto a
+// straight-line placement centered on the King's cell (kingR, kingC) --
+// e.g. a 3-cell ship becomes [king-1, king, king+1] along whichever axis
+// has room. The King's cell is deliberately part of the new footprint:
+// the hit that just landed there stays recorded in shotsAtMe, so it's
+// inherited as the partner's first hit the instant it takes over. Prefers
+// a CENTERED placement, but falls back to any off-center placement that
+// still includes the anchor cell if no centered one fits (something else
+// -- other ships, earlier shots -- crowding out the centered option).
+// Returns true on success (ship relocated); false if NOTHING fits
+// anywhere (blocked on every side by another ship, the edge of the
+// board, or an already-fired cell) -- the King has nowhere to swap to and
+// sinks for real.
+function relocatePartnerToKingsSpot(defender, shipIndex, kingR, kingC, size) {
   const ship = defender.ships[shipIndex];
   ship.cells.forEach(({ r, c }) => { defender.grid[r][c] = null; });
   let candidates = kingReplacementCandidates(kingR, kingC, ship.size)
@@ -599,7 +595,6 @@ class BattleshipRoom {
       p.foundOnBoard = []; // supply drops found ON this player's board (by their opponent)
       p.hintedCells = []; // cells hinted to this player's OPPONENT, on this player's board
       p.missStreak = 0; // this player's own consecutive-miss count (resets on any hit)
-      p.kingGrave = null; // { r, c, occupantIndex } once the King dies -- see handleGraveVacancy()
       p.timeBankMsRemaining = (this.timeBankSeconds && !p.isBot) ? this.timeBankSeconds * 1000 : null;
     });
     this.pushLog(`🚢 Place your fleet! (${this.gridSize}x${this.gridSize} — ${MAP_THEMES[this.mapTheme]})`);
@@ -654,11 +649,7 @@ class BattleshipRoom {
         opponent.hintedCells.push(hint);
         this.pushLog(`🧭 Sinking the ${res.ship.name} revealed a ${WEAPON_LABELS[hint.weapon]} supply drop on ${opponent.name}'s board!`);
       }
-      if (res.ship.name === 'King') {
-        this.handleGraveVacancy(opponent, tr, tc); // the King itself just died -- open the grave for the first time
-      } else if (opponent.kingGrave && res.shipIndex === opponent.kingGrave.occupantIndex) {
-        this.handleGraveVacancy(opponent, opponent.kingGrave.r, opponent.kingGrave.c); // the current occupant just fully sank -- try to refill
-      }
+      if (res.ship.name === 'King') this.trySwapKingToSafety(opponent, res.shipIndex, tr, tc);
     }
     return {
       r: tr, c: tc, result: res.result,
@@ -667,51 +658,50 @@ class BattleshipRoom {
     };
   }
 
-  // The King's grave: a fixed anchor cell (wherever the King itself died)
-  // that can be defended in up to 3 successive stages -- one each by
-  // Cruiser, Submarine, and Destroyer. Whichever of those three are STILL
-  // fully undamaged right now (independently judged -- one already being
-  // hit elsewhere doesn't disqualify the other two, and whichever ship
-  // just vacated the grave is automatically excluded, since sinking made
-  // it fully hit) are candidates; one, picked at random, swaps into a
-  // straight-line placement CENTERED on the anchor cell (see
-  // relocateShipToKingsGrave()), inheriting the hit that just vacated the
-  // grave as its own first hit there. On success, everything in a
-  // Nuclear-Bomb-shaped area around the anchor that isn't sitting under a
-  // ship is healed back to unfired water. The grave is lost for good --
-  // `defender.kingGrave` cleared -- once no candidate remains undamaged,
-  // or nothing fits geometrically.
-  handleGraveVacancy(defender, anchorR, anchorC) {
-    const wasAlreadyActive = Boolean(defender.kingGrave);
+  // Called the instant the King is hit (and thus, per resolveShot, sunk --
+  // a 1-cell ship dies on its first hit). If `defender` still has an
+  // undamaged Cruiser, Submarine, or Destroyer somewhere (independently
+  // judged -- one already hit elsewhere doesn't disqualify the other
+  // two), one is picked at random to trade places with the King: it
+  // relocates onto a straight-line placement CENTERED on the King's cell
+  // (see relocatePartnerToKingsSpot()), inheriting the hit that just
+  // landed there as its own first hit -- and the King reappears, alive
+  // and marked unsunk again, at a random one of the partner's own
+  // just-vacated cells (the rest of that footprint goes back to plain
+  // empty water). Everything in a Nuclear-Bomb-shaped area around the
+  // King's old cell that isn't sitting under a ship is healed back to
+  // unfired water so the partner has room to land. If no partner is
+  // undamaged, or nothing fits anywhere, the King simply stays sunk.
+  trySwapKingToSafety(defender, kingIndex, kingR, kingC) {
     const candidates = defender.ships
       .map((s, i) => i)
       .filter((i) => KING_PROTECTS.includes(defender.ships[i].name)
         && defender.ships[i].cells.every(({ r, c }) => defender.shotsAtMe[r][c] !== 'hit'));
     if (!candidates.length) {
-      defender.kingGrave = null;
-      if (wasAlreadyActive) this.pushLog(`👑 ${defender.name}'s King's grave has no one left to defend it — lost for good.`);
+      this.pushLog(`👑 ${defender.name}'s King had no undamaged ship left to swap with — sunk for good.`);
       return;
     }
     const pick = candidates[Math.floor(Math.random() * candidates.length)];
-    const relocated = relocateShipToKingsGrave(defender, pick, anchorR, anchorC, this.gridSize);
+    const partner = defender.ships[pick];
+    const vacatedCells = partner.cells; // captured BEFORE relocatePartnerToKingsSpot reassigns it
+    const relocated = relocatePartnerToKingsSpot(defender, pick, kingR, kingC, this.gridSize);
     if (!relocated) {
-      defender.kingGrave = null;
-      this.pushLog(wasAlreadyActive
-        ? `👑 ${defender.name}'s King's grave had nowhere to send another replacement — lost for good.`
-        : `👑 ${defender.name}'s King had nowhere to send a replacement — it fell for nothing.`);
+      this.pushLog(`👑 ${defender.name}'s King had nowhere to swap to — sunk for good.`);
       return;
     }
-    defender.kingGrave = { r: anchorR, c: anchorC, occupantIndex: pick };
     NUCLEAR_DELTAS.forEach(([dr, dc]) => {
-      const nr = anchorR + dr;
-      const nc = anchorC + dc;
+      const nr = kingR + dr;
+      const nc = kingC + dc;
       if (!inBounds(nr, nc, this.gridSize)) return;
       if (defender.grid[nr][nc] !== null) return; // a ship's here -- leave its shot record alone
       defender.shotsAtMe[nr][nc] = null; // heal -- back to pristine, unfired water
     });
-    this.pushLog(wasAlreadyActive
-      ? `👑 ${defender.name}'s King's grave holds again — another ship slipped into place!`
-      : `👑 ${defender.name}'s King sacrificed itself — a ship slipped into its place and the waters nearby were swept clean!`);
+    const newKingCell = vacatedCells[Math.floor(Math.random() * vacatedCells.length)];
+    const king = defender.ships[kingIndex];
+    king.cells = [newKingCell];
+    king.sunk = false;
+    defender.grid[newKingCell.r][newKingCell.c] = kingIndex;
+    this.pushLog(`👑 ${defender.name}'s King swapped places with the ${partner.name} to escape certain death!`);
   }
 
   // Tracks `player`'s own consecutive-miss streak (across their own fire()
@@ -919,7 +909,7 @@ class BattleshipRoom {
     this.players.push({
       id: `bot_${this.id}_${this.botCounter}`, name: botName, connected: true, socketId: null, isBot: true,
       ships: null, grid: null, shotsAtMe: freshGrid(this.gridSize), ready: false,
-      supplyGrid: null, ammo: freshAmmo(), foundOnBoard: [], hintedCells: [], missStreak: 0, kingGrave: null, timeBankMsRemaining: null,
+      supplyGrid: null, ammo: freshAmmo(), foundOnBoard: [], hintedCells: [], missStreak: 0, timeBankMsRemaining: null,
     });
     this.pushLog(`${botName} joined the table.`);
   }
@@ -980,6 +970,14 @@ class BattleshipRoom {
         ships: me.ships.map((s) => ({ name: s.name, size: s.size, sunk: s.sunk })),
         ammo: me.ammo,
         foundOnBoard: me.foundOnBoard, // supply drops the OPPONENT has found on MY board -- public once discovered
+        // Wherever the King ship currently sits, as long as it's still alive
+        // (it moves every time it dodges death -- see trySwapKingToSafety())
+        // -- lets the client badge that one cell so the King's current spot
+        // reads as "the King", not just an anonymous plain ship cell.
+        kingPosition: (() => {
+          const king = me.ships.find((s) => s.name === 'King');
+          return king && !king.sunk ? { r: king.cells[0].r, c: king.cells[0].c } : null;
+        })(),
       } : null,
       opponent: opponent && opponent.ships ? {
         shots: opponent.shotsAtMe, // the shots recorded on the opponent's board ARE my shots against them, 1v1
@@ -1041,7 +1039,7 @@ function attachBattleship(io) {
       room.players.push({
         id: playerId, name: clean, connected: true, socketId: socket.id, isBot: false,
         ships: null, grid: null, shotsAtMe: freshGrid(room.gridSize), ready: false,
-        supplyGrid: null, ammo: freshAmmo(), foundOnBoard: [], hintedCells: [], missStreak: 0, kingGrave: null, timeBankMsRemaining: null,
+        supplyGrid: null, ammo: freshAmmo(), foundOnBoard: [], hintedCells: [], missStreak: 0, timeBankMsRemaining: null,
       });
       room.pushLog(`${clean} created the room.`);
       rooms.set(room.id, room);
@@ -1071,7 +1069,7 @@ function attachBattleship(io) {
         room.players.push({
           id: playerId, name: clean, connected: true, socketId: socket.id, isBot: false,
           ships: null, grid: null, shotsAtMe: freshGrid(room.gridSize), ready: false,
-          supplyGrid: null, ammo: freshAmmo(), foundOnBoard: [], hintedCells: [], missStreak: 0, kingGrave: null, timeBankMsRemaining: null,
+          supplyGrid: null, ammo: freshAmmo(), foundOnBoard: [], hintedCells: [], missStreak: 0, timeBankMsRemaining: null,
         });
         room.pushLog(`${clean} joined the room.`);
       }
@@ -1186,7 +1184,7 @@ module.exports.STARTING_AMMO_MAX = STARTING_AMMO_MAX;
 module.exports.SHIP_SIZE_TO_HINT_WEAPON = SHIP_SIZE_TO_HINT_WEAPON;
 module.exports.MISS_STREAK_HINT_THRESHOLD = MISS_STREAK_HINT_THRESHOLD;
 module.exports.pickHintCell = pickHintCell;
-module.exports.relocateShipToKingsGrave = relocateShipToKingsGrave;
+module.exports.relocatePartnerToKingsSpot = relocatePartnerToKingsSpot;
 module.exports.kingReplacementCandidates = kingReplacementCandidates;
 module.exports.centerIndices = centerIndices;
 module.exports.allLineIndices = allLineIndices;

@@ -1178,6 +1178,7 @@ class NienRoom {
       mapHeight: this.mapHeight,
       loadoutBudget: this.loadoutBudget,
       firecrackerTypes: FIRECRACKER_TYPES,
+      firecrackerRange: FIRECRACKER_RANGE, // max throw distance -- see releaseFirecracker()
       characters: CHARACTERS,
       players: this.players.map((p) => ({
         id: p.id,
