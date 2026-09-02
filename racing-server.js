@@ -127,10 +127,10 @@ const CHECKPOINT_EDGE_MARGIN = 4 * WORLD_SCALE;
 // for whichever band it's currently in.
 const MAX_SPEED_KMH = 400;
 const SPEED_BANDS = [
-  { upTo: 60, kmhPer200ms: 2 },
+  { upTo: 60, kmhPer200ms: 4 },
   { upTo: 150, kmhPer200ms: 3 },
   { upTo: 250, kmhPer200ms: 5 },
-  { upTo: 400, kmhPer200ms: 8 }, // continues the 2,3,5,8 progression -- no rate was specified for this new top band, so it keeps the same "each band climbs faster" shape as the rest
+  { upTo: 400, kmhPer200ms: 8 }, // continues the original 2,3,5,8 progression -- no rate was specified for this top band, so it keeps the same "each band climbs faster" shape as the rest
 ];
 function speedRateKmhPerSec(speedKmh) {
   const band = SPEED_BANDS.find((b) => speedKmh <= b.upTo) || SPEED_BANDS[SPEED_BANDS.length - 1];
@@ -242,10 +242,17 @@ const ITEM_DEFS = {
 };
 const ITEM_LABELS = Object.fromEntries(ITEM_TYPES.map((t) => [t, `${ITEM_DEFS[t].emoji} ${ITEM_DEFS[t].label}`]));
 
-// ⛽ Max Gas: instantly sets speed to MAX_SPEED_KMH and holds it there for
-// this long regardless of whether the gas control is held — a convenience
-// "floor it" rather than a speed boost beyond the normal max.
+// ⛽ Max Gas: instantly jumps speed to MAX_GAS_ITEM_PEAK_KMH — ABOVE the
+// normal MAX_SPEED_KMH ceiling, a real speed boost rather than just
+// "floor it" — then decays back down at a flat rate (regardless of
+// whether the gas control is held) for MAX_GAS_ITEM_DURATION_MS, landing
+// EXACTLY on MAX_SPEED_KMH the moment it expires: the peak/duration/decay
+// rate are chosen so peak - decayRate*duration = MAX_SPEED_KMH exactly
+// (500 - 10*10 = 400), so control smoothly hands back to the normal gas
+// bands at precisely the speed they'd expect, no sudden drop.
 const MAX_GAS_ITEM_DURATION_MS = 10000;
+const MAX_GAS_ITEM_PEAK_KMH = 500;
+const MAX_GAS_DECAY_KMH_PER_SEC = 10;
 // 💫 Stun: picks a random racer from the CURRENT top STUN_TOP_N in the room
 // (ranking — see rankedPlayers()) and freezes them (no movement at all,
 // see tick()'s early-out) for this long — unless a 🛡️ shield blocks it.
@@ -383,7 +390,8 @@ const TRACKS = {
     descendCycles: 2,
     bgFrom: '#16321f',
     bgTo: '#0d2b3d',
-    decorationEmojis: ['🌴', '🌲', '🪨'],
+    decorationEmojis: ['🌴', '🌲', '🪨', '🌊', '⛵'],
+    farDecorationEmojis: ['🏔️', '☁️'],
     landmarkSpecs: [
       { label: 'Đà Nẵng', icon: '🏙️', atIndex: 0, offsetY: 60 },
       { label: 'Hải Vân Quan', icon: '⛩️', atIndex: 11, offsetY: -50 }, // summit (ascendRows+1)
@@ -404,7 +412,8 @@ const TRACKS = {
     gapWidth: 120,
     bgFrom: '#2f3a1f',
     bgTo: '#4a3b1f',
-    decorationEmojis: ['🪨', '🌲'],
+    decorationEmojis: ['🪨', '🌲', '🐴', '🌸'],
+    farDecorationEmojis: ['⛰️', '🌤️'],
     landmarkSpecs: [
       { label: 'Trà Lĩnh', icon: '🏘️', atIndex: 0, offsetY: 50 },
       { label: 'Cổng Trời Mã Phục', icon: '⛰️', atIndex: 6, offsetY: -40 }, // summit
@@ -427,7 +436,8 @@ const TRACKS = {
     descendPattern: 'fan',
     bgFrom: '#1f3a24',
     bgTo: '#4a545c',
-    decorationEmojis: ['🌾', '☁️', '🌲'],
+    decorationEmojis: ['🌾', '☁️', '🌲', '🌱', '🐃'],
+    farDecorationEmojis: ['🏔️', '🌤️'],
     landmarkSpecs: [
       { label: 'Tú Lệ', icon: '🌾', atIndex: 0, offsetY: 60 },
       { label: 'Khau Phạ - Biển Mây', icon: '☁️', atIndex: 12, offsetY: -50 }, // summit
@@ -453,7 +463,8 @@ const TRACKS = {
     gapWidth: 160,
     bgFrom: '#2a2410',
     bgTo: '#4a3a12',
-    decorationEmojis: ['🌲', '🪨'],
+    decorationEmojis: ['🌲', '🪨', '🍃', '🦋'],
+    farDecorationEmojis: ['⛰️', '🌥️'],
     landmarkSpecs: [
       { label: 'Tuần Giáo', icon: '🏘️', atIndex: 0, offsetY: 60 },
       { label: 'Đỉnh Pha Đin (1.648m)', icon: '🚩', atIndex: 8, offsetY: -50 }, // summit
@@ -481,7 +492,8 @@ const TRACKS = {
     gapWidth: 110,
     bgFrom: '#3a1f1f',
     bgTo: '#1f2a3a',
-    decorationEmojis: ['🪨', '🏞️'],
+    decorationEmojis: ['🪨', '🏞️', '🦅', '🍂'],
+    farDecorationEmojis: ['⛰️', '🌫️'],
     landmarkSpecs: [
       { label: 'Mèo Vạc', icon: '🏘️', atIndex: 0, offsetY: 60 },
       { label: 'Hẻm Nho Quế', icon: '🏞️', atIndex: 7, offsetX: -45 }, // mid-climb canyon viewpoint
@@ -502,7 +514,8 @@ const TRACKS = {
     descendPattern: 'zigzag',
     bgFrom: '#1f2a3a',
     bgTo: '#5a6b7a', // foggy blue-grey
-    decorationEmojis: ['☁️', '🌲', '🪨'],
+    decorationEmojis: ['☁️', '🌲', '🪨', '❄️'],
+    farDecorationEmojis: ['🏔️', '🌫️'],
     landmarkSpecs: [
       { label: 'Sa Pa', icon: '🏔️', atIndex: 0, offsetY: 60 },
       { label: 'Cổng Trời (2.000m)', icon: '🌫️', atIndex: 14, offsetY: -50 }, // summit
@@ -511,27 +524,62 @@ const TRACKS = {
   },
 };
 
-// Scatters purely-decorative scenery (no gameplay effect) alternating sides
-// of the road at every other segment, offset clear of the road-edge
-// barrier (trackWidth/2 + a margin). A switchback track's segments loop
-// back close to each other (that's the whole point of a hairpin), so an
-// offset computed from just ONE segment's local normal can still land
-// close to a totally different nearby segment — checked and nudged away
-// from the closest point on the WHOLE loop, not just its own segment, and
-// dropped entirely (rather than clamped into the road) if it still can't
-// find a clear spot within the map. Cycles through the track's own themed
-// emoji list. Needs closestPointOnLoop(), defined further down — fine
-// since this only ever runs from the TRACKS post-processing loop below,
-// well after module load finishes.
+// Scatters purely-decorative scenery (no gameplay effect), offset clear of
+// the road-edge barrier (trackWidth/2 + a margin). A switchback track's
+// segments loop back close to each other (that's the whole point of a
+// hairpin), so an offset computed from just ONE segment's local normal can
+// still land close to a totally different nearby segment — checked and
+// nudged away from the closest point on the WHOLE loop, not just its own
+// segment, and dropped entirely (rather than clamped into the road) if it
+// still can't find a clear spot within the map. Needs closestPointOnLoop(),
+// defined further down — fine since this only ever runs from the TRACKS
+// post-processing loop below, well after module load finishes.
+//
+// Two layers: a NEAR one (track's own `decorationEmojis`) at every segment,
+// close enough to the road to read as roadside scenery, and a sparser FAR
+// one (`farDecorationEmojis`, falling back to the near list if a track
+// doesn't define its own) placed noticeably further out — every 3rd
+// segment, on the opposite side from that same segment's near piece so
+// both sides of the road get some over the length of the track. The
+// client uses the `layer` tag to render far-layer pieces a bit hazier,
+// for a sense of depth rather than everything sitting at one flat distance.
 function scatterDecorations(track) {
-  const emojis = track.decorationEmojis || ['🌲'];
+  const nearEmojis = track.decorationEmojis || ['🌲'];
+  const farEmojis = track.farDecorationEmojis || nearEmojis;
   const pts = track.checkpoints;
   const n = pts.length;
   const half = track.trackWidth / 2;
-  const desiredClearance = half + 40 * WORLD_SCALE; // aimed-for offset, comfortably clear of the road
+  const nearClearance = half + 40 * WORLD_SCALE;
+  const farClearance = half + 110 * WORLD_SCALE;
   const minClearance = half + 12 * WORLD_SCALE; // accepted fallback -- just needs to clear the barrier, not the full margin
+
+  // Places one decoration `clearance` world units out from segment
+  // midpoint (mx,my) along normal (nx,ny) * side, nudging away from
+  // whatever's actually nearest on the WHOLE loop (see this function's
+  // own comment above) and clamping to the map bounds. Returns null
+  // (skip this one) if even after clamping it still can't clear
+  // minClearance -- happens on compact/tightly-packed tracks where the
+  // full desired margin never fits.
+  function place(mx, my, nx, ny, side, clearance) {
+    let x = mx + nx * clearance * side;
+    let y = my + ny * clearance * side;
+    for (let iter = 0; iter < 8; iter++) {
+      const { point, dist } = closestPointOnLoop({ x, y }, pts);
+      if (dist >= clearance) break;
+      const pushX = x - point.x;
+      const pushY = y - point.y;
+      const pushLen = Math.hypot(pushX, pushY) || 1;
+      x = point.x + (pushX / pushLen) * (clearance + 5 * WORLD_SCALE);
+      y = point.y + (pushY / pushLen) * (clearance + 5 * WORLD_SCALE);
+    }
+    x = clamp(x, 20 * WORLD_SCALE, track.mapWidth - 20 * WORLD_SCALE);
+    y = clamp(y, 20 * WORLD_SCALE, track.mapHeight - 20 * WORLD_SCALE);
+    if (closestPointOnLoop({ x, y }, pts).dist < minClearance) return null;
+    return { x, y };
+  }
+
   const decorations = [];
-  for (let i = 0; i < n; i += 2) {
+  for (let i = 0; i < n; i++) {
     const a = pts[i];
     const b = pts[(i + 1) % n];
     const mx = (a.x + b.x) / 2;
@@ -541,32 +589,15 @@ function scatterDecorations(track) {
     const len = Math.hypot(dx, dy) || 1;
     const nx = -dy / len;
     const ny = dx / len;
-    const side = (i / 2) % 2 === 0 ? 1 : -1;
-    let x = mx + nx * desiredClearance * side;
-    let y = my + ny * desiredClearance * side;
+    const side = i % 2 === 0 ? 1 : -1;
 
-    // A switchback track's segments loop back close to each other (that's
-    // the whole point of a hairpin), so the offset above -- computed from
-    // just this ONE segment's local normal -- can still land close to a
-    // totally different nearby segment. Nudge away from whichever point on
-    // the WHOLE loop is actually nearest until clear, falling back to the
-    // smaller minClearance (rather than giving up entirely) on a
-    // compact/tightly-packed track where the full desired margin never fits.
-    for (let iter = 0; iter < 8; iter++) {
-      const { point, dist } = closestPointOnLoop({ x, y }, pts);
-      if (dist >= desiredClearance) break;
-      const pushX = x - point.x;
-      const pushY = y - point.y;
-      const pushLen = Math.hypot(pushX, pushY) || 1;
-      x = point.x + (pushX / pushLen) * (desiredClearance + 5 * WORLD_SCALE);
-      y = point.y + (pushY / pushLen) * (desiredClearance + 5 * WORLD_SCALE);
+    const near = place(mx, my, nx, ny, side, nearClearance);
+    if (near) decorations.push({ x: near.x, y: near.y, emoji: nearEmojis[i % nearEmojis.length], layer: 'near' });
+
+    if (i % 3 === 0) {
+      const far = place(mx, my, nx, ny, -side, farClearance);
+      if (far) decorations.push({ x: far.x, y: far.y, emoji: farEmojis[Math.floor(i / 3) % farEmojis.length], layer: 'far' });
     }
-
-    x = clamp(x, 20 * WORLD_SCALE, track.mapWidth - 20 * WORLD_SCALE);
-    y = clamp(y, 20 * WORLD_SCALE, track.mapHeight - 20 * WORLD_SCALE);
-    if (closestPointOnLoop({ x, y }, pts).dist < minClearance) continue; // clamping pulled it back too close -- skip rather than overlap the road
-
-    decorations.push({ x, y, emoji: emojis[(i / 2) % emojis.length] });
   }
   return decorations;
 }
@@ -880,8 +911,8 @@ class RacingRoom {
     if (type === 'maxGas') {
       player.inventory.maxGas -= 1;
       player.maxGasUntil = now + MAX_GAS_ITEM_DURATION_MS;
-      player.speedKmh = MAX_SPEED_KMH;
-      this.pushLog(`⛽ ${player.name} floored the gas!`);
+      player.speedKmh = MAX_GAS_ITEM_PEAK_KMH;
+      this.pushLog(`⛽ ${player.name} floored it — ${MAX_GAS_ITEM_PEAK_KMH}km/h!`);
       return { ok: true };
     }
 
@@ -1013,11 +1044,15 @@ class RacingRoom {
       // the gas control is currently held (see setGasHeld()), at a rate
       // that depends on the CURRENT speed band (see SPEED_BANDS above) --
       // not a flat rate, so accelerating from a stop feels different than
-      // accelerating at speed. A ⛽ Max Gas item (see useItem()) already set
-      // speedKmh to MAX_SPEED_KMH on pickup and just holds it there for its
-      // duration here, ignoring gasHeld entirely.
+      // accelerating at speed. A ⛽ Max Gas item (see useItem()) already
+      // jumped speedKmh to MAX_GAS_ITEM_PEAK_KMH on pickup and decays it
+      // back down at a flat rate here, ignoring gasHeld entirely for the
+      // whole duration -- landing exactly on MAX_SPEED_KMH the instant it
+      // expires (see MAX_GAS_ITEM_PEAK_KMH's own comment for why those
+      // numbers line up), so normal gas control picks up right where this
+      // leaves off with no sudden drop.
       if (now < (p.maxGasUntil || 0)) {
-        p.speedKmh = MAX_SPEED_KMH;
+        p.speedKmh = Math.max(MAX_SPEED_KMH, p.speedKmh - MAX_GAS_DECAY_KMH_PER_SEC * dt);
       } else {
         const rate = speedRateKmhPerSec(p.speedKmh);
         p.speedKmh = clamp(p.speedKmh + rate * dt * (p.gasHeld ? 1 : -1), 0, MAX_SPEED_KMH);
@@ -1269,6 +1304,11 @@ class RacingRoom {
           character: p.character || null,
           x: p.x || 0,
           y: p.y || 0,
+          // The heading that actually drives movement (see tick()'s
+          // inertia comment) -- exposed so the client's chase-cam view can
+          // orient itself the same way the racer is actually facing/
+          // moving, not just their raw steering input.
+          moveDir: p.moveDir || { x: 0, y: 0 },
           checkpointsPassed: p.checkpointsPassed || 0,
           lap: Math.min(track.lapsToWin, Math.floor((p.checkpointsPassed || 0) / track.numCheckpoints) + 1),
           gasHeld: Boolean(p.gasHeld),
@@ -1559,6 +1599,8 @@ module.exports.SHIELD_PROTECTION_DURATION_MS = SHIELD_PROTECTION_DURATION_MS;
 module.exports.ITEM_TYPES = ITEM_TYPES;
 module.exports.ITEM_DEFS = ITEM_DEFS;
 module.exports.MAX_GAS_ITEM_DURATION_MS = MAX_GAS_ITEM_DURATION_MS;
+module.exports.MAX_GAS_ITEM_PEAK_KMH = MAX_GAS_ITEM_PEAK_KMH;
+module.exports.MAX_GAS_DECAY_KMH_PER_SEC = MAX_GAS_DECAY_KMH_PER_SEC;
 module.exports.STUN_DURATION_MS = STUN_DURATION_MS;
 module.exports.STUN_TOP_N = STUN_TOP_N;
 module.exports.CHARACTERS = CHARACTERS;

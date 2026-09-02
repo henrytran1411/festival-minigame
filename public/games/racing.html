@@ -363,6 +363,27 @@
     }
     .zoom-btn.selected { border-color: var(--gold); color: var(--gold); font-weight: 700; }
 
+    /* Which camera to draw with -- see racing.js's viewMode/cameraParams().
+       Same box styling as #zoom-control, stacked right under it. */
+    #view-mode-control {
+      display: flex;
+      gap: 4px;
+      background: rgba(10, 12, 18, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px;
+    }
+    .view-mode-btn {
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .view-mode-btn.selected { border-color: var(--gold); color: var(--gold); font-weight: 700; }
+
     .racing-countdown {
       position: absolute;
       inset: 0;
@@ -538,6 +559,11 @@
             <button type="button" class="zoom-btn" data-zoom="6">6x</button>
             <button type="button" class="zoom-btn" data-zoom="8">8x</button>
           </div>
+          <div id="view-mode-control">
+            <button type="button" class="view-mode-btn" data-view-mode="2d">2D</button>
+            <button type="button" class="view-mode-btn" data-view-mode="2.25d">2.25D</button>
+            <button type="button" class="view-mode-btn" data-view-mode="2.5d">2.5D</button>
+          </div>
           <div id="standings-mini"></div>
         </div>
 
@@ -629,7 +655,7 @@
           <li>Clipping the road's guardrail damages your car (see the 🔧 gauge next to GAS) — worse the faster you were going: about 10% at 0–60 km/h, 20% at 61–150, 45% at 151–250, and a brutal 70% above that. 🕳️ Potholes scattered on the road are gentler but still bite — 5%/10%/15%/20% at those same speed bands, plus a flat 20% cut off your current speed on top. Rack up 100% damage and your car is wrecked — frozen for 5 seconds while it's repaired, then it's good as new but back at a dead stop (0 km/h), just like the start of the race.</li>
           <li>The main view follows you closely, so it only shows the road right around you — use the <b>minimap</b> in the top-right corner to see the whole pass, where you are on it, and which checkpoint is next.</li>
           <li>Drive through the checkpoints around the loop <b>in order</b> — the road, the dashed center line, and the checkered start/finish band mark the pass. Each track needs a different number of laps to finish, shown in the track picker.</li>
-          <li>Every time YOU reach a checkpoint, you're given a random item — it's yours alone, so another racer crossing the same checkpoint (before or after you) always gets their own. It's added to your inventory (shown on the 3 buttons below the joystick); tap that button whenever you want to use it: <b>⛽ Max Gas</b> instantly jumps you to top speed and holds you there for 10s; <b>💫 Stun</b> freezes a random racer among the current top 5 for 5s; <b>🛡️ Shield</b> instantly repairs all your damage back to 0% and makes you completely immune to barrier hits, potholes, and stuns for the next 5s.</li>
+          <li>Every time YOU reach a checkpoint, you're given a random item — it's yours alone, so another racer crossing the same checkpoint (before or after you) always gets their own. It's added to your inventory (shown on the 3 buttons below the joystick); tap that button whenever you want to use it: <b>⛽ Max Gas</b> instantly jumps you to 500 km/h — above the normal 400 km/h cap — then eases back down 10 km/h every second, landing exactly back at the normal top speed after 10s; <b>💫 Stun</b> freezes a random racer among the current top 5 for 5s; <b>🛡️ Shield</b> instantly repairs all your damage back to 0% and makes you completely immune to barrier hits, potholes, and stuns for the next 5s.</li>
           <li>First to complete every lap wins! If time runs out before everyone finishes, whoever got furthest along the pass is ranked next.</li>
           <li>This is a backup game just for fun — no leaderboard points, always open.</li>
         </ul>
@@ -651,7 +677,7 @@
           <li>Va vào lan can đường sẽ làm hỏng xe (xem thanh <b>🔧</b> cạnh nút GA) — càng chạy nhanh càng hỏng nặng: khoảng 10% ở tốc độ 0–60 km/h, 20% ở 61–150, 45% ở 151–250, và tới 70% ở trên mức đó. <b>🕳️ Ổ voi</b> rải rác trên đường nhẹ hơn nhưng vẫn đau — 5%/10%/15%/20% ở các mức tốc độ tương tự, cộng thêm giảm thẳng 20% tốc độ hiện tại. Hỏng đủ 100% xe sẽ bị "toang" — đứng yên 5 giây để sửa, sau đó xe như mới nhưng lại xuất phát từ tốc độ 0 km/h, giống như lúc bắt đầu đua.</li>
           <li>Màn hình chính bám sát theo bạn nên chỉ hiện phần đường ngay quanh bạn — dùng <b>bản đồ thu nhỏ</b> ở góc trên bên phải để xem toàn bộ con đèo, vị trí của bạn trên đó, và điểm kiểm tra tiếp theo.</li>
           <li>Lái xe qua các điểm kiểm tra quanh vòng đua <b>theo đúng thứ tự</b> — con đường, vạch kẻ giữa đứt nét, và vạch đích kẻ ca-rô đánh dấu con đèo. Mỗi đường đua cần số vòng khác nhau để về đích, được ghi rõ ở phần chọn đèo.</li>
-          <li>Mỗi khi BẠN đi qua một điểm kiểm tra, bạn sẽ được tặng một vật phẩm ngẫu nhiên — vật phẩm này là của riêng bạn, nên tay đua khác đi qua cùng điểm kiểm tra đó (trước hay sau bạn) vẫn luôn nhận được phần của họ. Vật phẩm được thêm vào kho đồ của bạn (hiện trên 3 nút bên dưới phím định hướng); bấm nút đó bất cứ khi nào muốn dùng: <b>⛽ Ga tối đa</b> đưa bạn ngay lập tức lên tốc độ tối đa và giữ nguyên trong 10 giây; <b>💫 Choáng</b> làm choáng ngẫu nhiên một tay đua trong top 5 hiện tại trong 5 giây; <b>🛡️ Khiên</b> sửa ngay toàn bộ hư hỏng về 0% và giúp bạn miễn nhiễm hoàn toàn với va chạm lan can, ổ voi, và choáng trong 5 giây tiếp theo.</li>
+          <li>Mỗi khi BẠN đi qua một điểm kiểm tra, bạn sẽ được tặng một vật phẩm ngẫu nhiên — vật phẩm này là của riêng bạn, nên tay đua khác đi qua cùng điểm kiểm tra đó (trước hay sau bạn) vẫn luôn nhận được phần của họ. Vật phẩm được thêm vào kho đồ của bạn (hiện trên 3 nút bên dưới phím định hướng); bấm nút đó bất cứ khi nào muốn dùng: <b>⛽ Ga tối đa</b> đưa bạn ngay lập tức lên 500 km/h — vượt qua mức tối đa bình thường 400 km/h — rồi giảm dần 10 km/h mỗi giây, về đúng tốc độ tối đa bình thường sau 10 giây; <b>💫 Choáng</b> làm choáng ngẫu nhiên một tay đua trong top 5 hiện tại trong 5 giây; <b>🛡️ Khiên</b> sửa ngay toàn bộ hư hỏng về 0% và giúp bạn miễn nhiễm hoàn toàn với va chạm lan can, ổ voi, và choáng trong 5 giây tiếp theo.</li>
           <li>Ai hoàn thành đủ số vòng trước sẽ thắng! Nếu hết giờ mà chưa ai về đích, ai đi xa nhất trên đèo sẽ được xếp hạng tiếp theo.</li>
           <li>Đây là trò chơi phụ chỉ để giải trí — không tính điểm bảng xếp hạng, luôn mở.</li>
         </ul>
