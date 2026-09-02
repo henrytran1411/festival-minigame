@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đua Tốc Độ — Autumn Festival</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .racing-wrap { max-width: 900px; }
+
+    .racing-log {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      max-height: 110px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+    .racing-log div { padding: 2px 0; }
+
+    .racing-player-list {
+      list-style: none;
+      padding: 0;
+      margin: 12px 0;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+    .racing-player-list li { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .racing-player-list li:last-child { border-bottom: none; }
+
+    /* Live-ranked standings during a race -- kept small and out of the way
+       (see #hud-topleft below) since the goal now is to keep the player's
+       eyes on the road, not a scoreboard: just rank + name, no progress
+       bars or status icons (those still show on the track canvas itself
+       and in the finished-screen results). Scrollable so a full room (up
+       to 10) never grows taller than the zoom control above it. */
+    #standings-mini {
+      background: rgba(10, 12, 18, 0.65);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 11px;
+      color: var(--text);
+      max-height: 150px;
+      overflow-y: auto;
+      min-width: 84px;
+    }
+    .standings-mini-row {
+      display: flex;
+      gap: 5px;
+      padding: 2px 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .standings-mini-row .rank { color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+    .standings-mini-row .name { overflow: hidden; text-overflow: ellipsis; }
+    .standings-mini-row.me { color: var(--gold); font-weight: 700; }
+
+    .room-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; }
+    .room-row .room-info { display: flex; flex-direction: column; }
+    .room-row .room-name { font-weight: 600; font-size: 14px; }
+    .room-row .room-meta { font-size: 12px; color: var(--muted); }
+    .room-row .room-meta.playing { color: var(--gold); }
+    .room-row button { padding: 6px 14px; font-size: 13px; }
+
+    #lobby-screen input, #create-room-screen input, #password-modal input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .racing-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+
+    .character-options { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .character-btn {
+      flex: 1;
+      min-width: 90px;
+      text-align: center;
+      padding: 10px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .character-btn .emoji { font-size: 28px; display: block; margin-bottom: 4px; }
+    .character-btn .portrait { width: 48px; height: 48px; object-fit: contain; display: block; margin: 0 auto 4px; }
+    .character-btn.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.3); color: var(--gold); font-weight: 700; }
+
+    .track-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    @media (max-width: 480px) { .track-options { grid-template-columns: 1fr; } }
+    .track-btn {
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .track-btn .track-label { font-size: 14px; font-weight: 700; }
+    .track-btn .track-blurb { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .track-btn .track-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .track-btn.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.3); }
+    .track-btn.selected .track-label { color: var(--gold); }
+
+    /* Preview of the currently-selected track's actual layout, shown in the
+       waiting room -- lets players see the loop shape before racing rather
+       than judging a track from its blurb text alone. Reuses the same
+       checkpoint/decoration/landmark data the in-race minimap draws from
+       (see racing.js's renderTrackPreview()), just at a bigger, standalone
+       size since there's no player position to also frame here. */
+    #track-preview-wrap {
+      display: flex;
+      justify-content: center;
+      margin-top: 10px;
+    }
+    #track-preview-canvas {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-width: 100%;
+    }
+
+    /* Gas (throttle) + item-use controls -- an overlay INSIDE #track-wrap
+       now (a child of it, like #hud-topleft), pinned to its bottom-right
+       corner rather than a full row below the track, so the road stays
+       the main focus and these are just a compact corner HUD. Stacked as
+       a column (each row right-aligned within it) rather than one wide
+       row, since there's a lot packed in here (gas gauge+speed+button,
+       damage gauge+value, 3 item buttons) and a corner panel reads
+       better tall than wide. Gas buttons are hold-to-ramp (pointerdown/
+       up, same gesture as the joystick) since gas is a continuous dial,
+       not a toggle; item buttons are plain clicks, disabled while the
+       racer holds none of that type. Shrunk throughout (gauges, buttons,
+       font sizes) since this now lives tucked under the minimap (see
+       #hud-topright) rather than as its own dedicated panel -- a small
+       corner readout, not something meant to be stared at. */
+    #control-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 5px;
+      background: rgba(10, 12, 18, 0.65);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 6px;
+    }
+    #gas-control { display: flex; align-items: center; gap: 5px; }
+    #gas-gauge {
+      width: 42px;
+      height: 9px;
+      border-radius: 5px;
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    #gas-gauge-fill {
+      display: block;
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #5b8cff, var(--gold));
+      transition: width 0.1s linear;
+    }
+    #speed-value {
+      min-width: 40px;
+      font-size: 10px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--gold);
+    }
+
+    #damage-control { display: flex; align-items: center; gap: 4px; }
+    #damage-gauge {
+      width: 34px;
+      height: 9px;
+      border-radius: 5px;
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    #damage-gauge-fill {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #7ddc7d, #ff5a5a);
+      transition: width 0.2s linear;
+    }
+    #damage-value {
+      min-width: 24px;
+      font-size: 10px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+    .gas-btn {
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      cursor: pointer;
+      touch-action: none;
+      user-select: none;
+    }
+    /* .held mirrors :active so a held mouse-drag-off-then-back-on (pointer
+       capture keeps firing move/up on the same element) still reads as
+       pressed, not just the browser's own :active pseudo-class. */
+    .gas-btn:active, .gas-btn.held { border-color: var(--gold); color: var(--gold); background: rgba(255, 209, 102, 0.15); }
+
+    #item-control { display: flex; gap: 4px; }
+    /* Icon + count only now (no text label -- see .item-label below) so
+       all 3 fit comfortably in one narrow row; the label still exists in
+       the DOM as a `title` tooltip for anyone hovering to check which is
+       which. */
+    .item-btn {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 3px 5px;
+      font-size: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .item-btn:disabled { opacity: 0.4; cursor: default; }
+    .item-btn:not(:disabled):active { border-color: var(--gold); }
+    /* Shield's own active countdown (see renderControls() in racing.js) --
+       matches the blue shield ring drawn around a racer's own avatar. */
+    .item-btn.active { border-color: #5b8cff; background: rgba(91, 140, 255, 0.18); }
+    .item-btn .item-emoji { font-size: 12px; }
+    .item-btn .item-label { display: none; }
+    .item-btn .item-count {
+      background: rgba(255, 209, 102, 0.2);
+      color: var(--gold);
+      border-radius: 8px;
+      padding: 0 4px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #track-banner { text-align: center; font-size: 13px; font-weight: 700; color: var(--gold); margin-bottom: 6px; }
+    #checkpoint-hint {
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      margin-bottom: 8px;
+      min-height: 18px;
+    }
+
+    .shop-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 14px;
+    }
+
+    /* Fixed 600x700 box -- padding is 10px on every side, so
+       box-sizing: border-box keeps the padding INSIDE that 600x700 rather
+       than adding to it, leaving exactly 580x680 (600-20 x 700-20) of
+       content area for #track-canvas below to fill edge to edge.
+       max-width is a narrow-screen safety net (this box doesn't otherwise
+       shrink on its own); margin: auto centers it once it's narrower than
+       its container. */
+    #track-wrap {
+      display: flex;
+      justify-content: center;
+      box-sizing: border-box;
+      width: 600px;
+      height: 700px;
+      max-width: 100%;
+      margin: 6px auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px;
+      position: relative;
+    }
+    /* Fills #track-wrap's content area exactly (580x680, see above) --
+       racing.js's syncCanvasResolution() just mirrors this box's actual
+       rendered size back into the canvas's backing store, it doesn't
+       dictate the shape. */
+    #track-canvas { width: 100%; height: 100%; border-radius: 8px; display: block; }
+
+    /* Overview of the whole track, since the main view now follows the
+       player up close and can only show a small local window of it (see
+       racing.js's camera transform). Sized in CSS px (not %) so it stays
+       legible even when #track-canvas itself is scaled down on a narrow
+       screen. Positioning now lives on its #hud-topright parent below. */
+    #minimap-canvas {
+      display: block;
+      border: 2px solid var(--gold);
+      border-radius: 6px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Top-left HUD stack: the zoom control (see racing.js's
+       VIEWPORT_ROAD_WIDTHS -- a per-viewer preference, not something the
+       room agrees on) with the compact standings list underneath it. One
+       positioned group rather than positioning each piece separately, so
+       the standings just stack below the zoom control regardless of its
+       own height. */
+    #hud-topleft {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    /* Top-right HUD stack, same idea as #hud-topleft: the minimap with
+       the (compact) gas/damage/item controls stacked directly underneath
+       it, rather than each positioned independently. */
+    #hud-topright {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+    #zoom-control {
+      display: flex;
+      gap: 4px;
+      background: rgba(10, 12, 18, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px;
+    }
+    #zoom-control .zoom-label { align-self: center; font-size: 11px; color: var(--muted); padding: 0 4px; }
+    .zoom-btn {
+      padding: 4px 9px;
+      font-size: 11px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .zoom-btn.selected { border-color: var(--gold); color: var(--gold); font-weight: 700; }
+
+    .racing-countdown {
+      position: absolute;
+      inset: 0;
+      /* Above #hud-topleft/#control-bar's own z-index: 5 (a positive
+         z-index always wins over source order), so the countdown stays
+         fully visible over both corners rather than being covered. */
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 64px;
+      font-weight: 800;
+      color: var(--gold);
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+    }
+    .racing-countdown.hidden { display: none; }
+
+    /* Shown centered over the track, same idea as the countdown overlay,
+       whenever MY car is disabled after a 100%-damage wreck (see
+       racing-server.js's REPAIR_DURATION_MS) -- big and impossible to miss
+       since the player can't do anything else during it anyway. */
+    #repair-banner {
+      position: absolute;
+      inset: 0;
+      /* Same reasoning as .racing-countdown's own z-index above -- must
+         dominate #hud-topleft/#control-bar (z-index: 5) while shown. */
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: rgba(10, 12, 18, 0.55);
+      font-size: 28px;
+      font-weight: 800;
+      color: #ff9f5a;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+    }
+    #repair-banner .repair-seconds { font-size: 44px; }
+    #repair-banner.hidden { display: none; }
+
+    .racing-hint { text-align: center; color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+
+    /* Hint/Log start collapsed (see the "hidden" class on their own
+       elements) -- toggled open on demand rather than always taking up
+       space, so the default view during a race is just the road. Active
+       state mirrors the track picker's own .selected treatment. */
+    .toggle-btn.active { border-color: var(--gold); color: var(--gold); }
+
+    /* On-screen steering joystick -- there's no keyboard on a phone, so
+       this is the only way to steer there. Hidden by default (desktop
+       already has WASD/arrows); shown only under a coarse pointer
+       (touch-primary), regardless of screen width, so a mouse user with a
+       small window never sees it. Fixed-position so it floats over the
+       page and stays reachable without scrolling. Mirrors nien.js's own
+       joystick (same drag-to-steer gesture, same CSS radius). */
+    #mobile-joystick { display: none; }
+    @media (pointer: coarse) {
+      #mobile-joystick { display: block; }
+    }
+    #mobile-joystick {
+      position: fixed;
+      left: 24px;
+      bottom: 24px;
+      z-index: 40;
+      width: 108px;
+      height: 108px;
+      border-radius: 50%;
+      background: rgba(38, 43, 54, 0.55);
+      border: 1px solid var(--border);
+      touch-action: none;
+    }
+    #joystick-thumb {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: rgba(91, 140, 255, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .racing-winner { text-align: center; font-size: 20px; font-weight: 800; margin: 10px 0; white-space: pre-line; }
+    .racing-score-list { list-style: none; padding: 0; margin: 12px 0; }
+    .racing-score-list li { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .racing-score-list li:first-child { color: var(--gold); font-weight: 700; }
+    .racing-score-list .dnf { color: var(--muted); font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="wrap racing-wrap">
+    <div class="top-bar">
+      <h1>🏁 Đua Tốc Độ <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
+      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+    </div>
+
+    <div id="lobby-screen" class="card">
+      <h2 style="margin-top:0; text-align:center;">Race Rooms</h2>
+      <ul id="room-list" class="racing-player-list"></ul>
+      <p id="no-rooms-msg" style="color:var(--muted); font-size:13px; text-align:center; display:none;">No rooms yet — create one to get started.</p>
+      <div class="racing-actions">
+        <button id="show-create-btn">+ Create Room</button>
+      </div>
+    </div>
+
+    <div id="create-room-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;">Create Room</h2>
+      <p style="font-size:13px; color:var(--muted);">Room name</p>
+      <input type="text" id="room-name-input" maxlength="30" placeholder="e.g. Track 1" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Password</p>
+      <input type="text" id="room-password-input" maxlength="30" placeholder="Anything — share it with your group" />
+      <p id="create-room-error" style="color:var(--bad); font-size:13px; display:none;"></p>
+      <div class="racing-actions">
+        <button id="create-room-btn">Create &amp; Join</button>
+        <button class="secondary" id="cancel-create-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="waiting-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
+      <ul id="player-list" class="racing-player-list"></ul>
+      <div class="racing-actions">
+        <button class="secondary" id="add-bots-btn">🤖 Add 3 Bots</button>
+        <button class="secondary" id="add-many-bots-btn">🤖🤖 Fill Room</button>
+        <button id="start-btn" disabled>▶ Start Race</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center; margin-top:8px;">No one else around? Add bots and test with multiple racers at once — up to 10 in a room.</p>
+
+      <div class="shop-card">
+        <h3 style="margin:0 0 8px; text-align:center; font-size:14px;">🗺️ Choose the Pass</h3>
+        <div class="track-options" id="track-list"></div>
+        <p style="color:var(--muted); font-size:11px; text-align:center; margin:8px 0 0;">Anyone in the room can switch the pass before Start Race.</p>
+        <div id="track-preview-wrap">
+          <canvas id="track-preview-canvas"></canvas>
+        </div>
+      </div>
+
+      <div class="shop-card">
+        <h3 style="margin:0 0 8px; text-align:center; font-size:14px;">🌕 Choose Your Racer</h3>
+        <div class="character-options" id="character-list"></div>
+        <p style="color:var(--muted); font-size:11px; text-align:center; margin:8px 0 0;">Didn't pick one? You'll get a random racer when the race starts.</p>
+      </div>
+
+      <div class="racing-actions">
+        <button class="danger" id="leave-waiting-btn">Leave Room</button>
+      </div>
+      <div id="waiting-log" class="racing-log"></div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+      <div id="track-banner"></div>
+      <div id="checkpoint-hint"></div>
+
+      <div class="racing-actions" id="info-toggles">
+        <button type="button" class="secondary toggle-btn" id="hint-toggle-btn">💡 Hint</button>
+        <button type="button" class="secondary toggle-btn" id="log-toggle-btn">📜 Log</button>
+        <button class="danger" id="leave-btn">Leave Room</button>
+      </div>
+
+      <div id="track-wrap">
+        <canvas id="track-canvas"></canvas>
+        <div id="hud-topleft">
+          <div id="zoom-control">
+            <span class="zoom-label">Zoom</span>
+            <button type="button" class="zoom-btn" data-zoom="3">3x</button>
+            <button type="button" class="zoom-btn" data-zoom="4">4x</button>
+            <button type="button" class="zoom-btn" data-zoom="5">5x</button>
+            <button type="button" class="zoom-btn" data-zoom="6">6x</button>
+            <button type="button" class="zoom-btn" data-zoom="8">8x</button>
+          </div>
+          <div id="standings-mini"></div>
+        </div>
+
+        <div id="hud-topright">
+          <canvas id="minimap-canvas"></canvas>
+          <div id="control-bar">
+            <div id="gas-control">
+              <div id="gas-gauge"><div id="gas-gauge-fill"></div></div>
+              <span id="speed-value">0 km/h</span>
+              <button type="button" id="gas-btn" class="gas-btn">⛽ GAS</button>
+            </div>
+            <div id="damage-control">
+              <span title="Damage">🔧</span>
+              <div id="damage-gauge"><div id="damage-gauge-fill"></div></div>
+              <span id="damage-value">0%</span>
+            </div>
+            <div id="item-control">
+              <button type="button" id="use-maxGas-btn" class="item-btn" data-item="maxGas" title="Max Gas" disabled>
+                <span class="item-emoji">⛽</span><span class="item-label">Max Gas</span><span class="item-count">0</span>
+              </button>
+              <button type="button" id="use-stun-btn" class="item-btn" data-item="stun" title="Stun" disabled>
+                <span class="item-emoji">💫</span><span class="item-label">Stun</span><span class="item-count">0</span>
+              </button>
+              <button type="button" id="use-shield-btn" class="item-btn" data-item="shield" title="Shield" disabled>
+                <span class="item-emoji">🛡️</span><span class="item-label">Shield</span><span class="item-count">0</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="racing-countdown hidden" id="countdown-el"></div>
+        <div id="repair-banner" class="hidden">
+          <span>🔧 CAR WRECKED — REPAIRING</span>
+          <span class="repair-seconds" id="repair-seconds">5</span>
+        </div>
+      </div>
+
+      <div id="mobile-joystick">
+        <div id="joystick-thumb"></div>
+      </div>
+
+      <p class="racing-hint hidden" id="racing-hint-text">Steer with <b>WASD</b>, the <b>arrow keys</b>, or the on-screen joystick (touch devices) — the faster you're going, the harder it gets to redirect. Hold <b>Shift</b> or the <b>⛽ GAS</b> button to accelerate — release to coast down. Hitting the barrier or a 🕳️ pothole damages your car (worse at higher speed!) — reach 100% and it's wrecked for 5s. Driving through a checkpoint always gives YOU a random item — use it with the buttons above!</p>
+
+      <div id="game-log" class="racing-log hidden"></div>
+    </div>
+
+    <div id="finished-screen" class="card result-card hidden">
+      <div class="racing-winner" id="winner-text"></div>
+      <ul class="racing-score-list" id="score-list"></ul>
+      <div class="actions">
+        <button id="new-game-btn">Race Again</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 id="password-modal-title">Enter Password</h2>
+      <input type="text" id="join-password-input" placeholder="Room password" />
+      <p id="password-error" style="color:var(--bad); font-size:13px; display:none;">Wrong password.</p>
+      <div class="racing-actions">
+        <button id="password-submit-btn">Join</button>
+        <button class="secondary" id="password-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="rules-lang-toggle">
+        <button type="button" class="rules-lang-en">English</button>
+        <button type="button" class="rules-lang-vi">Tiếng Việt</button>
+      </div>
+      <div class="lang-en">
+        <h2>How to Play Đua Tốc Độ</h2>
+        <ul>
+          <li>Create or join a room with a friend's password, then in the waiting room, optionally pick one of <b>6 tracks</b> — each a stylized version of a real Vietnamese mountain pass, with a live preview of its layout — and a racer (the same Mid-Autumn characters from Đuổi Niên Thú), and add bots if you're testing solo. Anyone in the room can switch the pass before Start.</li>
+          <li><b>Đèo Hải Vân</b> (21km · 496m, Đà Nẵng ↔ Huế) — coastal hairpins with the sea on one side.</li>
+          <li><b>Đèo Mã Phục</b> (3.5km · 620m, Cao Bằng) — the shortest and easiest, 7 hairpins through twin "kneeling horse" peaks.</li>
+          <li><b>Đèo Khau Phạ</b> (35km · 1,300m, Mù Cang Chải) — terraced rice fields and a "sea of clouds" summit.</li>
+          <li><b>Đèo Pha Đin</b> (32km · 1,648m, Sơn La ↔ Điện Biên) — a historic route with long sweeping S-curves.</li>
+          <li><b>Đèo Mã Pí Lèng</b> (20km · 1,200m, Hà Giang) — the "king of passes", a narrow cliffside road above the Nho Quế canyon.</li>
+          <li><b>Đèo Ô Quy Hồ</b> (50km · 2,000m, Sa Pa ↔ Tam Đường) — the longest and highest, near Fansipan, often foggy.</li>
+          <li>When the host clicks <b>Start Race</b>, there's a 3-second countdown — get ready!</li>
+          <li>Once it says <b>GO!</b>, steer with <b>WASD</b>, the <b>arrow keys</b>, or the on-screen joystick (touch devices) — you move freely in any direction, so taking the hairpins tight or wide is up to your own driving. The road has real guardrails now — straying past the yellow edge lines slides you back onto the road instead of letting you cut across the terrain.</li>
+          <li>Steering only sets your direction — your actual speed comes from a single <b>⛽ GAS</b> control (next to the joystick). You start at a dead stop: hold <b>Shift</b> or the GAS button and speed climbs; let go and it coasts back down — no separate brake. It climbs gently up to 60 km/h, a bit quicker from 60–150, quicker still from 150–250, and fastest of all from 250 up to the 400 km/h top speed, so flooring it feels like it really wakes up the faster you're already going.</li>
+          <li>The faster you're going, the more your car resists changing direction — a quick flick of the wheel at low speed turns almost instantly, but the same flick at top speed takes a real moment to catch, so plan hairpins ahead of time once you're flying.</li>
+          <li>Clipping the road's guardrail damages your car (see the 🔧 gauge next to GAS) — worse the faster you were going: about 10% at 0–60 km/h, 20% at 61–150, 45% at 151–250, and a brutal 70% above that. 🕳️ Potholes scattered on the road are gentler but still bite — 5%/10%/15%/20% at those same speed bands, plus a flat 20% cut off your current speed on top. Rack up 100% damage and your car is wrecked — frozen for 5 seconds while it's repaired, then it's good as new but back at a dead stop (0 km/h), just like the start of the race.</li>
+          <li>The main view follows you closely, so it only shows the road right around you — use the <b>minimap</b> in the top-right corner to see the whole pass, where you are on it, and which checkpoint is next.</li>
+          <li>Drive through the checkpoints around the loop <b>in order</b> — the road, the dashed center line, and the checkered start/finish band mark the pass. Each track needs a different number of laps to finish, shown in the track picker.</li>
+          <li>Every time YOU reach a checkpoint, you're given a random item — it's yours alone, so another racer crossing the same checkpoint (before or after you) always gets their own. It's added to your inventory (shown on the 3 buttons below the joystick); tap that button whenever you want to use it: <b>⛽ Max Gas</b> instantly jumps you to top speed and holds you there for 10s; <b>💫 Stun</b> freezes a random racer among the current top 5 for 5s; <b>🛡️ Shield</b> instantly repairs all your damage back to 0% and makes you completely immune to barrier hits, potholes, and stuns for the next 5s.</li>
+          <li>First to complete every lap wins! If time runs out before everyone finishes, whoever got furthest along the pass is ranked next.</li>
+          <li>This is a backup game just for fun — no leaderboard points, always open.</li>
+        </ul>
+      </div>
+      <div class="lang-vi">
+        <h2>Cách chơi Đua Tốc Độ</h2>
+        <ul>
+          <li>Tạo hoặc tham gia một phòng bằng mật khẩu của nhóm bạn, sau đó trong phòng chờ, tùy chọn chọn một trong <b>6 đường đua</b> — mỗi đường được cách điệu theo một con đèo có thật ở Việt Nam, kèm bản xem trước hình dạng đường đua — và chọn nhân vật đua (cùng các nhân vật Trung Thu từ trò Đuổi Niên Thú), rồi thêm bot nếu bạn muốn test một mình. Bất kỳ ai trong phòng cũng có thể đổi đèo trước khi bắt đầu.</li>
+          <li><b>Đèo Hải Vân</b> (21km · 496m, Đà Nẵng ↔ Huế) — các khúc cua ven biển, một bên là biển.</li>
+          <li><b>Đèo Mã Phục</b> (3,5km · 620m, Cao Bằng) — ngắn và dễ nhất, 7 khúc cua tay áo qua hai ngọn núi "ngựa quỳ".</li>
+          <li><b>Đèo Khau Phạ</b> (35km · 1.300m, Mù Cang Chải) — ruộng bậc thang và biển mây trên đỉnh đèo.</li>
+          <li><b>Đèo Pha Đin</b> (32km · 1.648m, Sơn La ↔ Điện Biên) — con đèo lịch sử với những khúc cua chữ S dài.</li>
+          <li><b>Đèo Mã Pí Lèng</b> (20km · 1.200m, Hà Giang) — "vua của các con đèo", đường đèo hẹp bám vách đá trên hẻm Nho Quế.</li>
+          <li><b>Đèo Ô Quy Hồ</b> (50km · 2.000m, Sa Pa ↔ Tam Đường) — dài và cao nhất, gần đỉnh Fansipan, thường có sương mù.</li>
+          <li>Khi chủ phòng nhấn <b>Start Race</b>, sẽ có 3 giây đếm ngược — chuẩn bị nào!</li>
+          <li>Khi màn hình hiện <b>GO!</b>, hãy điều khiển bằng <b>WASD</b>, <b>phím mũi tên</b>, hoặc phím định hướng ảo trên màn hình (thiết bị cảm ứng) — bạn di chuyển tự do theo mọi hướng, nên vào cua tay áo rộng hay hẹp là do kỹ năng lái của bạn. Đường đua giờ có lan can thật — đi lệch quá vạch vàng ở mép đường sẽ bị đẩy trở lại vào đường thay vì băng qua địa hình.</li>
+          <li>Hướng lái chỉ quyết định bạn đi hướng nào — tốc độ thực tế đến từ một nút <b>⛽ GA</b> duy nhất (cạnh phím định hướng ảo). Bạn bắt đầu đứng yên: giữ <b>Shift</b> hoặc nút GA để tăng tốc, thả ra để giảm tốc dần — không có nút phanh riêng. Tốc độ tăng chậm rãi tới 60 km/h, nhanh hơn một chút từ 60–150, nhanh hơn nữa từ 150–250, và nhanh nhất từ 250 lên tới tốc độ tối đa 400 km/h, nên đạp ga càng lâu càng như thể xe "bốc" hơn.</li>
+          <li>Càng chạy nhanh, xe càng "ì" khi bạn muốn đổi hướng — bẻ lái nhanh ở tốc độ thấp gần như phản ứng ngay, nhưng cùng một cú bẻ lái đó ở tốc độ tối đa sẽ mất một lúc mới ăn lái, nên hãy tính trước các khúc cua khi đang chạy nhanh.</li>
+          <li>Va vào lan can đường sẽ làm hỏng xe (xem thanh <b>🔧</b> cạnh nút GA) — càng chạy nhanh càng hỏng nặng: khoảng 10% ở tốc độ 0–60 km/h, 20% ở 61–150, 45% ở 151–250, và tới 70% ở trên mức đó. <b>🕳️ Ổ voi</b> rải rác trên đường nhẹ hơn nhưng vẫn đau — 5%/10%/15%/20% ở các mức tốc độ tương tự, cộng thêm giảm thẳng 20% tốc độ hiện tại. Hỏng đủ 100% xe sẽ bị "toang" — đứng yên 5 giây để sửa, sau đó xe như mới nhưng lại xuất phát từ tốc độ 0 km/h, giống như lúc bắt đầu đua.</li>
+          <li>Màn hình chính bám sát theo bạn nên chỉ hiện phần đường ngay quanh bạn — dùng <b>bản đồ thu nhỏ</b> ở góc trên bên phải để xem toàn bộ con đèo, vị trí của bạn trên đó, và điểm kiểm tra tiếp theo.</li>
+          <li>Lái xe qua các điểm kiểm tra quanh vòng đua <b>theo đúng thứ tự</b> — con đường, vạch kẻ giữa đứt nét, và vạch đích kẻ ca-rô đánh dấu con đèo. Mỗi đường đua cần số vòng khác nhau để về đích, được ghi rõ ở phần chọn đèo.</li>
+          <li>Mỗi khi BẠN đi qua một điểm kiểm tra, bạn sẽ được tặng một vật phẩm ngẫu nhiên — vật phẩm này là của riêng bạn, nên tay đua khác đi qua cùng điểm kiểm tra đó (trước hay sau bạn) vẫn luôn nhận được phần của họ. Vật phẩm được thêm vào kho đồ của bạn (hiện trên 3 nút bên dưới phím định hướng); bấm nút đó bất cứ khi nào muốn dùng: <b>⛽ Ga tối đa</b> đưa bạn ngay lập tức lên tốc độ tối đa và giữ nguyên trong 10 giây; <b>💫 Choáng</b> làm choáng ngẫu nhiên một tay đua trong top 5 hiện tại trong 5 giây; <b>🛡️ Khiên</b> sửa ngay toàn bộ hư hỏng về 0% và giúp bạn miễn nhiễm hoàn toàn với va chạm lan can, ổ voi, và choáng trong 5 giây tiếp theo.</li>
+          <li>Ai hoàn thành đủ số vòng trước sẽ thắng! Nếu hết giờ mà chưa ai về đích, ai đi xa nhất trên đèo sẽ được xếp hạng tiếp theo.</li>
+          <li>Đây là trò chơi phụ chỉ để giải trí — không tính điểm bảng xếp hạng, luôn mở.</li>
+        </ul>
+      </div>
+      <button class="modal-close">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../common.js"></script>
+  <script src="racing.js"></script>
+</body>
+</html>
