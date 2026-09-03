@@ -213,11 +213,20 @@
       cursor: pointer;
       touch-action: none;
       user-select: none;
+      -webkit-touch-callout: none;
     }
     /* .held mirrors :active so a held mouse-drag-off-then-back-on (pointer
        capture keeps firing move/up on the same element) still reads as
        pressed, not just the browser's own :active pseudo-class. */
     .gas-btn:active, .gas-btn.held { border-color: var(--gold); color: var(--gold); background: rgba(255, 209, 102, 0.15); }
+    /* On touch devices the corner gas-btn is replaced by the big floating
+       #mobile-gas-btn below (matching the joystick) -- this compact one is
+       too small and too far from the thumb to hold reliably while
+       steering. The gauge/speed readout next to it stays visible either
+       way, purely informational. */
+    @media (pointer: coarse) {
+      .gas-btn { display: none; }
+    }
 
     #item-control { display: flex; gap: 4px; }
     /* Icon + count only now (no text label -- see .item-label below) so
@@ -471,6 +480,42 @@
       pointer-events: none;
     }
 
+    /* On-screen GAS button for touch devices -- same fixed floating-circle
+       design as #mobile-joystick above (mirrored to the opposite bottom
+       corner), replacing the tiny corner .gas-btn which is too small and
+       too far from the thumb to hold reliably while steering. A plain
+       <div>, not a <button> -- avoids any native focus ring/callout on
+       tap-and-hold, which is exactly the "select text" long-press menu
+       this is meant to prevent (see user-select/-webkit-touch-callout
+       below: without them, holding this down can pop the OS's copy/
+       lookup bubble on the GAS label, which is distracting mid-race). */
+    #mobile-gas-btn { display: none; }
+    @media (pointer: coarse) {
+      #mobile-gas-btn { display: flex; }
+    }
+    #mobile-gas-btn {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 40;
+      width: 108px;
+      height: 108px;
+      border-radius: 50%;
+      background: rgba(38, 43, 54, 0.55);
+      border: 1px solid var(--border);
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: var(--text);
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    #mobile-gas-btn.held { border-color: var(--gold); color: var(--gold); background: rgba(255, 209, 102, 0.3); }
+
     .racing-winner { text-align: center; font-size: 20px; font-weight: 800; margin: 10px 0; white-space: pre-line; }
     .racing-score-list { list-style: none; padding: 0; margin: 12px 0; }
     .racing-score-list li { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
@@ -604,6 +649,8 @@
       <div id="mobile-joystick">
         <div id="joystick-thumb"></div>
       </div>
+
+      <div id="mobile-gas-btn">GAS</div>
 
       <p class="racing-hint hidden" id="racing-hint-text">Steer with <b>WASD</b>, the <b>arrow keys</b>, or the on-screen joystick (touch devices) — the faster you're going, the harder it gets to redirect. Hold <b>Shift</b> or the <b>⛽ GAS</b> button to accelerate — release to coast down. Hitting the barrier or a 🕳️ pothole damages your car (worse at higher speed!) — reach 100% and it's wrecked for 5s. Driving through a checkpoint always gives YOU a random item — use it with the buttons above!</p>
 

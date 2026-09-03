@@ -50,6 +50,7 @@ if (me) {
   const gasGaugeFillEl = document.getElementById('gas-gauge-fill');
   const speedValueEl = document.getElementById('speed-value');
   const gasBtn = document.getElementById('gas-btn');
+  const mobileGasBtn = document.getElementById('mobile-gas-btn');
   const damageGaugeFillEl = document.getElementById('damage-gauge-fill');
   const damageValueEl = document.getElementById('damage-value');
   const repairBannerEl = document.getElementById('repair-banner');
@@ -396,7 +397,7 @@ if (me) {
   const VIEW_MODES = ['2d', '2.25d', '2.5d'];
   let viewMode = (() => {
     const saved = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
-    return VIEW_MODES.includes(saved) ? saved : '2.25d';
+    return VIEW_MODES.includes(saved) ? saved : '2d';
   })();
   const viewModeButtons = document.querySelectorAll('.view-mode-btn');
   function renderViewModeButtons() {
@@ -1736,23 +1737,46 @@ if (me) {
   }
   // Converts the joystick's raw (-1..1) screen-relative vector into the
   // final world-space direction to send -- unchanged in '2d' (screen and
-  // world directions already match there); in '2.25d'/'2.5d', rotated by
-  // the current heading (see steeringHeading()) so pushing "up" always
-  // means forward and "right" always means steer-right, regardless of
-  // which way the camera itself is currently facing -- same reasoning as
-  // the keyboard's own relative steering above, just continuous instead
-  // of a fixed angle (analog input can express any in-between angle,
-  // unlike 3 discrete keys). Magnitude (how far the stick is pushed) is
-  // preserved either way -- it still scales actual movement speed
-  // server-side (see racing-server.js's setPlayerInput()).
+  // world directions already match there); in '2.25d'/'2.5d', relative to
+  // the current heading (see steeringHeading()), same reasoning as the
+  // keyboard's own relative steering above: pushing "up" always means
+  // forward and "right" always means steer-right, regardless of which way
+  // the camera itself is currently facing.
+  //
+  // Earlier version re-AIMED the whole heading instantly at wherever the
+  // stick currently points -- which can be up to +-180 degrees away from
+  // the current heading on a single tick, unlike the keyboard's small
+  // fixed RELATIVE_TURN_ANGLE nudge. Reapplied every server tick while
+  // held (see socket.on('racing:state') below), that turned a barely-off-
+  // center finger wobble into a full snap every ~80ms -- and since the
+  // 2.25d/2.5d chase-cam reads this same heading (see
+  // currentHeadingAngle()), the CAMERA whipped around just as hard,
+  // worst right at a standstill where the server's own speed-based turn
+  // inertia (turnLerpFactor()) barely slows anything down yet. Fixed the
+  // same way: clamp the per-tick nudge to JOYSTICK_MAX_TURN_PER_TICK
+  // (scaled down further by how lightly the stick is pushed, so a small
+  // deflection barely nudges at all and only a full push reaches the
+  // full per-tick step) -- smooth, continuous turning instead of
+  // snapping, and a proportionally smaller camera swing to match. Kept
+  // deliberately smaller than the keyboard's own RELATIVE_TURN_ANGLE --
+  // reapplied at the same tick rate, the joystick's continuous analog
+  // angle still read as "too quick" at that same step size. Always
+  // returns a magnitude-1 vector (once actually deflected) rather than
+  // the raw partial magnitude -- steering direction and throttle are
+  // meant to be fully independent (see the ⛽ GAS control), so a light
+  // push should steer gently, not ALSO drive slower.
+  const JOYSTICK_MAX_TURN_PER_TICK = 2 * Math.PI / 180; // ~2 degrees
   function applySteeringFrame(rawX, rawY) {
     if (viewMode === '2d' || (rawX === 0 && rawY === 0)) return { x: rawX, y: rawY };
     const heading = steeringHeading();
-    const cosH = Math.cos(heading);
-    const sinH = Math.sin(heading);
-    const forwardWeight = -rawY; // "up" on the stick = full forward weight
-    const rightWeight = rawX; // "right" on the stick = full right weight
-    return { x: cosH * forwardWeight - sinH * rightWeight, y: sinH * forwardWeight + cosH * rightWeight };
+    const forwardWeight = -rawY; // "up" on the stick = forward
+    const rightWeight = rawX; // "right" on the stick = steer right
+    const mag = Math.min(1, Math.hypot(forwardWeight, rightWeight));
+    const desiredOffset = Math.atan2(rightWeight, forwardWeight);
+    const maxNudge = JOYSTICK_MAX_TURN_PER_TICK * mag;
+    const offset = Math.max(-maxNudge, Math.min(maxNudge, desiredOffset));
+    const angle = heading + offset;
+    return { x: Math.cos(angle), y: Math.sin(angle) };
   }
   function updateJoystick(e) {
     const rect = mobileJoystickEl.getBoundingClientRect();
@@ -1793,16 +1817,19 @@ if (me) {
   mobileJoystickEl.addEventListener('pointerup', endJoystickDrag);
   mobileJoystickEl.addEventListener('pointercancel', endJoystickDrag);
 
-  // --- Gas control: a single held/released control -- Shift (desktop) or --
-  // the ⛽ GAS button (mouse or touch), same "hold it down" spirit as the
-  // joystick above. Held sends true (speed climbs); released sends false
-  // (speed coasts back down) -- there's no separate brake input, matching
-  // racing-server.js's setGasHeld()/SPEED_BANDS, which do the actual
-  // accelerating/decelerating. The `.held` class gives instant visual
-  // feedback locally rather than waiting on a state-broadcast round trip.
+  // --- Gas control: a single held/released control -- Shift (desktop), --
+  // the compact ⛽ GAS button (mouse), or the big floating #mobile-gas-btn
+  // (touch -- mirrors the joystick's corner, see racing.html), same "hold
+  // it down" spirit as the joystick above. Held sends true (speed
+  // climbs); released sends false (speed coasts back down) -- there's no
+  // separate brake input, matching racing-server.js's setGasHeld()/
+  // SPEED_BANDS, which do the actual accelerating/decelerating. The
+  // `.held` class on BOTH buttons gives instant visual feedback locally
+  // rather than waiting on a state-broadcast round trip.
   let lastSentGasHeld = false;
   function sendGasHeldIfChanged(held) {
     gasBtn.classList.toggle('held', held);
+    mobileGasBtn.classList.toggle('held', held);
     if (held === lastSentGasHeld) return;
     lastSentGasHeld = held;
     socket.emit('racing:gasInput', { held });
@@ -1817,13 +1844,15 @@ if (me) {
     sendGasHeldIfChanged(false);
   });
   window.addEventListener('blur', () => sendGasHeldIfChanged(false));
-  gasBtn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    if (!latestState || latestState.status !== 'racing' || myPlayerFinished()) return;
-    sendGasHeldIfChanged(true);
-  });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach((evt) => {
-    gasBtn.addEventListener(evt, () => sendGasHeldIfChanged(false));
+  [gasBtn, mobileGasBtn].forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (!latestState || latestState.status !== 'racing' || myPlayerFinished()) return;
+      sendGasHeldIfChanged(true);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach((evt) => {
+      btn.addEventListener(evt, () => sendGasHeldIfChanged(false));
+    });
   });
 
   // --- Item-use buttons: spend one held item of that type (see -----------
