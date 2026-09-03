@@ -410,7 +410,15 @@ if (me) {
   function renderTurnBanner(state) {
     if (state.status !== 'playing') { turnBannerEl.textContent = ''; return; }
     if (!state.monster) {
-      turnBannerEl.textContent = '👻 The Niên Thú fled! It will return in about a minute...';
+      // The Niên Thú only ever disappears for good now (100% HP, no more
+      // respawns) -- state.monsterDefeatedAt marks when, and the match
+      // ends monsterDefeatedWindupMs after that (see nien-server.js).
+      if (state.monsterDefeatedAt) {
+        const remaining = Math.max(0, Math.ceil((state.monsterDefeatedAt + state.monsterDefeatedWindupMs - Date.now()) / 1000));
+        turnBannerEl.textContent = `🏆 The Niên Thú is gone for good! Grab your last loot — match ends in ${remaining}s.`;
+      } else {
+        turnBannerEl.textContent = '';
+      }
       return;
     }
     if (!state.monster.visible) {
@@ -992,7 +1000,9 @@ if (me) {
     }
     const budgetInput = document.querySelector('input[name="loadout-budget"]:checked');
     const loadoutBudget = budgetInput ? Number(budgetInput.value) : 100;
-    socket.emit('nien:createRoom', { roomName, password, playerId: me.id, name: me.name, loadoutBudget }, (res) => {
+    const durationInput = document.querySelector('input[name="game-duration"]:checked');
+    const gameDurationMinutes = durationInput ? Number(durationInput.value) : 6;
+    socket.emit('nien:createRoom', { roomName, password, playerId: me.id, name: me.name, loadoutBudget, gameDurationMinutes }, (res) => {
       if (res && res.ok) {
         enterRoom(res.roomId);
       } else {

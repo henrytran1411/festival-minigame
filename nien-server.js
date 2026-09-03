@@ -34,7 +34,6 @@ const LOOT_DROP_RADIUS = 500;
 const MONSTER_RADIUS = 24;
 const MONSTER_FLEE_SPEED = 190;
 const MONSTER_FLEE_MS = 2200;
-const MONSTER_RESPAWN_DELAY_MS = 60000; // matches the GDD's "every 60 seconds"
 
 // Zone-tile items (Trung/Thu/Vui/Vẻ) are a SEPARATE drop stream from the
 // 3 classic prizes below -- not a random weighted roll, but reserved
@@ -43,16 +42,6 @@ const MONSTER_RESPAWN_DELAY_MS = 60000; // matches the GDD's "every 60 seconds"
 const ZONE_TILE_TOP_N = 3; // top 1-3 ranked players each get one reserved tile per decile
 const ZONE_TILE_RESERVATION_MS = 10000; // reserved to that player only for this long; open to anyone after
 const ZONE_TILE_FULL_SET_BONUS = 100; // awarded each time a player completes another full set of all 4 distinct tiles
-// After the Niên Thú fully flees at 100% HP, nobody can hit it (so no new
-// damage ranking can form) for the whole MONSTER_RESPAWN_DELAY_MS window.
-// Loot still needs to keep flowing through that window per the design
-// brief, at double volume: classic items drop on a timer (no monster
-// position to scale "nearby" by, so everyone connected counts), and zone
-// tiles keep reserving to whichever top-3 ranking was current when it
-// fled (the last completed decile's contributions) since no fresher one
-// can ever be computed while it's gone.
-const FLED_DROP_INTERVAL_MS = 8000;
-const FLED_VOLUME_MULTIPLIER = 2;
 
 // Skill "Sư Tử Hống" (Lion's Roar): every LION_ROAR_HP_STEP of raw HP
 // dropped (0.5% of the pool), the Niên Thú roars in place — stunning every
@@ -89,15 +78,28 @@ const ZONE_LABELS = {
   topLeft: 'Trung', topRight: 'Thu', bottomLeft: 'Vui', bottomRight: 'Vẻ',
 };
 
+// Fisher-Yates -- used to build each fresh zone "bag" below.
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// A "shuffle bag" of all 4 zones, refilled + reshuffled once drained --
+// guarantees every zone appears at least once (in fact at least twice)
+// across any 10 relocations, instead of leaving it to pure chance whether
+// a zone gets skipped for an entire 0-100% fear cycle (spawn + the 9
+// relocateMonster() calls at each 10-90% decile = 10 zone-appearances per
+// cycle, matching the room's own DECILE_MILESTONES). A bag can repeat a
+// zone at most twice in a row (the last draw of one bag and the first
+// draw of the next), never three times, since a single bag never
+// contains a duplicate.
 function pickZone(room) {
-  const lastTwo = room.zoneHistory.slice(-2);
-  const candidates = (lastTwo.length === 2 && lastTwo[0] === lastTwo[1])
-    ? ZONE_KEYS.filter((z) => z !== lastTwo[0])
-    : ZONE_KEYS;
-  const zone = candidates[Math.floor(Math.random() * candidates.length)];
-  room.zoneHistory.push(zone);
-  if (room.zoneHistory.length > 2) room.zoneHistory.shift(); // only the last 2 picks matter for the rule
-  return zone;
+  if (!room.zoneBag || room.zoneBag.length === 0) room.zoneBag = shuffle(ZONE_KEYS);
+  return room.zoneBag.pop();
 }
 
 function zoneOrigin(mapWidth, mapHeight, zone) {
@@ -154,9 +156,9 @@ const SELF_DETONATE_STUN_MS = 3000;
 // PACK (i.e. per purchaseUnit), not per individual firecracker — see
 // totalLoadoutCost().
 const FIRECRACKER_TYPES = {
-  small: { key: 'small', label: 'Pháo tép', emoji: '🧨', radius: 50, fear: 12, cost: 5, purchaseUnit: 100, timeToBurn: 1, timeBeforeExplosion: 2, nextBurnTime: 0.5 },
-  medium: { key: 'medium', label: 'Pháo chuột', emoji: '🎆', radius: 75, fear: 20, cost: 10, purchaseUnit: 100, timeToBurn: 2, timeBeforeExplosion: 3, nextBurnTime: 1 },
-  large: { key: 'large', label: 'Pháo cối', emoji: '💣', radius: 110, fear: 35, cost: 25, purchaseUnit: 100, timeToBurn: 5, timeBeforeExplosion: 5, nextBurnTime: 3 },
+  small: { key: 'small', label: 'Pháo tép', emoji: '🧨', radius: 30, fear: 12, cost: 5, purchaseUnit: 100, timeToBurn: 1, timeBeforeExplosion: 5, nextBurnTime: 0.5 },
+  medium: { key: 'medium', label: 'Pháo chuột', emoji: '🎆', radius: 50, fear: 20, cost: 10, purchaseUnit: 100, timeToBurn: 1.5, timeBeforeExplosion: 3, nextBurnTime: 1 },
+  large: { key: 'large', label: 'Pháo cối', emoji: '💣', radius: 80, fear: 38, cost: 25, purchaseUnit: 100, timeToBurn: 4, timeBeforeExplosion: 2, nextBurnTime: 2 },
 };
 const FIRECRACKER_KEYS = Object.keys(FIRECRACKER_TYPES);
 const DEFAULT_LOADOUT_BUDGET = 100; // matches the GDD's own example budget
@@ -187,16 +189,15 @@ const DEFAULT_CHARACTER = CHARACTER_KEYS[0];
 // like it should be — a small dent, not a fifth of its health bar.
 const MONSTER_MAX_HP = 100000;
 
-// Every whole 1,000 HP dropped (i.e. crossing another 1% of the pool, even
-// though we no longer track fear AS a percentage — a single big firecracker
-// can still cross more than one of these in one hit if it's ever buffed
-// past 1,000) drops loot scaled to how crowded the monster's current spot
-// is: count connected players/bots within this radius and multiply by the
-// rate below. Numbers are placeholders per the design brief ("drop rate
-// will be config later") — easy to retune without touching the logic.
+// Every whole 2,500 HP dropped (2.5% of the pool -- a single big
+// firecracker can still cross more than one of these in one hit) drops
+// loot scaled to how crowded the monster's current spot is: count
+// connected players/bots within this radius and multiply by the rate
+// below. Numbers are placeholders per the design brief ("drop rate will
+// be config later") — easy to retune without touching the logic.
 const MONSTER_LOOT_RADIUS = 300;
-const LOOT_DROP_RATE_PER_NEARBY = 2; // e.g. 10 nearby -> 20 items per 1,000 HP crossed
-const LOOT_MILESTONE_HP = 1000; // one loot-drop milestone per this many raw HP dropped (= 1% of MONSTER_MAX_HP)
+const LOOT_DROP_RATE_PER_NEARBY = 2; // e.g. 10 nearby -> 20 items per 2,500 HP crossed
+const LOOT_MILESTONE_HP = 2500; // one loot-drop milestone per this many raw HP dropped (= 2.5% of MONSTER_MAX_HP)
 
 // Every 10% of the HP pool is its own separate milestone system, for the
 // recurring "who's scaring it the most RIGHT NOW" mini-competition: each
@@ -220,18 +221,13 @@ const SCARE_REWARD_TIERS = [
   { minRank: 11, maxRank: 20, points: 5 },
 ];
 const SCARE_REWARD_ANY = 1;
-// One-time bonus for whoever lands the very first successful hit of the
-// entire match — separate from (and in addition to) the recurring
-// decile-tier rewards above.
-const FIRST_HIT_BONUS = 25;
-// That very first hit is also special in a second way, regardless of which
-// firecracker type landed it: it only "grazes" the Niên Thú for a token
-// amount of HP instead of the firecracker's real damage (so the match
-// doesn't immediately blow past the 10% decile — and its hide + relocate —
-// on turn one, before anyone's even seen it move). It's still a genuine
-// hit: the monster is revealed to everyone exactly like any other. Now that
-// fear IS raw HP, this needs no unit conversion — it's just applied as-is.
-const FIRST_HIT_HP_OVERRIDE = 5;
+// Bonus damage (added directly to the firecracker's own real fear amount,
+// not a separate score reward) for whoever lands the hit that finds the
+// Niên Thú again after it goes invisible -- covers the first hit of the
+// whole match, every decile relocation, and the plain "gave up
+// searching" auto-hide alike (see armHiddenWander()/scareMonster()).
+// E.g. Pháo Cối (38 fear) landing this hit deals 38 + 25 = 63 damage.
+const INVISIBLE_FIND_BONUS_HP = 25;
 
 function totalLoadoutCost(loadout) {
   if (!loadout) return 0;
@@ -275,11 +271,16 @@ function autoFillLoadout(budget, { randomized = false } = {}) {
 }
 
 // No cap on how much loot a match can drop in total -- it keeps flowing
-// for as long as the match runs (including through the post-100%
-// "fled" window, see the fled-drop loop in tick()). The only thing that
-// ends a match automatically now is this safety net, so a room can't run
-// forever.
-const MAX_GAME_DURATION_MS = 6 * 60 * 1000;
+// for as long as the match runs. A match ends whichever comes first of:
+// (1) the Niên Thú's HP fully depletes (100%, see scareMonster()) and
+// MONSTER_DEFEATED_WINDUP_MS then passes with no monster left to
+// respawn, giving players time to grab whatever loot is still on the
+// ground, or (2) the room's own time limit runs out -- host-configurable
+// at room creation (see GAME_DURATION_MINUTES_OPTIONS), floored at 6
+// minutes so a room can't be griefed down to an unplayably short match.
+const GAME_DURATION_MINUTES_OPTIONS = [6, 10, 15, 20];
+const DEFAULT_GAME_DURATION_MINUTES = 6;
+const MONSTER_DEFEATED_WINDUP_MS = 2 * 60 * 1000;
 
 // The classic Mid-Autumn prizes -- these are the only items in the plain
 // random-weighted drop (pickLootType()); the zone tiles below are a
@@ -336,31 +337,27 @@ function computeMapSize(playerCount) {
 }
 
 class NienRoom {
-  constructor(id, name, password, loadoutBudget) {
+  constructor(id, name, password, loadoutBudget, gameDurationMinutes) {
     this.id = id;
     this.name = name;
     this.password = password;
     this.loadoutBudget = LOADOUT_BUDGET_OPTIONS.includes(Number(loadoutBudget)) ? Number(loadoutBudget) : DEFAULT_LOADOUT_BUDGET;
+    this.gameDurationMs = (GAME_DURATION_MINUTES_OPTIONS.includes(Number(gameDurationMinutes)) ? Number(gameDurationMinutes) : DEFAULT_GAME_DURATION_MINUTES) * 60 * 1000;
     this.status = 'waiting'; // 'waiting' | 'playing' | 'finished'
     this.players = []; // { id, name, connected, socketId, isBot, x, y, dir, score, burning, armed, stunnedUntil, nextBurnAt, loadout, inventory }
     this.botCounter = 0;
     this.mapWidth = 0;
     this.mapHeight = 0;
-    this.monster = null; // { x, y, zone, visible, lastHitAt, fear, fleeDir, fleeUntil, milestonesHit, decileHit, contributions }
-    this.zoneHistory = []; // last 2 zones the monster appeared/relocated in, for the no-3-in-a-row rule
-    this.firstHitAwarded = false;
+    this.monster = null; // { x, y, zone, visible, lastHitAt, fear, fleeDir, fleeUntil, milestonesHit, decileHit, contributions, pendingBonusHit }
+    this.zoneBag = []; // shuffled zones still owed an appearance this cycle -- see pickZone()
     this.loot = []; // { id, type, label, emoji, value, x, y, reservedFor?, reservedUntil? }
     this.lootCounter = 0; // also doubles as "total items ever dropped" for the HUD
     this.startedAt = null;
-    this.lastDecileRanking = []; // playerIds, highest damage-since-last-decile first -- reused during the fled window
-    this.lastMonsterZone = null; // zone the Niên Thú was last in -- themes fled-window zone-tile drops
-    this.fledUntil = 0; // Date.now() cutoff for the post-100% "gone, respawning" window; 0 = not currently fled
-    this.nextFledDropAt = 0; // next scheduled fled-window drop, while fledUntil is active
+    this.monsterDefeatedAt = null; // Date.now() once the Niên Thú fully depletes for good -- see scareMonster()/tick()
     this.log = [];
     this.winnerId = null;
     this.resultText = null;
     this.tickTimer = null;
-    this.monsterSpawnTimer = null;
   }
 
   pushLog(message) {
@@ -418,13 +415,8 @@ class NienRoom {
     this.loot = [];
     this.lootCounter = 0;
     this.monster = null;
-    this.zoneHistory = [];
-    this.lastDecileRanking = [];
-    this.lastMonsterZone = null;
-    this.fledUntil = 0;
-    this.nextFledDropAt = 0;
-    this.firstHitAwarded = false;
-    clearTimeout(this.monsterSpawnTimer);
+    this.zoneBag = [];
+    this.monsterDefeatedAt = null;
     this.status = 'playing';
     this.startedAt = Date.now();
     this.winnerId = null;
@@ -438,11 +430,14 @@ class NienRoom {
   // random-wander window (see MONSTER_HIDDEN_WANDER_MS) that always kicks
   // in the instant hiding begins, whatever the reason. Mutates the passed
   // monster object; does NOT touch m.visible/m.zone/m.x/m.y itself since
-  // callers set those differently (a fresh spot vs. hiding in place).
+  // callers set those differently (a fresh spot vs. hiding in place). Also
+  // arms the "find it again" bonus (see INVISIBLE_FIND_BONUS_HP /
+  // scareMonster()) for whoever lands the next hit after this.
   armHiddenWander(m) {
     m.visible = false;
     m.hiddenWanderUntil = Date.now() + MONSTER_HIDDEN_WANDER_MS;
     m.wanderDir = null;
+    m.pendingBonusHit = true;
   }
 
   // A fresh appearance (initial spawn, or the respawn 60s after being
@@ -469,8 +464,6 @@ class NienRoom {
       contributions: {}, // playerId -> fear damage dealt since the last decile payout
     };
     this.armHiddenWander(this.monster);
-    this.fledUntil = 0; // it's back -- the fled-window drop loop (tick()) stops here
-    this.nextFledDropAt = 0;
     this.pushLog(`👹 The Niên Thú has appeared somewhere in the ${ZONE_LABELS[zone]} zone!`);
   }
 
@@ -552,14 +545,6 @@ class NienRoom {
       const names = topIds.map((id) => (this.findPlayer(id) || { name: '?' }).name).join(', ');
       this.pushLog(`🎁 A ${t.label} tile dropped, reserved for ${names} (open to anyone after ${ZONE_TILE_RESERVATION_MS / 1000}s)!`);
     }
-  }
-
-  scheduleMonsterSpawn() {
-    clearTimeout(this.monsterSpawnTimer);
-    this.monsterSpawnTimer = setTimeout(() => {
-      this.monsterSpawnTimer = null;
-      if (this.status === 'playing') this.spawnMonster();
-    }, MONSTER_RESPAWN_DELAY_MS);
   }
 
   setPlayerInput(player, dx, dy) {
@@ -646,16 +631,17 @@ class NienRoom {
   }
 
   // playerId identifies who threw the firecracker that landed this hit —
-  // used for the first-hit bonus and the decile-tier reward ranking.
+  // used for the "found it" bonus and the decile-tier reward ranking.
   scareMonster(explosionX, explosionY, fearAmount, playerId) {
     const m = this.monster;
     if (!m) return;
-    const isFirstHit = !this.firstHitAwarded;
-    // The very first successful hit of the match only grazes it for a
-    // token amount, no matter which firecracker type actually landed —
-    // see FIRST_HIT_HP_OVERRIDE above. fearAmount/m.fear are raw HP now,
-    // so this needs no scaling.
-    const appliedFearAmount = isFirstHit ? FIRST_HIT_HP_OVERRIDE : fearAmount;
+    // Whoever lands the first hit after the Niên Thú goes invisible (see
+    // armHiddenWander() -- covers the very first hit of the match, every
+    // decile relocation, and the plain "gave up searching" auto-hide)
+    // deals bonus damage on top of their firecracker's real fear amount,
+    // rewarding actively tracking it down over just camping its old spot.
+    const isBonusHit = Boolean(m.pendingBonusHit);
+    const appliedFearAmount = isBonusHit ? fearAmount + INVISIBLE_FIND_BONUS_HP : fearAmount;
     const oldFear = m.fear;
     m.fear = Math.min(MONSTER_MAX_HP, m.fear + appliedFearAmount);
     const appliedFear = m.fear - oldFear;
@@ -669,12 +655,11 @@ class NienRoom {
       m.contributions[playerId] = (m.contributions[playerId] || 0) + appliedFear;
     }
 
-    if (isFirstHit) {
-      this.firstHitAwarded = true;
+    if (isBonusHit) {
+      m.pendingBonusHit = false;
       const scorer = this.findPlayer(playerId);
       if (scorer) {
-        scorer.score += FIRST_HIT_BONUS;
-        this.pushLog(`🥇 ${scorer.name} was the first to land a hit on the Niên Thú! +${FIRST_HIT_BONUS} pts! (a graze — just ${FIRST_HIT_HP_OVERRIDE} HP — but it's revealed now)`);
+        this.pushLog(`🥇 ${scorer.name} found the hidden Niên Thú! +${INVISIBLE_FIND_BONUS_HP} bonus HP (${fearAmount} + ${INVISIBLE_FIND_BONUS_HP} = ${appliedFearAmount} damage)!`);
       }
     }
 
@@ -698,7 +683,7 @@ class NienRoom {
       this.triggerLionRoar(m);
     }
 
-    // Every whole LOOT_MILESTONE_HP (1,000 = 1% of the pool) crossed —
+    // Every whole LOOT_MILESTONE_HP (2,500 = 2.5% of the pool) crossed —
     // not just every hit, in case a future retune makes a single throw
     // cross more than one at once — drops loot scaled to however many
     // players/bots are currently standing within MONSTER_LOOT_RADIUS of
@@ -718,31 +703,27 @@ class NienRoom {
     // (see dropReservedZoneTiles()), then resets contributions for the
     // next 10% segment. A single big hit can cross more than one decile
     // at once — each crossed decile gets its own payout using the same
-    // contributions snapshot, then it's reset once. this.lastDecileRanking
-    // keeps the most recent ranking around so the fled-window drop loop
-    // (see tick()) has a "top 3" to reserve against once the Niên Thú is
-    // gone and no fresh damage/ranking can happen for ~60s.
+    // contributions snapshot, then it's reset once.
     const decileCrossed = DECILE_MILESTONES.filter((ms) => m.fear >= ms && !m.decileHit.includes(ms));
     decileCrossed.forEach((ms) => {
       m.decileHit.push(ms);
       const ranked = this.rankContributions(m);
       this.distributeScareRewards(ranked, ms);
       this.dropReservedZoneTiles(ranked.map((r) => r.playerId), m.zone, m.x, m.y);
-      this.lastDecileRanking = ranked.map((r) => r.playerId);
     });
     if (decileCrossed.length) m.contributions = {};
 
     if (m.fear >= MONSTER_MAX_HP) {
-      this.pushLog('🏃 The Niên Thú fled completely! It will return in 60 seconds.');
-      this.lastMonsterZone = m.zone;
-      this.fledUntil = Date.now() + MONSTER_RESPAWN_DELAY_MS;
-      this.nextFledDropAt = Date.now() + FLED_DROP_INTERVAL_MS;
+      // Gone for good this time -- no respawn. Players get MONSTER_DEFEATED_WINDUP_MS
+      // to grab whatever loot is still on the ground before the match ends
+      // (see the windup check in tick()); nothing new drops in the
+      // meantime since there's no monster left to hit.
       this.monster = null;
-      this.scheduleMonsterSpawn();
+      this.monsterDefeatedAt = Date.now();
+      this.pushLog(`🏆 The Niên Thú has been fully scared away for good! Grab any last loot — the match ends in ${MONSTER_DEFEATED_WINDUP_MS / 1000}s.`);
     } else if (decileCrossed.length) {
-      // 100% already relocates via the full disappear-and-respawn path
-      // above; anything below that gets an immediate hide + relocate
-      // instead, keeping the chase going without the 60s wait.
+      // 100% ends the match instead (see above); anything below that gets
+      // an immediate hide + relocate, keeping the chase going.
       this.relocateMonster();
     }
   }
@@ -1065,29 +1046,6 @@ class NienRoom {
 
     if (this.monster) this.advanceMonster(now, dt);
 
-    // Fled window: the Niên Thú just got fully scared away (100% HP) and
-    // won't be back for MONSTER_RESPAWN_DELAY_MS -- nobody can deal fresh
-    // damage in the meantime, but loot still needs to keep flowing per the
-    // design brief, at double volume. Classic items drop on a timer here
-    // (no monster position to scale "nearby" by, so everyone connected
-    // counts instead); zone tiles keep reserving to whichever top-3
-    // ranking was current the moment it fled, since no fresher one can
-    // ever be computed while it's gone.
-    if (this.fledUntil && now < this.fledUntil) {
-      if (now >= this.nextFledDropAt) {
-        this.nextFledDropAt = now + FLED_DROP_INTERVAL_MS;
-        const centerX = this.mapWidth / 2;
-        const centerY = this.mapHeight / 2;
-        const connectedCount = this.players.filter((p) => p.connected).length;
-        this.dropLoot(centerX, centerY, connectedCount * LOOT_DROP_RATE_PER_NEARBY * FLED_VOLUME_MULTIPLIER);
-        if (this.lastDecileRanking.length) {
-          this.dropReservedZoneTiles(this.lastDecileRanking, this.lastMonsterZone || 'topLeft', centerX, centerY, FLED_VOLUME_MULTIPLIER);
-        }
-      }
-    } else {
-      this.nextFledDropAt = 0;
-    }
-
     const { selfDetonations } = this.resolveFirecrackers(now);
 
     // Collecting an item takes standing still (no movement input) inside
@@ -1134,7 +1092,9 @@ class NienRoom {
       return true;
     });
 
-    if (this.startedAt && now - this.startedAt >= MAX_GAME_DURATION_MS) {
+    if (this.monsterDefeatedAt && now - this.monsterDefeatedAt >= MONSTER_DEFEATED_WINDUP_MS) {
+      this.finishGame('🏆 The Niên Thú has been driven away for good!');
+    } else if (this.startedAt && now - this.startedAt >= this.gameDurationMs) {
       this.finishGame("⏰ Time's up!");
     }
     return { explosions, selfDetonations };
@@ -1142,8 +1102,6 @@ class NienRoom {
 
   finishGame(reason) {
     this.status = 'finished';
-    clearTimeout(this.monsterSpawnTimer);
-    this.monsterSpawnTimer = null;
     const ranking = [...this.players].sort((a, b) => b.score - a.score);
     this.winnerId = ranking.length && ranking[0].score > 0 ? ranking[0].id : null;
     const winner = this.winnerId ? this.findPlayer(this.winnerId) : null;
@@ -1177,6 +1135,12 @@ class NienRoom {
       mapWidth: this.mapWidth,
       mapHeight: this.mapHeight,
       loadoutBudget: this.loadoutBudget,
+      gameDurationMs: this.gameDurationMs,
+      // Set once the Niên Thú is gone for good (100% HP, no more respawns)
+      // -- the client counts down MONSTER_DEFEATED_WINDUP_MS from this to
+      // show "grab your last loot, match ending soon".
+      monsterDefeatedAt: this.monsterDefeatedAt,
+      monsterDefeatedWindupMs: MONSTER_DEFEATED_WINDUP_MS,
       firecrackerTypes: FIRECRACKER_TYPES,
       firecrackerRange: FIRECRACKER_RANGE, // max throw distance -- see releaseFirecracker()
       characters: CHARACTERS,
@@ -1257,7 +1221,6 @@ function attachNien(io) {
   function deleteRoomIfEmpty(room) {
     if (room && room.isEmpty()) {
       clearInterval(room.tickTimer);
-      clearTimeout(room.monsterSpawnTimer);
       rooms.delete(room.id);
     }
   }
@@ -1269,7 +1232,7 @@ function attachNien(io) {
       if (typeof callback === 'function') callback({ ok: true, rooms: roomList() });
     });
 
-    socket.on('nien:createRoom', ({ roomName, password, playerId, name, loadoutBudget }, callback) => {
+    socket.on('nien:createRoom', ({ roomName, password, playerId, name, loadoutBudget, gameDurationMinutes }, callback) => {
       const cleanRoomName = String(roomName || '').trim().slice(0, 30);
       const cleanPassword = String(password || '');
       if (!cleanRoomName) { if (typeof callback === 'function') callback({ ok: false, error: 'invalid-name' }); return; }
@@ -1279,7 +1242,7 @@ function attachNien(io) {
       if (nameTaken) { if (typeof callback === 'function') callback({ ok: false, error: 'name-taken' }); return; }
 
       roomCounter += 1;
-      const room = new NienRoom(`room_${roomCounter}`, cleanRoomName, cleanPassword, loadoutBudget);
+      const room = new NienRoom(`room_${roomCounter}`, cleanRoomName, cleanPassword, loadoutBudget, gameDurationMinutes);
       const clean = String(name || 'Player').trim().slice(0, 20) || 'Player';
       room.players.push({ id: playerId, name: clean, connected: true, socketId: socket.id, isBot: false, x: 0, y: 0, dir: { x: 0, y: 0 }, score: 0, burning: null, armed: null, stunnedUntil: 0, nextBurnAt: 0, loadout: emptyLoadout(), character: null, pickupProgress: null, zoneTileCounts: { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0 } });
       room.pushLog(`${clean} created the room.`);
@@ -1483,8 +1446,7 @@ module.exports.ZONE_LABELS = ZONE_LABELS;
 module.exports.DECILE_MILESTONES = DECILE_MILESTONES;
 module.exports.SCARE_REWARD_TIERS = SCARE_REWARD_TIERS;
 module.exports.SCARE_REWARD_ANY = SCARE_REWARD_ANY;
-module.exports.FIRST_HIT_BONUS = FIRST_HIT_BONUS;
-module.exports.FIRST_HIT_HP_OVERRIDE = FIRST_HIT_HP_OVERRIDE;
+module.exports.INVISIBLE_FIND_BONUS_HP = INVISIBLE_FIND_BONUS_HP;
 module.exports.MONSTER_HIDE_AFTER_MS = MONSTER_HIDE_AFTER_MS;
 module.exports.LION_ROAR_HP_STEP = LION_ROAR_HP_STEP;
 module.exports.LION_ROAR_RADIUS = LION_ROAR_RADIUS;
@@ -1499,12 +1461,12 @@ module.exports.zoneOrigin = zoneOrigin;
 module.exports.zoneCenter = zoneCenter;
 module.exports.randomPositionInZone = randomPositionInZone;
 module.exports.MONSTER_MAX_HP = MONSTER_MAX_HP;
-module.exports.MONSTER_RESPAWN_DELAY_MS = MONSTER_RESPAWN_DELAY_MS;
+module.exports.MONSTER_DEFEATED_WINDUP_MS = MONSTER_DEFEATED_WINDUP_MS;
+module.exports.GAME_DURATION_MINUTES_OPTIONS = GAME_DURATION_MINUTES_OPTIONS;
+module.exports.DEFAULT_GAME_DURATION_MINUTES = DEFAULT_GAME_DURATION_MINUTES;
 module.exports.CLASSIC_LOOT_TYPES = CLASSIC_LOOT_TYPES;
 module.exports.ZONE_LOOT_TYPES = ZONE_LOOT_TYPES;
 module.exports.ZONE_TILE_TOP_N = ZONE_TILE_TOP_N;
 module.exports.ZONE_TILE_RESERVATION_MS = ZONE_TILE_RESERVATION_MS;
 module.exports.ZONE_TILE_FULL_SET_BONUS = ZONE_TILE_FULL_SET_BONUS;
-module.exports.FLED_DROP_INTERVAL_MS = FLED_DROP_INTERVAL_MS;
-module.exports.FLED_VOLUME_MULTIPLIER = FLED_VOLUME_MULTIPLIER;
 module.exports.FIRECRACKER_TYPES = FIRECRACKER_TYPES;
