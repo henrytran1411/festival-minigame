@@ -136,6 +136,33 @@ if (me) {
     });
   }
 
+  function selectLaps(laps) {
+    socket.emit('racing:selectLaps', { laps }, (res) => {
+      if (!res || !res.ok) alert('Could not change lap count: ' + ((res && res.error) || 'unknown error'));
+    });
+  }
+
+  // state.lapsOptions/state.lapsToWin here are the ROOM's own setting (see
+  // racing-server.js's setLaps()), not any one track's native default --
+  // same idea as renderTrackPicker() below, just a flat number instead of
+  // a track object.
+  const lapsListEl = document.getElementById('laps-list');
+  function renderLapsPicker(state) {
+    if (!state.lapsOptions) return;
+    lapsListEl.innerHTML = '';
+    state.lapsOptions.forEach((laps) => {
+      const btn = document.createElement('button');
+      btn.className = 'track-btn' + (state.lapsToWin === laps ? ' selected' : '');
+      btn.type = 'button';
+      const label = document.createElement('div');
+      label.className = 'track-label';
+      label.textContent = `${laps} lap${laps === 1 ? '' : 's'}`;
+      btn.appendChild(label);
+      btn.addEventListener('click', () => selectLaps(laps));
+      lapsListEl.appendChild(btn);
+    });
+  }
+
   // Preview of the currently-selected track's actual layout -- reuses the
   // same checkpoint/decoration/landmark/road data the in-race views draw
   // from (state's own checkpoints/decorations/landmarks/bgFrom/bgTo/
@@ -275,6 +302,7 @@ if (me) {
     addManyBotsBtn.disabled = state.players.length >= MAX_PLAYERS;
     renderTrackPicker(state);
     renderTrackPreview(state);
+    renderLapsPicker(state);
     renderCharacterPicker(state);
     renderLog(waitingLogEl, state.log);
   }

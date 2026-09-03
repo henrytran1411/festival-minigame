@@ -219,14 +219,12 @@
        capture keeps firing move/up on the same element) still reads as
        pressed, not just the browser's own :active pseudo-class. */
     .gas-btn:active, .gas-btn.held { border-color: var(--gold); color: var(--gold); background: rgba(255, 209, 102, 0.15); }
-    /* On touch devices the corner gas-btn is replaced by the big floating
-       #mobile-gas-btn below (matching the joystick) -- this compact one is
-       too small and too far from the thumb to hold reliably while
-       steering. The gauge/speed readout next to it stays visible either
-       way, purely informational. */
-    @media (pointer: coarse) {
-      .gas-btn { display: none; }
-    }
+    /* The corner gas-btn is always replaced by the big floating
+       #mobile-gas-btn below (matching the joystick's own size/position,
+       and shown on mouse now too, not just touch) -- this compact one is
+       too small and too fiddly to hold reliably. The gauge/speed readout
+       next to it stays visible either way, purely informational. */
+    .gas-btn { display: none; }
 
     #item-control { display: flex; gap: 4px; }
     /* Icon + count only now (no text label -- see .item-label below) so
@@ -448,17 +446,20 @@
        this is the only way to steer there. Hidden by default (desktop
        already has WASD/arrows); shown only under a coarse pointer
        (touch-primary), regardless of screen width, so a mouse user with a
-       small window never sees it. Fixed-position so it floats over the
-       page and stays reachable without scrolling. Mirrors nien.js's own
-       joystick (same drag-to-steer gesture, same CSS radius). */
+       small window never sees it. Positioned relative to #track-wrap (its
+       actual parent, position: relative -- same anchor #hud-topleft/
+       #hud-topright already use), not the page/viewport, so it always
+       sits over a corner of the track canvas itself rather than the
+       corner of whatever window happens to contain it. Mirrors nien.js's
+       own joystick (same drag-to-steer gesture, same CSS radius). */
     #mobile-joystick { display: none; }
     @media (pointer: coarse) {
       #mobile-joystick { display: block; }
     }
     #mobile-joystick {
-      position: fixed;
-      left: 24px;
-      bottom: 24px;
+      position: absolute;
+      left: 18px;
+      bottom: 18px;
       z-index: 40;
       width: 108px;
       height: 108px;
@@ -480,23 +481,26 @@
       pointer-events: none;
     }
 
-    /* On-screen GAS button for touch devices -- same fixed floating-circle
-       design as #mobile-joystick above (mirrored to the opposite bottom
-       corner), replacing the tiny corner .gas-btn which is too small and
-       too far from the thumb to hold reliably while steering. A plain
-       <div>, not a <button> -- avoids any native focus ring/callout on
-       tap-and-hold, which is exactly the "select text" long-press menu
-       this is meant to prevent (see user-select/-webkit-touch-callout
-       below: without them, holding this down can pop the OS's copy/
-       lookup bubble on the GAS label, which is distracting mid-race). */
-    #mobile-gas-btn { display: none; }
-    @media (pointer: coarse) {
-      #mobile-gas-btn { display: flex; }
-    }
+    /* On-screen GAS button -- same floating-circle design as
+       #mobile-joystick above (mirrored to the opposite bottom corner of
+       #track-wrap, same absolute-relative-to-the-track anchor -- see its
+       comment), replacing the tiny corner .gas-btn which is too small
+       and fiddly to hold reliably. Shown for EVERY pointer type now,
+       mouse included -- unlike the joystick (still touch-only, since
+       desktop already has WASD/arrows for steering), there's no
+       equivalent always-there desktop control for gas beyond Shift, so
+       this floating button is the more discoverable, easier-to-hold
+       option there too. A plain <div>, not a <button> -- avoids any
+       native focus ring/callout on tap-and-hold, which is exactly the
+       "select text" long-press menu this is meant to prevent on touch
+       (see user-select/-webkit-touch-callout below: without them,
+       holding this down can pop the OS's copy/lookup bubble on the GAS
+       label, distracting mid-race). */
     #mobile-gas-btn {
-      position: fixed;
-      right: 24px;
-      bottom: 24px;
+      display: flex;
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
       z-index: 40;
       width: 108px;
       height: 108px;
@@ -572,6 +576,12 @@
       </div>
 
       <div class="shop-card">
+        <h3 style="margin:0 0 8px; text-align:center; font-size:14px;">🏁 Race Length</h3>
+        <div class="track-options" id="laps-list"></div>
+        <p style="color:var(--muted); font-size:11px; text-align:center; margin:8px 0 0;">Anyone in the room can change the lap count before Start Race. Items from checkpoints are only given on lap 1.</p>
+      </div>
+
+      <div class="shop-card">
         <h3 style="margin:0 0 8px; text-align:center; font-size:14px;">🌕 Choose Your Racer</h3>
         <div class="character-options" id="character-list"></div>
         <p style="color:var(--muted); font-size:11px; text-align:center; margin:8px 0 0;">Didn't pick one? You'll get a random racer when the race starts.</p>
@@ -644,13 +654,13 @@
           <span>🔧 CAR WRECKED — REPAIRING</span>
           <span class="repair-seconds" id="repair-seconds">5</span>
         </div>
-      </div>
 
-      <div id="mobile-joystick">
-        <div id="joystick-thumb"></div>
-      </div>
+        <div id="mobile-joystick">
+          <div id="joystick-thumb"></div>
+        </div>
 
-      <div id="mobile-gas-btn">GAS</div>
+        <div id="mobile-gas-btn">GAS</div>
+      </div>
 
       <p class="racing-hint hidden" id="racing-hint-text">Steer with <b>WASD</b>, the <b>arrow keys</b>, or the on-screen joystick (touch devices) — the faster you're going, the harder it gets to redirect. Hold <b>Shift</b> or the <b>⛽ GAS</b> button to accelerate — release to coast down. Hitting the barrier or a 🕳️ pothole damages your car (worse at higher speed!) — reach 100% and it's wrecked for 5s. Driving through a checkpoint always gives YOU a random item — use it with the buttons above!</p>
 
@@ -698,7 +708,8 @@
           <li>When the host clicks <b>Start Race</b>, there's a 3-second countdown — get ready!</li>
           <li>Once it says <b>GO!</b>, steer with <b>WASD</b>, the <b>arrow keys</b>, or the on-screen joystick (touch devices) — you move freely in any direction, so taking the hairpins tight or wide is up to your own driving. The road has real guardrails now — straying past the yellow edge lines slides you back onto the road instead of letting you cut across the terrain.</li>
           <li>Steering only sets your direction — your actual speed comes from a single <b>⛽ GAS</b> control (next to the joystick). You start at a dead stop: hold <b>Shift</b> or the GAS button and speed climbs; let go and it coasts back down — no separate brake. It climbs gently up to 60 km/h, a bit quicker from 60–150, quicker still from 150–250, and fastest of all from 250 up to the 400 km/h top speed, so flooring it feels like it really wakes up the faster you're already going.</li>
-          <li>The faster you're going, the more your car resists changing direction — a quick flick of the wheel at low speed turns almost instantly, but the same flick at top speed takes a real moment to catch, so plan hairpins ahead of time once you're flying.</li>
+          <li><b>Momentum is real:</b> letting off the gas always coasts down at the same steady rate, no matter how fast you were going — which means the higher your speed, the much longer it takes (and the much longer a run-up you'll cover) before you actually slow down. Coasting from 60 km/h takes about 3 seconds; coasting all the way down from 400 km/h takes roughly 20 — kinetic energy doesn't just disappear, so brake early before a hairpin, not at it.</li>
+          <li><b>Understeer is real, too:</b> the faster you're going, the more your car resists changing direction at all — a quick flick of the wheel at low-to-medium speed still turns almost instantly, but push much past 250 km/h and the SAME flick barely nudges your heading no matter how hard you hold it; momentum just carries you straight through. Flying into a tight hairpin at top speed means you plow wide (or into the guardrail) even at full steering lock — you have to actually slow down first to make the corner.</li>
           <li>Clipping the road's guardrail damages your car (see the 🔧 gauge next to GAS) — worse the faster you were going: about 10% at 0–60 km/h, 20% at 61–150, 45% at 151–250, and a brutal 70% above that. 🕳️ Potholes scattered on the road are gentler but still bite — 5%/10%/15%/20% at those same speed bands, plus a flat 20% cut off your current speed on top. Rack up 100% damage and your car is wrecked — frozen for 5 seconds while it's repaired, then it's good as new but back at a dead stop (0 km/h), just like the start of the race.</li>
           <li>The main view follows you closely, so it only shows the road right around you — use the <b>minimap</b> in the top-right corner to see the whole pass, where you are on it, and which checkpoint is next.</li>
           <li>Drive through the checkpoints around the loop <b>in order</b> — the road, the dashed center line, and the checkered start/finish band mark the pass. Each track needs a different number of laps to finish, shown in the track picker.</li>

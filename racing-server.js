@@ -119,12 +119,11 @@ const CHECKPOINT_EDGE_MARGIN = 4 * WORLD_SCALE;
 //
 // The rate of change isn't flat — it depends on the CURRENT speed band, so
 // climbing from a stop feels different than climbing at speed. Each band's
-// rate is specified per 200ms of continuous holding (or releasing), then
-// converted to per-second in speedRateKmhPerSec() since tick() runs at
-// TICK_MS regardless of that 200ms figure. The same table is used for
-// deceleration (releasing) as for acceleration (holding) — there's no
-// separate "how fast it coasts down" spec, so it falls at the same rate
-// for whichever band it's currently in.
+// rate is specified per 200ms of continuous holding, then converted to
+// per-second in speedRateKmhPerSec() since tick() runs at TICK_MS
+// regardless of that 200ms figure. This curve is ACCELERATION ONLY now --
+// see BRAKE_DECEL_KMH_PER_SEC below for coasting/braking, which
+// deliberately does NOT reuse this table.
 const MAX_SPEED_KMH = 400;
 const SPEED_BANDS = [
   { upTo: 60, kmhPer200ms: 4 },
@@ -137,33 +136,52 @@ function speedRateKmhPerSec(speedKmh) {
   return band.kmhPer200ms * (1000 / 200);
 }
 
-// Movement inertia: a racer's actual heading (`moveDir`, see tick()) chases
-// the raw steering input (`dir`, unchanged by this — still set directly by
-// setPlayerInput()) instead of snapping to it every tick. How fast it
-// chases depends on CURRENT speed: near-instant at a standstill, much
-// slower at top speed, so redirecting into a different heading gets
-// noticeably harder the faster a racer is already going. Blended nlerp-
-// style (a straight linear blend of the two unit vectors, not a true
-// angular slerp) since that's simple and cheap; a side effect at high
-// inertia + a sharp turn is the blended vector's length dipping below 1
-// mid-turn (it's a chord of the arc between two unit vectors) — this reads
-// as a natural scrub/slowdown through a hard direction change rather than
-// an artifact to fix.
+// Coasting/braking rate -- there's no separate brake pedal, letting go of
+// gas IS the brake here, same as the real comment above says. FLAT
+// (independent of speed band), unlike acceleration: real braking distance
+// grows with the SQUARE of speed (kinetic energy ~= v^2) even under a
+// CONSTANT deceleration force (distance ~= v^2 / (2 * decel)), so a flat
+// rate already gives that realistic "much longer to stop from high speed"
+// feel for free, with zero extra math. Matches the old lowest band's own
+// rate (20 km/h/s) so a stop from low speed feels basically unchanged;
+// the old table's TOP band was actually FASTER (40 km/h/s) than its
+// bottom one, meaning a racer decelerated quicker the faster they were
+// going -- backwards from a real car fighting its own momentum, and
+// exactly what this replaces.
+const BRAKE_DECEL_KMH_PER_SEC = 20;
+
+// Movement inertia / understeer: a racer's actual heading (`moveDir`, see
+// tick()) chases the raw steering input (`dir`, unchanged by this --
+// still set directly by setPlayerInput()) instead of snapping to it every
+// tick. How fast it chases depends on CURRENT speed: near-instant at a
+// standstill, down to almost nothing at top speed, so redirecting into a
+// different heading gets noticeably harder the faster a racer is already
+// going -- the wheel turns, but momentum keeps carrying the car mostly
+// straight (real understeer: even full steering lock can't pull a tight
+// corner at high speed, since moveDir can only crawl toward `dir` a
+// couple percent of the way there per tick). Blended nlerp-style (a
+// straight linear blend of the two unit vectors, not a true angular
+// slerp) since that's simple and cheap; a side effect at high inertia +
+// a sharp turn is the blended vector's length dipping below 1 mid-turn
+// (it's a chord of the arc between two unit vectors) — this reads as a
+// natural scrub/slowdown through a hard direction change rather than an
+// artifact to fix.
 //
-// Eased by speed SQUARED (not linear) rather than a flat taper: most WASD
-// driving is small, gradual adjustments (following the road's own curve,
-// or a diagonal-key combo swap), which converge close enough to feel
-// "instant" even at a fairly sluggish lerp value, so a flat taper made the
-// effect nearly invisible in normal play — only a full reversal made it
-// obvious. Squaring keeps low/mid speed snappy (matching a real car that
-// still steers fine well under its top speed) while making the falloff
-// sharply, unmistakably heavier specifically in the upper end of the speed
-// range, where it's supposed to matter most.
+// Eased by speed CUBED (not linear, not squared) rather than a flat
+// taper: most WASD driving is small, gradual adjustments (following the
+// road's own curve, or a diagonal-key combo swap), which converge close
+// enough to feel "instant" even at a fairly sluggish lerp value, so a
+// flat taper made the effect nearly invisible in normal play — only a
+// full reversal made it obvious. Cubing keeps low/mid speed snappy
+// (matching a real car that still steers fine well under its top speed,
+// understeer only really biting near the very top of the range) while
+// making the falloff sharply, unmistakably heavier specifically in the
+// upper end of the speed range, where it's supposed to matter most.
 const TURN_LERP_AT_MIN_SPEED = 1; // effectively instant at a standstill
-const TURN_LERP_AT_MAX_SPEED = 0.05; // noticeably heavy at top speed
+const TURN_LERP_AT_MAX_SPEED = 0.02; // barely turns at all at top speed -- genuine understeer, not just "a bit heavier"
 function turnLerpFactor(speedKmh) {
   const t = clamp(speedKmh / MAX_SPEED_KMH, 0, 1);
-  const eased = t * t;
+  const eased = t * t * t;
   return TURN_LERP_AT_MIN_SPEED + (TURN_LERP_AT_MAX_SPEED - TURN_LERP_AT_MIN_SPEED) * eased;
 }
 
@@ -644,6 +662,17 @@ Object.keys(TRACKS).forEach((key) => {
 const TRACK_KEYS = Object.keys(TRACKS);
 const DEFAULT_TRACK_KEY = TRACK_KEYS[0];
 
+// Host-configurable race length, in laps -- a ROOM setting (like
+// trackKey), not a per-track one: overrides each track's own native
+// `lapsToWin` above once set. Note this breaks the original "every
+// track's total race length lands in a similar ballpark" balancing those
+// per-track defaults were tuned for -- e.g. 8 laps of the 50km Ô Quy Hồ
+// pass is a genuinely long race compared to 8 laps of the short Hải Vân
+// one -- but that's the whole point: the host is deliberately choosing
+// how long the race runs, track be damned.
+const LAPS_OPTIONS = [3, 4, 5, 8];
+const DEFAULT_LAPS = 3;
+
 // Playable characters, picked pre-race (see racing:selectCharacter). Not
 // exclusive — more than one player can pick the same one. Same 4
 // Mid-Autumn mascots as Đuổi Niên Thú's own CHARACTERS in nien-server.js,
@@ -713,11 +742,12 @@ function nextCheckpointIndex(checkpointsPassed, numCheckpoints) {
 }
 
 class RacingRoom {
-  constructor(id, name, password, trackKey) {
+  constructor(id, name, password, trackKey, laps) {
     this.id = id;
     this.name = name;
     this.password = password;
     this.trackKey = TRACKS[trackKey] ? trackKey : DEFAULT_TRACK_KEY;
+    this.laps = LAPS_OPTIONS.includes(Number(laps)) ? Number(laps) : DEFAULT_LAPS;
     this.status = 'waiting'; // 'waiting' | 'countdown' | 'racing' | 'finished'
     // { id, name, connected, socketId, isBot, character, x, y, dir,
     //   moveDir, checkpointsPassed, finishedAt, finishRank, speedKmh,
@@ -749,6 +779,13 @@ class RacingRoom {
     if (!TRACKS[trackKey]) return { ok: false, error: 'invalid-track' };
     this.trackKey = trackKey;
     return { ok: true, trackKey };
+  }
+
+  // Same host-less "anyone may change it" spirit as setTrack() above.
+  setLaps(laps) {
+    if (!LAPS_OPTIONS.includes(Number(laps))) return { ok: false, error: 'invalid-laps' };
+    this.laps = Number(laps);
+    return { ok: true, laps: this.laps };
   }
 
   // Scatters POTHOLE_COUNT hazards at random points directly on THIS
@@ -837,7 +874,7 @@ class RacingRoom {
     this.status = 'countdown';
     this.raceStartsAt = Date.now() + COUNTDOWN_MS;
     this.raceStartedAt = null;
-    this.pushLog(`🏁 On your marks for ${track.label}... ${track.lapsToWin} laps to win!`);
+    this.pushLog(`🏁 On your marks for ${track.label}... ${this.laps} laps to win!`);
     clearTimeout(this.countdownTimer);
     this.countdownTimer = setTimeout(() => {
       this.countdownTimer = null;
@@ -1053,9 +1090,23 @@ class RacingRoom {
       // leaves off with no sudden drop.
       if (now < (p.maxGasUntil || 0)) {
         p.speedKmh = Math.max(MAX_SPEED_KMH, p.speedKmh - MAX_GAS_DECAY_KMH_PER_SEC * dt);
-      } else {
+      } else if (p.gasHeld) {
         const rate = speedRateKmhPerSec(p.speedKmh);
-        p.speedKmh = clamp(p.speedKmh + rate * dt * (p.gasHeld ? 1 : -1), 0, MAX_SPEED_KMH);
+        p.speedKmh = clamp(p.speedKmh + rate * dt, 0, MAX_SPEED_KMH);
+      } else {
+        // Coasting (no brake pedal, no separate "not gas" control -- letting
+        // go IS the brake here) at a FLAT rate, not the same climbing curve
+        // used for acceleration -- real kinetic energy scales with speed
+        // SQUARED, so even a constant deceleration force already means
+        // stopping distance grows quadratically with how fast you were
+        // going (distance ~= v^2 / (2 * decel)); the old shared-rate
+        // version actually decelerated FASTER at high speed than low
+        // (40 km/h/s at 250-400 vs 20 at 0-60), the opposite of a real car
+        // fighting its own momentum. This keeps low-speed coasting feeling
+        // basically the same (BRAKE_DECEL_KMH_PER_SEC matches the old
+        // lowest band) while making a stop from anywhere near MAX_SPEED_KMH
+        // take a genuinely long run-up -- see BRAKE_DECEL_KMH_PER_SEC.
+        p.speedKmh = clamp(p.speedKmh - BRAKE_DECEL_KMH_PER_SEC * dt, 0, MAX_SPEED_KMH);
       }
       // PLAYER_SPEED is exactly what speedKmh === MAX_SPEED_KMH already
       // meant, so this is a no-op at top speed and scales down from there.
@@ -1160,13 +1211,16 @@ class RacingRoom {
         // guaranteed personal reward for reaching the checkpoint, not a
         // pickup another nearby racer could grab instead (see the comment
         // on ITEM_TYPES above). Doesn't touch or block anyone else's own
-        // crossing of the same checkpoint, before or after.
-        this.grantRandomItem(p);
+        // crossing of the same checkpoint, before or after. FIRST LAP
+        // only (checkpointsPassed <= numCheckpoints covers checkpoints
+        // 1..numCheckpoints, i.e. everything up to and including the lap-1
+        // finish line itself) -- repeat laps don't hand out any more.
+        if (p.checkpointsPassed <= track.numCheckpoints) this.grantRandomItem(p);
         if (p.checkpointsPassed % track.numCheckpoints === 0) {
           const lap = p.checkpointsPassed / track.numCheckpoints;
-          this.pushLog(`🏎️ ${p.name} completed lap ${lap}/${track.lapsToWin}!`);
+          this.pushLog(`🏎️ ${p.name} completed lap ${lap}/${this.laps}!`);
         }
-        if (p.checkpointsPassed >= track.totalCheckpointsToFinish) {
+        if (p.checkpointsPassed >= this.laps * track.numCheckpoints) {
           p.finishedAt = now;
           this.finishCounter += 1;
           p.finishRank = this.finishCounter;
@@ -1207,17 +1261,18 @@ class RacingRoom {
     if (allDone || timedOut) this.finishRace();
   }
 
-  // Fractional progress (0..1) toward the current track's
-  // totalCheckpointsToFinish, purely for ranking unfinished racers and
-  // driving the client's live progress bar — includes a smooth fractional
-  // term for "how close to the next checkpoint" rather than only jumping
-  // in whole-checkpoint steps.
+  // Fractional progress (0..1) toward this ROOM's configured race length
+  // (this.laps -- not the track's own native lapsToWin, see setLaps()),
+  // purely for ranking unfinished racers and driving the client's live
+  // progress bar — includes a smooth fractional term for "how close to
+  // the next checkpoint" rather than only jumping in whole-checkpoint
+  // steps.
   progressFraction(player) {
     const track = this.track;
     const target = track.checkpoints[nextCheckpointIndex(player.checkpointsPassed, track.numCheckpoints)];
     const dist = distance(player, target);
     const fractional = 1 - clamp(dist / (CHECKPOINT_RADIUS * 4), 0, 1);
-    return (player.checkpointsPassed + fractional) / track.totalCheckpointsToFinish;
+    return (player.checkpointsPassed + fractional) / (this.laps * track.numCheckpoints);
   }
 
   finishRace() {
@@ -1277,9 +1332,10 @@ class RacingRoom {
       trackWidth: track.trackWidth,
       bgFrom: track.bgFrom,
       bgTo: track.bgTo,
-      lapsToWin: track.lapsToWin,
+      lapsToWin: this.laps, // room's configured race length -- see setLaps() -- NOT the track's own native default
+      lapsOptions: LAPS_OPTIONS, // for the waiting-room picker
       numCheckpoints: track.numCheckpoints,
-      totalCheckpointsToFinish: track.totalCheckpointsToFinish,
+      totalCheckpointsToFinish: this.laps * track.numCheckpoints,
       // Lightweight catalog of every selectable track (for the waiting-room
       // picker) — full checkpoint/landmark/item geometry is only sent for
       // the CURRENTLY selected one, above.
@@ -1310,7 +1366,7 @@ class RacingRoom {
           // moving, not just their raw steering input.
           moveDir: p.moveDir || { x: 0, y: 0 },
           checkpointsPassed: p.checkpointsPassed || 0,
-          lap: Math.min(track.lapsToWin, Math.floor((p.checkpointsPassed || 0) / track.numCheckpoints) + 1),
+          lap: Math.min(this.laps, Math.floor((p.checkpointsPassed || 0) / track.numCheckpoints) + 1),
           gasHeld: Boolean(p.gasHeld),
           // Shown as 0 while stunned/repairing rather than the stale value
           // a racer who isn't actually moving anymore still holds
@@ -1387,7 +1443,7 @@ function attachRacing(io) {
       if (typeof callback === 'function') callback({ ok: true, rooms: roomList() });
     });
 
-    socket.on('racing:createRoom', ({ roomName, password, playerId, name, trackKey }, callback) => {
+    socket.on('racing:createRoom', ({ roomName, password, playerId, name, trackKey, laps }, callback) => {
       const cleanRoomName = String(roomName || '').trim().slice(0, 30);
       const cleanPassword = String(password || '');
       if (!cleanRoomName) { if (typeof callback === 'function') callback({ ok: false, error: 'invalid-name' }); return; }
@@ -1397,7 +1453,7 @@ function attachRacing(io) {
       if (nameTaken) { if (typeof callback === 'function') callback({ ok: false, error: 'name-taken' }); return; }
 
       roomCounter += 1;
-      const room = new RacingRoom(`room_${roomCounter}`, cleanRoomName, cleanPassword, trackKey);
+      const room = new RacingRoom(`room_${roomCounter}`, cleanRoomName, cleanPassword, trackKey, laps);
       const clean = String(name || 'Player').trim().slice(0, 20) || 'Player';
       room.players.push(newPlayer(playerId, clean, socket.id, false));
       room.pushLog(`${clean} created the room.`);
@@ -1483,6 +1539,15 @@ function attachRacing(io) {
       if (!room) { if (typeof callback === 'function') callback({ ok: false, error: 'no-room' }); return; }
       if (room.status !== 'waiting') { if (typeof callback === 'function') callback({ ok: false, error: 'already-started' }); return; }
       const result = room.setTrack(trackKey);
+      if (typeof callback === 'function') callback(result);
+      if (result.ok) room.broadcast(nsp);
+    });
+
+    socket.on('racing:selectLaps', ({ laps }, callback) => {
+      const room = myRoom();
+      if (!room) { if (typeof callback === 'function') callback({ ok: false, error: 'no-room' }); return; }
+      if (room.status !== 'waiting') { if (typeof callback === 'function') callback({ ok: false, error: 'already-started' }); return; }
+      const result = room.setLaps(laps);
       if (typeof callback === 'function') callback(result);
       if (result.ok) room.broadcast(nsp);
     });
@@ -1575,6 +1640,8 @@ module.exports.columnX = columnX;
 module.exports.TRACKS = TRACKS;
 module.exports.TRACK_KEYS = TRACK_KEYS;
 module.exports.DEFAULT_TRACK_KEY = DEFAULT_TRACK_KEY;
+module.exports.LAPS_OPTIONS = LAPS_OPTIONS;
+module.exports.DEFAULT_LAPS = DEFAULT_LAPS;
 module.exports.PLAYER_SPEED = PLAYER_SPEED;
 module.exports.PLAYER_RADIUS = PLAYER_RADIUS;
 module.exports.COUNTDOWN_MS = COUNTDOWN_MS;
@@ -1584,6 +1651,7 @@ module.exports.CHECKPOINT_EDGE_MARGIN = CHECKPOINT_EDGE_MARGIN;
 module.exports.MAX_SPEED_KMH = MAX_SPEED_KMH;
 module.exports.SPEED_BANDS = SPEED_BANDS;
 module.exports.speedRateKmhPerSec = speedRateKmhPerSec;
+module.exports.BRAKE_DECEL_KMH_PER_SEC = BRAKE_DECEL_KMH_PER_SEC;
 module.exports.turnLerpFactor = turnLerpFactor;
 module.exports.DAMAGE_BANDS = DAMAGE_BANDS;
 module.exports.damagePercentForSpeed = damagePercentForSpeed;
