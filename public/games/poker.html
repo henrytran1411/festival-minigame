@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poker — Autumn Festival</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .pk-wrap { max-width: 760px; }
+
+    .pk-log {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      max-height: 140px;
+      overflow-y: auto;
+      margin-top: 14px;
+    }
+    .pk-log div { padding: 2px 0; }
+
+    .pk-player-list { list-style: none; padding: 0; margin: 12px 0; }
+    .pk-player-list li { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; display: flex; justify-content: space-between; }
+    .pk-player-list li:last-child { border-bottom: none; }
+
+    .room-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; }
+    .room-row .room-info { display: flex; flex-direction: column; }
+    .room-row .room-name { font-weight: 600; font-size: 14px; }
+    .room-row .room-meta { font-size: 12px; color: var(--muted); }
+    .room-row .room-meta.playing { color: var(--gold); }
+    .room-row button { padding: 6px 14px; font-size: 13px; }
+
+    #lobby-screen input, #create-room-screen input, #create-room-screen select, #password-modal input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 14px;
+    }
+    .pk-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 10px; }
+    @media (max-width: 420px) { .pk-config-grid { grid-template-columns: 1fr; } }
+    .pk-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+
+    .pk-clock { text-align: center; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+    .pk-clock.low { color: var(--bad); font-weight: 700; }
+    .pk-turn-banner { text-align: center; font-weight: 700; margin-bottom: 10px; min-height: 22px; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+    .pk-turn-banner.mine { color: var(--good); }
+    .pk-turn-banner.thinking { color: var(--gold); }
+    .pk-thinking-dots { display: inline-block; width: 1.5em; text-align: left; animation: pk-thinking-dots 1.2s steps(4) infinite; overflow: hidden; white-space: nowrap; }
+    @keyframes pk-thinking-dots { 0% { width: 0; } 100% { width: 1.5em; } }
+
+    /* Table layout -- everyone (including you) seated around an oval
+       table, same approach as UNO's .uno-table/.uno-seat: fixed seating
+       order (the server's player join order), you always at the bottom,
+       absolutely positioned by angle around the ellipse. */
+    .pk-table {
+      position: relative;
+      height: 340px;
+      margin-bottom: 14px;
+      background: radial-gradient(ellipse at 50% 20%, #1f4d3a 0%, #123424 70%, #0c2519 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+    .pk-seats-ring { position: absolute; inset: 0; }
+    .pk-seat {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      background: rgba(10, 12, 18, 0.75);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 10px;
+      text-align: center;
+      min-width: 92px;
+    }
+    .pk-seat.you { border-color: var(--accent); }
+    .pk-seat.turn { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); }
+    .pk-seat.folded { opacity: 0.45; }
+    .pk-seat.offline { opacity: 0.5; }
+    .pk-seat.eliminated { opacity: 0.35; }
+    .pk-seat .name { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
+    .pk-seat .chips { font-size: 12px; color: var(--gold); font-variant-numeric: tabular-nums; }
+    .pk-seat .bet { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .pk-seat .dealer-badge, .pk-seat .allin-badge, .pk-seat .fold-badge {
+      position: absolute; top: -8px; right: -6px; font-size: 11px; font-weight: 800;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 1px 6px;
+    }
+    .pk-seat .dealer-badge { color: var(--gold); }
+    .pk-seat .allin-badge { color: var(--bad); }
+    .pk-seat .hole-cards { display: flex; justify-content: center; gap: 3px; margin-top: 6px; }
+
+    .pk-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 1;
+    }
+
+    /* Playing cards -- plain rank+suit faces so no image assets are needed. */
+    .pk-card {
+      width: 30px; height: 42px;
+      border-radius: 5px;
+      background: #f4f1e8;
+      color: #1a1a1a;
+      border: 1px solid #cfc9b8;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 13px; line-height: 1.1;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+      flex-shrink: 0;
+    }
+    .pk-card.red { color: #b3122b; }
+    .pk-card .suit { font-size: 12px; }
+    .pk-card.small { width: 24px; height: 34px; font-size: 11px; }
+    .pk-card.small .suit { font-size: 10px; }
+    .pk-card.back {
+      background: repeating-linear-gradient(45deg, #3a4152, #3a4152 4px, #2d3340 4px, #2d3340 8px);
+      color: transparent;
+    }
+    .pk-card.win { box-shadow: 0 0 0 2px var(--good), 0 1px 3px rgba(0,0,0,0.4); }
+
+    .pk-board { display: flex; justify-content: center; gap: 4px; margin-bottom: 6px; flex-wrap: nowrap; }
+    .pk-pot { color: var(--gold); font-weight: 700; font-size: 14px; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+
+    .pk-you { text-align: center; margin-bottom: 4px; }
+    .pk-you .hole-cards { display: flex; justify-content: center; gap: 8px; }
+
+    .pk-action-bar { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+    .pk-action-buttons { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .pk-action-buttons button { min-width: 90px; }
+    .pk-raise-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
+    .pk-raise-row input[type="range"] { width: 160px; }
+    .pk-raise-row input[type="number"] {
+      width: 90px; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: #1a1d24; color: var(--text); font-size: 14px;
+    }
+    .pk-quick-bets { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+    .pk-quick-bets button { padding: 5px 10px; font-size: 12px; }
+
+    .pk-hand-result {
+      background: rgba(10, 12, 18, 0.7);
+      border: 1px solid var(--gold);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+    .pk-hand-result .title { font-weight: 700; color: var(--gold); margin-bottom: 6px; text-align: center; }
+    .pk-hand-result .reveal-row { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 4px 0; flex-wrap: wrap; }
+    .pk-hand-result .reveal-row .cards { display: flex; gap: 3px; }
+    .pk-hand-result .reveal-row .label { font-size: 12px; color: var(--muted); min-width: 120px; text-align: right; }
+
+    #rules-modal ul { padding-left: 18px; }
+    #rules-modal li { margin-bottom: 8px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap pk-wrap">
+    <div class="top-bar">
+      <h1>♠️ Poker <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
+      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+    </div>
+
+    <div id="lobby-screen" class="card">
+      <h2 style="margin-top:0; text-align:center;">Poker Tables</h2>
+      <ul id="room-list" class="pk-player-list"></ul>
+      <p id="no-rooms-msg" style="color:var(--muted); font-size:13px; text-align:center; display:none;">No tables yet — create one to get started.</p>
+      <div class="pk-actions">
+        <button id="show-create-btn">+ Create Table</button>
+      </div>
+    </div>
+
+    <div id="create-room-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;">Create Table</h2>
+      <p style="font-size:13px; color:var(--muted);">Table name</p>
+      <input type="text" id="room-name-input" maxlength="30" placeholder="e.g. Poker Table 1" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Password</p>
+      <input type="text" id="room-password-input" maxlength="30" placeholder="Anything — share it with the table" />
+
+      <div class="pk-config-grid">
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Max seats</p>
+          <select id="max-seats-select">
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6" selected>6</option>
+          </select>
+        </div>
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Starting chips</p>
+          <select id="starting-chips-select">
+            <option value="500">500</option>
+            <option value="1000" selected>1,000</option>
+            <option value="2000">2,000</option>
+            <option value="5000">5,000</option>
+          </select>
+        </div>
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Small blind <span style="font-weight:400;">(big blind is 2x)</span></p>
+          <select id="small-blind-select">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+          </select>
+        </div>
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Blinds increase</p>
+          <select id="blind-increase-select">
+            <option value="0" selected>Off</option>
+            <option value="5">Double every 5 hands</option>
+            <option value="10">Double every 10 hands</option>
+          </select>
+        </div>
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Time per turn</p>
+          <select id="time-per-turn-select">
+            <option value="0">Unlimited</option>
+            <option value="20">20s</option>
+            <option value="30">30s</option>
+            <option value="45">45s</option>
+            <option value="60">60s</option>
+          </select>
+        </div>
+      </div>
+
+      <p id="create-room-error" style="color:var(--bad); font-size:13px; display:none;"></p>
+      <div class="pk-actions">
+        <button id="create-room-btn">Create &amp; Sit Down</button>
+        <button class="secondary" id="cancel-create-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="waiting-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
+      <p id="waiting-config" style="text-align:center; font-size:12px; color:var(--muted); margin-top:-6px;"></p>
+      <ul id="player-list" class="pk-player-list"></ul>
+      <div class="pk-actions">
+        <button class="secondary" id="add-bot-btn">🤖 Add Bot</button>
+        <button id="start-btn" disabled>▶ Start Game</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center; margin-top:8px;">Need more players around the table? Add a bot.</p>
+      <div class="pk-actions">
+        <button class="danger" id="leave-waiting-btn">Leave Table</button>
+      </div>
+      <div id="waiting-log" class="pk-log"></div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+      <div class="pk-turn-banner" id="turn-banner"></div>
+      <div class="pk-clock" id="turn-clock"></div>
+      <div id="hand-result" class="pk-hand-result hidden"></div>
+
+      <div class="pk-table">
+        <div class="pk-seats-ring" id="seats"></div>
+        <div class="pk-center">
+          <div class="pk-board" id="board-cards"></div>
+          <div class="pk-pot" id="pot-display"></div>
+        </div>
+      </div>
+
+      <div class="pk-you" id="you-panel"></div>
+      <div class="pk-action-bar" id="action-bar"></div>
+      <div class="pk-actions">
+        <button class="danger" id="leave-btn">Leave Table</button>
+      </div>
+      <div id="game-log" class="pk-log"></div>
+    </div>
+
+    <div id="finished-screen" class="card result-card hidden">
+      <div class="pk-winner" id="winner-text" style="text-align:center; font-size:22px; font-weight:800; margin:10px 0;"></div>
+      <ul id="final-standings" class="pk-player-list"></ul>
+      <div class="actions">
+        <button id="new-game-btn">Play Again</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 id="password-modal-title">Enter Password</h2>
+      <input type="text" id="join-password-input" placeholder="Table password" />
+      <p id="password-error" style="color:var(--bad); font-size:13px; display:none;">Wrong password.</p>
+      <div class="pk-actions">
+        <button id="password-submit-btn">Join</button>
+        <button class="secondary" id="password-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="rules-lang-toggle">
+        <button type="button" class="rules-lang-en">English</button>
+        <button type="button" class="rules-lang-vi">Tiếng Việt</button>
+      </div>
+      <div class="lang-en">
+        <h2>How to Play Poker</h2>
+        <ul>
+          <li>Standard No-Limit Texas Hold'em, 2-6 players, with purely virtual chips — no real stakes.</li>
+          <li>Every hand, each player gets 2 private hole cards. Betting happens in 4 rounds: <b>preflop</b> (right after the deal), <b>flop</b> (3 shared community cards), <b>turn</b> (1 more), and <b>river</b> (1 more).</li>
+          <li>Before the cards are dealt, the two seats after the dealer button post a <b>small blind</b> and <b>big blind</b> — forced bets that start the pot. The button moves one seat clockwise every hand.</li>
+          <li>On your turn you can <b>fold</b> (give up the hand), <b>check</b> (pass, only if no one has bet yet this round) or <b>call</b> (match the current bet), or <b>bet/raise</b> (increase it). If you don't have enough chips to fully call or raise, you can always go <b>all-in</b> with whatever you have left.</li>
+          <li>A betting round ends once everyone still in the hand has either folded or put in the same amount. Once every remaining player is all-in, the rest of the community cards are dealt straight through to showdown.</li>
+          <li>If everyone else folds, the last player standing wins the pot without having to show their cards. Otherwise, once the river's betting is done, everyone left reveals their hand — best 5-card hand (from your 2 hole cards + the 5 community cards) wins.</li>
+          <li>Hand rankings, best to worst: <b>Straight Flush</b>, <b>Four of a Kind</b>, <b>Full House</b>, <b>Flush</b>, <b>Straight</b>, <b>Three of a Kind</b>, <b>Two Pair</b>, <b>Pair</b>, <b>High Card</b>.</li>
+          <li>If two or more players tie for the best hand, they split the pot evenly (any leftover odd chip goes to whichever of them sits closest to the dealer's left).</li>
+          <li><b>Side pots:</b> if a short-stacked player goes all-in for less than everyone else, a separate side pot forms for the extra chips among the players who could still cover it — the all-in player can only win up to what they put in.</li>
+          <li>Run out of chips and you're eliminated from the table. The game ends when only one player still has chips — they win the table.</li>
+          <li><b>Table settings</b> (chosen by whoever creates the table): max seats (2-6), starting chip stack, small blind size (big blind is always double), an optional blind increase every few hands to keep things moving, and an optional per-turn clock (miss it and you're auto-checked or auto-folded).</li>
+        </ul>
+      </div>
+      <div class="lang-vi">
+        <h2>Cách chơi Poker</h2>
+        <ul>
+          <li>Texas Hold'em No-Limit tiêu chuẩn, 2-6 người chơi, chỉ dùng chip ảo — không có cược tiền thật.</li>
+          <li>Mỗi ván, mỗi người chơi được chia 2 lá bài riêng (bài tẩy). Cược diễn ra qua 4 vòng: <b>trước lật (preflop)</b> (ngay sau khi chia bài), <b>flop</b> (3 lá bài chung), <b>turn</b> (thêm 1 lá), và <b>river</b> (thêm 1 lá).</li>
+          <li>Trước khi chia bài, hai vị trí ngay sau người cầm nút chia bài phải đặt <b>cược nhỏ (small blind)</b> và <b>cược lớn (big blind)</b> — cược bắt buộc để tạo quỹ cược. Nút chia bài di chuyển 1 vị trí theo chiều kim đồng hồ mỗi ván.</li>
+          <li>Đến lượt bạn có thể <b>bỏ bài (fold)</b>, <b>bỏ lượt (check)</b> (chỉ khi chưa ai đặt cược trong vòng này) hoặc <b>theo (call)</b> (khớp mức cược hiện tại), hoặc <b>cược/tăng (bet/raise)</b> (tăng mức cược). Nếu không đủ chip để theo hoặc tăng đầy đủ, bạn luôn có thể <b>dốc hết (all-in)</b> với số chip còn lại.</li>
+          <li>Một vòng cược kết thúc khi mọi người còn trong ván đã bỏ bài hoặc đặt cùng một mức cược. Khi mọi người còn lại đều đã all-in, các lá bài chung còn lại sẽ được chia liên tiếp cho đến khi lật bài.</li>
+          <li>Nếu mọi người khác bỏ bài, người còn lại thắng toàn bộ quỹ cược mà không cần lật bài. Ngược lại, khi vòng cược ở river kết thúc, những người còn lại lật bài — bài 5 lá mạnh nhất (từ 2 lá bài riêng + 5 lá bài chung) thắng.</li>
+          <li>Thứ tự bài từ mạnh đến yếu: <b>Thùng Phá Sảnh (Straight Flush)</b>, <b>Tứ Quý (Four of a Kind)</b>, <b>Cù Lũ (Full House)</b>, <b>Thùng (Flush)</b>, <b>Sảnh (Straight)</b>, <b>Ba Cây (Three of a Kind)</b>, <b>Hai Đôi (Two Pair)</b>, <b>Một Đôi (Pair)</b>, <b>Bài Cao (High Card)</b>.</li>
+          <li>Nếu hai người trở lên có bài mạnh bằng nhau, họ chia đều quỹ cược (chip dư ra được chia cho người ngồi gần bên trái người chia bài nhất).</li>
+          <li><b>Quỹ cược phụ (side pot):</b> nếu một người dốc hết (all-in) với ít chip hơn những người khác, phần chip dư sẽ tạo thành quỹ cược phụ giữa những người vẫn còn đủ chip theo — người all-in chỉ có thể thắng tối đa số chip họ đã đặt.</li>
+          <li>Hết chip là bị loại khỏi bàn. Ván chơi kết thúc khi chỉ còn một người còn chip — người đó thắng cả bàn.</li>
+          <li><b>Cài đặt bàn</b> (do người tạo bàn chọn): số ghế tối đa (2-6), số chip khởi đầu, mức cược nhỏ (cược lớn luôn gấp đôi), tùy chọn tăng cược sau vài ván để ván chơi không kéo dài quá lâu, và tùy chọn đồng hồ đếm giờ mỗi lượt (hết giờ sẽ tự động bỏ lượt hoặc bỏ bài).</li>
+        </ul>
+      </div>
+      <button class="modal-close">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../common.js"></script>
+  <script src="poker.js"></script>
+</body>
+</html>

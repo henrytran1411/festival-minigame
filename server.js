@@ -20,6 +20,7 @@ require('./nien-server.js')(io);
 require('./oaq-server.js')(io);
 require('./battleship-server.js')(io);
 require('./racing-server.js')(io);
+require('./poker-server.js')(io);
 
 const GAMES = ['sudoku', 'scramble', 'memory', 'proverb'];
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'trungthu2026!@';
