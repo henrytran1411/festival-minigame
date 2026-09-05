@@ -13,13 +13,23 @@
       <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
     </div>
 
-    <div id="play-screen">
+    <div id="mode-screen" class="card hidden" style="max-width:420px; margin:40px auto; text-align:center;">
+      <h2 style="margin-top:0;">Choose a mode</h2>
+      <p style="color:var(--muted); font-size:13px;">Both Solo and Tournament give you your own random puzzle (different for every player, so no one can pass along the layout). Tournament just marks the attempt as an official tournament round on the leaderboard. Both count against your 3 total attempts.</p>
+      <div class="actions" style="justify-content:center;">
+        <button id="solo-mode-btn">🎮 Solo</button>
+        <button class="secondary" id="tournament-mode-btn">🏆 Tournament</button>
+      </div>
+    </div>
+
+    <div id="play-screen" class="hidden">
       <div class="status-bar">
         <div>Time: <b id="timer">0s</b></div>
         <div>Mistakes: <b id="mistakes">0</b></div>
         <div>Time Score: <b id="time-score">300</b></div>
         <div>Input Score: <b id="input-score">0</b></div>
         <div>Attempt: <b id="attempt-info">1/3</b></div>
+        <div id="mode-badge" style="color:var(--gold);"></div>
       </div>
       <div id="board" class="board"></div>
       <div style="text-align:center; margin-top:12px;">

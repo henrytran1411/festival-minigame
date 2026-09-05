@@ -98,7 +98,7 @@ const cardEls = {};
 function buildGameCards() {
   gameControlsEl.innerHTML = '';
   window.FESTIVAL_GAMES.forEach((g) => {
-    gameWindowStates[g.key] = gameWindowStates[g.key] || { game: g.key, isOpen: false, openedAt: null, closesAt: null, hidden: false };
+    gameWindowStates[g.key] = gameWindowStates[g.key] || { game: g.key, isOpen: false, openedAt: null, closesAt: null, hidden: false, tournamentHidden: false };
 
     const card = document.createElement('div');
     card.className = 'card';
@@ -107,13 +107,24 @@ function buildGameCards() {
       <div class="admin-status closed" data-role="status">🔒 Closed</div>
       <div class="admin-status" data-role="hidden-status" style="color: var(--muted); font-size: 12px;"></div>
       <div class="admin-actions">
-        <button data-role="open">▶ Open (2 min)</button>
+        <button data-role="open">▶ Open (5 min)</button>
         <button data-role="close" class="danger" disabled>■ Close Now</button>
       </div>
       <div class="admin-actions">
         <button data-role="toggle-hidden" class="secondary">🙈 Hide from Players</button>
         <button data-role="reset-attempts" class="secondary">↺ Reset Attempts</button>
       </div>
+      ${g.hasTournamentMode ? `
+      <div class="admin-actions">
+        <button data-role="toggle-tournament" class="secondary">🏆 Hide Tournament Mode</button>
+        ${g.tournament ? '<button data-role="new-tournament-round" class="secondary">🎲 New Tournament Round</button>' : ''}
+      </div>` : ''}
+      ${g.tournament ? `
+      <div class="admin-status" data-role="round-status" style="color: var(--muted); font-size: 12px;"></div>
+      <div class="admin-actions">
+        <button data-role="tournament-start" class="secondary">▶️ Start Tournament</button>
+        <button data-role="tournament-next" class="secondary" disabled>⏭ Next Question</button>
+      </div>` : ''}
     `;
     card.querySelector('[data-role="open"]').addEventListener('click', () => {
       socket.emit('admin:open', { game: g.key }, (res) => {
@@ -131,6 +142,31 @@ function buildGameCards() {
         if (res && res.ok) applyState(res.state);
       });
     });
+    if (g.hasTournamentMode) {
+      card.querySelector('[data-role="toggle-tournament"]').addEventListener('click', () => {
+        const currentlyHidden = Boolean(gameWindowStates[g.key].tournamentHidden);
+        socket.emit('admin:set-tournament-hidden', { game: g.key, hidden: !currentlyHidden }, (res) => {
+          if (res && res.ok) applyState(res.state);
+        });
+      });
+    }
+    if (g.tournament) {
+      card.querySelector('[data-role="new-tournament-round"]').addEventListener('click', () => {
+        socket.emit('admin:new-tournament-round', { game: g.key }, (res) => {
+          if (res && res.ok) showResetNote(g.key, null, '🎲 New tournament round ready — new Tournament joins get fresh content.');
+        });
+      });
+      card.querySelector('[data-role="tournament-start"]').addEventListener('click', () => {
+        socket.emit('admin:tournament-start', { game: g.key }, (res) => {
+          if (!res || !res.ok) alert('Could not start the tournament: ' + ((res && res.error) || 'unknown error'));
+        });
+      });
+      card.querySelector('[data-role="tournament-next"]').addEventListener('click', () => {
+        socket.emit('admin:tournament-next', { game: g.key }, (res) => {
+          if (!res || !res.ok) alert('Could not advance the tournament: ' + ((res && res.error) || 'unknown error'));
+        });
+      });
+    }
     card.querySelector('[data-role="reset-attempts"]').addEventListener('click', () => {
       socket.emit('admin:reset-attempts', { game: g.key }, (res) => {
         if (res && res.ok) showResetNote(g.key, res.playerCount);
@@ -165,13 +201,51 @@ function renderCard(game) {
   const toggleHiddenBtn = card.querySelector('[data-role="toggle-hidden"]');
   hiddenStatusEl.textContent = state.hidden ? '🙈 Hidden from index page ("Open later")' : '';
   toggleHiddenBtn.textContent = state.hidden ? '👁 Show to Players' : '🙈 Hide from Players';
+
+  const toggleTournamentBtn = card.querySelector('[data-role="toggle-tournament"]');
+  if (toggleTournamentBtn) {
+    toggleTournamentBtn.textContent = state.tournamentHidden ? '🏆 Show Tournament Mode' : '🏆 Hide Tournament Mode';
+  }
 }
 
-function showResetNote(game, playerCount) {
+// game -> { phase, questionIndex, totalQuestions, playerCount }, only for
+// tournament-capable games -- see server.js's tournamentRound.
+const tournamentRoundStates = {};
+
+function renderTournamentRound(game) {
+  const card = cardEls[game];
+  if (!card) return;
+  const statusEl = card.querySelector('[data-role="round-status"]');
+  const startBtn = card.querySelector('[data-role="tournament-start"]');
+  const nextBtn = card.querySelector('[data-role="tournament-next"]');
+  if (!statusEl || !startBtn || !nextBtn) return;
+  const state = tournamentRoundStates[game];
+  if (!state) return;
+
+  if (state.phase === 'lobby') {
+    statusEl.textContent = `🏟 Lobby — ${state.playerCount} player${state.playerCount === 1 ? '' : 's'} waiting to start`;
+    startBtn.disabled = false;
+    nextBtn.disabled = true;
+    nextBtn.textContent = '⏭ Next Question';
+  } else {
+    const isLast = state.questionIndex + 1 >= state.totalQuestions;
+    statusEl.textContent = `▶️ Question ${state.questionIndex + 1} of ${state.totalQuestions} in progress — ${state.playerCount} joined`;
+    startBtn.disabled = true;
+    nextBtn.disabled = isLast;
+    nextBtn.textContent = isLast ? '⏭ Last Question' : '⏭ Next Question';
+  }
+}
+
+function applyRoundState(state) {
+  tournamentRoundStates[state.game] = state;
+  renderTournamentRound(state.game);
+}
+
+function showResetNote(game, playerCount, customMessage) {
   const card = cardEls[game];
   if (!card) return;
   const statusEl = card.querySelector('[data-role="status"]');
-  statusEl.textContent = `↺ Attempts reset for ${playerCount} player${playerCount === 1 ? '' : 's'}`;
+  statusEl.textContent = customMessage || `↺ Attempts reset for ${playerCount} player${playerCount === 1 ? '' : 's'}`;
   setTimeout(() => renderCard(game), 2500);
 }
 
@@ -247,6 +321,10 @@ socket.on('leaderboard', (entries) => {
   playerCountEl.textContent = `${entries.length} player${entries.length === 1 ? '' : 's'} registered`;
 });
 socket.on('admin:cheat-flag', (flag) => addFlag(flag));
+socket.on('tournament:round-state', (state) => applyRoundState(state));
+socket.on('tournament:round-state-all', (all) => {
+  Object.values(all).forEach((state) => applyRoundState(state));
+});
 
 const savedPassword = localStorage.getItem(PASSWORD_KEY);
 if (savedPassword) {

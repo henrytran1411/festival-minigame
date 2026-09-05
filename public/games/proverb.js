@@ -6,7 +6,7 @@ if (me) {
 
   const ROUND_SECONDS = 60;
   const HINT_UNLOCK_AT = 20; // seconds elapsed in the round
-  const OPTIONS_REVEAL_AT = 40; // seconds elapsed in the round
+  const OPTIONS_REVEAL_AT = 35; // seconds elapsed in the round
   const MAX_HINTS = 3; // total for the whole game, not per round
   const ROUNDS_PER_GAME = 15;
   const WRONG_PENALTY = 5;
@@ -35,6 +35,62 @@ if (me) {
       }
     }
     return CORRECT_POINT_CHECKPOINTS[CORRECT_POINT_CHECKPOINTS.length - 1].points;
+  }
+
+  // Tournament mode's correct-answer score decays differently from Solo's
+  // pointsForCorrectAnswer above, in two phases:
+  //  - Phase 1 (0s to OPTIONS_REVEAL_AT): steps down every 0.5s, from 100 to
+  //    TOURNAMENT_PHASE1_END_POINTS over that span (so 0-0.5s = 100,
+  //    0.5-1s = 99, ...), floored to a whole number each half-second tick.
+  //  - Phase 2 (OPTIONS_REVEAL_AT to ROUND_SECONDS): once the multiple-choice
+  //    options have auto-revealed, decay slows to 1 point per 1.5 elapsed
+  //    seconds, continuing from wherever phase 1 left off.
+  // Needs sub-second precision (see roundStartTime), since roundTimeLeft only
+  // ticks once per second and can't resolve the 0.5s phase-1 steps.
+  const TOURNAMENT_PHASE1_START_POINTS = 100;
+  const TOURNAMENT_PHASE1_END_POINTS = 65;
+  const TOURNAMENT_PHASE2_STEP_SECONDS = 1.5;
+  const TOURNAMENT_WRONG_PENALTY = 4;
+  const MAX_TOURNAMENT_WRONG_GUESSES = 5; // per round (typed guesses only) -- Solo stays unlimited retries
+
+  function tournamentPointsForCorrectAnswer(elapsedSeconds) {
+    if (elapsedSeconds < OPTIONS_REVEAL_AT) {
+      const perHalfStep = (TOURNAMENT_PHASE1_START_POINTS - TOURNAMENT_PHASE1_END_POINTS) / (OPTIONS_REVEAL_AT * 2);
+      return Math.floor(TOURNAMENT_PHASE1_START_POINTS - perHalfStep * Math.floor(elapsedSeconds * 2));
+    }
+    const stepsSinceReveal = Math.floor((elapsedSeconds - OPTIONS_REVEAL_AT) / TOURNAMENT_PHASE2_STEP_SECONDS);
+    return TOURNAMENT_PHASE1_END_POINTS - stepsSinceReveal;
+  }
+
+  // Tournament mode's speed bonus (replaces Solo's single MAX_SPEED_BONUS=300
+  // savedTime-based figure) splits the same 300-point total into three parts:
+  //  - Up to 150 (10/round): only for a correct answer typed with full
+  //    Vietnamese diacritics -- e.g. "Ăn quả nhớ kẻ trồng cây" earns it, "an
+  //    qua nho ke trong cay" (still accepted as correct, see
+  //    normalizeAnswer()) does not. Picking a multiple-choice option always
+  //    earns it, since the option button submits the exact accented text.
+  //  - Up to 75 (5/round): only for a correct answer given before the
+  //    multiple-choice options have auto-revealed (optionsShown still false).
+  //  - Up to 75: a single tiered bonus on TOTAL time used across all 15
+  //    rounds (see totalTimeUsed) -- 75 points for 0-60s total, stepping
+  //    down 5 points per additional 60s, floor of 25 past 600s total.
+  const TOURNAMENT_DIACRITICS_BONUS = 10;
+  const TOURNAMENT_NO_HINT_BONUS = 5;
+
+  function tournamentTimeBonus(totalSeconds) {
+    if (totalSeconds > 600) return 25;
+    const tier = Math.max(1, Math.ceil(totalSeconds / 60));
+    return 75 - 5 * (tier - 1);
+  }
+
+  // Case/punctuation-insensitive like normalizeAnswer(), but keeps
+  // diacritics -- used only to detect the TOURNAMENT_DIACRITICS_BONUS above.
+  function normalizeKeepDiacritics(text) {
+    return text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   // Well-known Vietnamese ca dao / tục ngữ, each represented as an emoji
@@ -97,10 +153,72 @@ if (me) {
   const hintBtn = document.getElementById('hint-btn');
   const mcOptionsEl = document.getElementById('mc-options');
   const answerRevealEl = document.getElementById('answer-reveal');
+  const modeScreen = document.getElementById('mode-screen');
+  const tournamentLobbyScreenEl = document.getElementById('tournament-lobby-screen');
+  const tournamentLobbyCountEl = document.getElementById('tournament-lobby-count');
+  const tournamentLobbyPlayersEl = document.getElementById('tournament-lobby-players');
+  const tournamentWaitMsgEl = document.getElementById('tournament-wait-msg');
   const playScreen = document.getElementById('play-screen');
   const resultScreen = document.getElementById('result-screen');
   const finalScoreEl = document.getElementById('final-score');
   const resultDetailEl = document.getElementById('result-detail');
+  const bonusBreakdownEl = document.getElementById('bonus-breakdown');
+  const modeBadgeEl = document.getElementById('mode-badge');
+  const wrongGuessCounterEl = document.getElementById('wrong-guess-counter');
+  const soloModeBtn = document.getElementById('solo-mode-btn');
+  const tournamentModeBtn = document.getElementById('tournament-mode-btn');
+  Festival.watchTournamentMode(socket, 'proverb', (available) => {
+    tournamentModeBtn.style.display = available ? '' : 'none';
+    // While the admin has Tournament mode open, only Tournament is offered
+    // -- Solo comes back once the admin hides Tournament again.
+    soloModeBtn.style.display = available ? 'none' : '';
+  });
+
+  // Tournament-only: shows the running wrong-guess count against
+  // MAX_TOURNAMENT_WRONG_GUESSES (e.g. "❌ 2/5"), turning solid red once the
+  // cap is hit and typed input locks -- see attempt()'s wrong-guess branch.
+  function renderWrongGuessCounter() {
+    if (currentMode !== 'tournament') {
+      wrongGuessCounterEl.classList.add('hidden');
+      return;
+    }
+    wrongGuessCounterEl.classList.remove('hidden');
+    wrongGuessCounterEl.textContent = `❌ ${wrongGuessCount}/${MAX_TOURNAMENT_WRONG_GUESSES}`;
+    wrongGuessCounterEl.style.fontWeight = wrongGuessCount >= MAX_TOURNAMENT_WRONG_GUESSES ? '700' : '400';
+  }
+
+  // Tournament round pacing, server-authoritative (see server.js's
+  // tournamentRound). While this player is in the lobby, `pendingProverbOrder`
+  // holds the content already fetched at tournament:join -- startGame() isn't
+  // called until admin:tournament-start flips the round to 'active'. Once
+  // playing, `waitingForAdmin` marks the gap after a round ends until
+  // admin:tournament-next bumps questionIndex -- see advance() and
+  // enterWaitingForAdmin()/exitWaitingForAdmin() below.
+  let roundState = null;
+  let pendingProverbOrder = null;
+  let waitingForAdmin = false;
+  function renderLobby(state) {
+    tournamentLobbyCountEl.textContent = `👥 ${state.playerCount} joined`;
+    Festival.renderTournamentLobbyPlayers(tournamentLobbyPlayersEl, state.players);
+  }
+  Festival.watchTournamentRoundState(socket, 'proverb', (state) => {
+    const wasLobby = roundState && roundState.phase === 'lobby';
+    roundState = state;
+    if (currentMode !== 'tournament') return;
+    if (!tournamentLobbyScreenEl.classList.contains('hidden')) {
+      renderLobby(state);
+      if (state.phase === 'active' && wasLobby) {
+        tournamentLobbyScreenEl.classList.add('hidden');
+        startGame(pendingProverbOrder);
+      }
+      return;
+    }
+    if (waitingForAdmin && state.phase === 'active' && state.questionIndex > index) {
+      index = state.questionIndex;
+      exitWaitingForAdmin();
+      showRound();
+    }
+  });
 
   const meta = window.FESTIVAL_GAMES.find((g) => g.key === 'proverb');
   const rulesModalEl = document.getElementById('rules-modal');
@@ -121,7 +239,19 @@ if (me) {
   rulesModalEl.querySelectorAll('.rules-lang-en').forEach((b) => b.addEventListener('click', () => { Festival.setRulesLang('en'); renderRulesBody(); }));
   rulesModalEl.querySelectorAll('.rules-lang-vi').forEach((b) => b.addEventListener('click', () => { Festival.setRulesLang('vi'); renderRulesBody(); }));
 
-  let rounds, index, score, solvedCount, savedTime, startTime, roundTimeLeft, roundTimerHandle, finished, hintsLeft, optionsShown, transitioning;
+  let rounds, index, score, solvedCount, savedTime, startTime, roundTimeLeft, roundTimerHandle, finished, hintsLeft, optionsShown, transitioning, roundStartTime,
+    diacriticsBonusTotal, noHintBonusTotal, totalTimeUsed, wrongGuessCount;
+  // 'solo' | 'tournament' -- picked on the mode screen before each run.
+  // Tournament mode draws its 15 rounds from the server's shared order
+  // (see tournament-mode-btn's handler below) instead of a fresh random
+  // draw, so everyone who plays Tournament faces the identical proverbs
+  // in the identical order -- and has no Hint button and no Skip at all.
+  // It's also admin-paced: a fresh join lands in a lobby until
+  // admin:tournament-start releases everyone into round 0 together, and
+  // after each round the player waits (see enterWaitingForAdmin()) until
+  // admin:tournament-next releases everyone into the next one -- see
+  // watchTournamentRoundState above.
+  let currentMode = 'solo';
 
   function shuffleArray(arr) {
     const a = [...arr];
@@ -148,8 +278,15 @@ if (me) {
     return shuffleArray(PROVERB_POOL).slice(0, ROUNDS_PER_GAME);
   }
 
-  function startGame() {
-    rounds = pickRounds();
+  function showModeScreen() {
+    tournamentLobbyScreenEl.classList.add('hidden');
+    playScreen.classList.add('hidden');
+    resultScreen.classList.add('hidden');
+    modeScreen.classList.remove('hidden');
+  }
+
+  function startGame(proverbOrder) {
+    rounds = proverbOrder ? proverbOrder.map((i) => PROVERB_POOL[i]) : pickRounds();
     index = 0;
     score = 0;
     solvedCount = 0;
@@ -157,8 +294,17 @@ if (me) {
     startTime = performance.now();
     hintsLeft = MAX_HINTS;
     finished = false;
+    waitingForAdmin = false;
+    diacriticsBonusTotal = 0;
+    noHintBonusTotal = 0;
+    totalTimeUsed = 0;
     liveScoreEl.textContent = '0';
     roundTotalEl.textContent = String(rounds.length);
+    modeBadgeEl.textContent = currentMode === 'tournament' ? '🏆 Tournament' : '';
+    hintBtn.style.display = currentMode === 'tournament' ? 'none' : '';
+    skipBtn.style.display = currentMode === 'tournament' ? 'none' : '';
+    modeScreen.classList.add('hidden');
+    tournamentLobbyScreenEl.classList.add('hidden');
     resultScreen.classList.add('hidden');
     playScreen.classList.remove('hidden');
     answerInput.disabled = false;
@@ -172,6 +318,7 @@ if (me) {
   }
 
   function updateHintButton() {
+    if (currentMode === 'tournament') return; // no Hint button in Tournament mode at all
     const unlocked = elapsedInRound() >= HINT_UNLOCK_AT;
     hintBtn.disabled = finished || hintsLeft <= 0 || !unlocked;
     if (finished) return;
@@ -184,12 +331,15 @@ if (me) {
 
   function showRound() {
     transitioning = false;
+    roundStartTime = performance.now();
+    wrongGuessCount = 0;
+    renderWrongGuessCounter();
     wordIndexEl.textContent = String(index + 1);
     emojiEl.textContent = rounds[index].emoji;
     answerInput.value = '';
     answerInput.disabled = false;
     submitBtn.disabled = false;
-    skipBtn.disabled = false;
+    skipBtn.disabled = currentMode === 'tournament';
     flashEl.textContent = '';
     flashEl.className = 'scramble-flash';
     hintEl.textContent = '';
@@ -197,6 +347,7 @@ if (me) {
     mcOptionsEl.classList.add('hidden');
     answerRevealEl.textContent = '';
     answerRevealEl.classList.add('hidden');
+    tournamentWaitMsgEl.style.display = 'none';
     optionsShown = false;
     roundTimeLeft = ROUND_SECONDS;
     timerEl.textContent = ROUND_SECONDS + 's';
@@ -216,6 +367,10 @@ if (me) {
       clearInterval(roundTimerHandle);
       flash("Time's up!", 'bad');
       revealAnswer();
+      if (currentMode === 'tournament') {
+        totalTimeUsed += ROUND_SECONDS;
+        Festival.submitTournamentQuestionDone(socket, 'proverb', index, score);
+      }
       advance(3000);
     }
   }
@@ -259,7 +414,21 @@ if (me) {
     if (!guess) return;
 
     if (guess === normalizeAnswer(rounds[index].answer)) {
-      score += pointsForCorrectAnswer(elapsedInRound());
+      if (currentMode === 'tournament') {
+        const elapsedSeconds = (performance.now() - roundStartTime) / 1000;
+        score += tournamentPointsForCorrectAnswer(elapsedSeconds);
+        // Bonus-eligible only when typed with full Vietnamese diacritics --
+        // a multiple-choice pick always passes this too, since `raw` is then
+        // the option's own accented text (see revealOptions()'s button
+        // handler), matched here case/punctuation-insensitively.
+        if (normalizeKeepDiacritics(raw) === normalizeKeepDiacritics(rounds[index].answer)) {
+          diacriticsBonusTotal += TOURNAMENT_DIACRITICS_BONUS;
+        }
+        if (!optionsShown) noHintBonusTotal += TOURNAMENT_NO_HINT_BONUS;
+        totalTimeUsed += elapsedSeconds;
+      } else {
+        score += pointsForCorrectAnswer(elapsedInRound());
+      }
       solvedCount += 1;
       savedTime += Math.max(0, roundTimeLeft);
       liveScoreEl.textContent = String(score);
@@ -267,35 +436,87 @@ if (me) {
       flash('Correct!', 'good');
       if (fromOption) {
         revealAnswer();
+        if (currentMode === 'tournament') Festival.submitTournamentQuestionDone(socket, 'proverb', index, score);
         advance(2000);
       } else {
+        if (currentMode === 'tournament') Festival.submitTournamentQuestionDone(socket, 'proverb', index, score);
         advance(600);
       }
     } else if (fromOption) {
-      score -= WRONG_PENALTY;
+      score -= currentMode === 'tournament' ? TOURNAMENT_WRONG_PENALTY : WRONG_PENALTY;
       liveScoreEl.textContent = String(score);
       clearInterval(roundTimerHandle);
       flash('Not quite!', 'bad');
       revealAnswer();
+      if (currentMode === 'tournament') {
+        totalTimeUsed += (performance.now() - roundStartTime) / 1000;
+        Festival.submitTournamentQuestionDone(socket, 'proverb', index, score);
+      }
       advance(3000);
     } else {
-      score -= WRONG_PENALTY;
+      if (currentMode === 'tournament') {
+        score -= TOURNAMENT_WRONG_PENALTY;
+        wrongGuessCount += 1;
+        renderWrongGuessCounter();
+      } else {
+        score -= WRONG_PENALTY;
+      }
       liveScoreEl.textContent = String(score);
-      flash('Not quite, try again', 'bad');
-      answerInput.value = '';
-      answerInput.focus();
+      if (currentMode === 'tournament' && wrongGuessCount >= MAX_TOURNAMENT_WRONG_GUESSES) {
+        // Out of typed guesses -- unlike Scramble, Proverb has a fallback:
+        // force the multiple-choice options open (if they haven't already)
+        // so this player can still finish the round that way.
+        answerInput.disabled = true;
+        submitBtn.disabled = true;
+        flash('Out of guesses — pick an option below', 'bad');
+        if (!optionsShown) revealOptions();
+      } else {
+        flash('Not quite, try again', 'bad');
+        answerInput.value = '';
+        answerInput.focus();
+      }
     }
   }
 
   function advance(delay) {
     if (transitioning) return;
     transitioning = true;
+    if (currentMode === 'tournament') {
+      // Tournament's questionIndex is server-authoritative (see
+      // watchTournamentRoundState above) -- this player's own `index` isn't
+      // bumped until admin:tournament-next says so, except for the very last
+      // round, which needs no admin release: there's nothing left to advance
+      // to, so this player's own run just ends.
+      if (index >= rounds.length - 1) {
+        finishGame();
+      } else {
+        enterWaitingForAdmin();
+      }
+      return;
+    }
     index += 1;
     if (index >= rounds.length) {
       finishGame();
     } else {
       setTimeout(showRound, delay);
     }
+  }
+
+  // Tournament-only: this round is done, but the next one doesn't appear
+  // until admin:tournament-next bumps questionIndex (see
+  // watchTournamentRoundState above, which calls exitWaitingForAdmin() +
+  // showRound() when it does).
+  function enterWaitingForAdmin() {
+    waitingForAdmin = true;
+    answerInput.disabled = true;
+    submitBtn.disabled = true;
+    timerEl.textContent = 'Waiting…';
+    tournamentWaitMsgEl.style.display = '';
+  }
+
+  function exitWaitingForAdmin() {
+    waitingForAdmin = false;
+    tournamentWaitMsgEl.style.display = 'none';
   }
 
   function finishGame() {
@@ -306,14 +527,46 @@ if (me) {
     submitBtn.disabled = true;
     skipBtn.disabled = true;
     hintBtn.disabled = true;
-    const totalPossibleTime = ROUND_SECONDS * rounds.length;
-    const bonus = Math.round(MAX_SPEED_BONUS * (savedTime / totalPossibleTime));
-    const finalScore = Math.max(0, Math.min(1500, score + bonus));
+    let bonus;
+    let timeBonus;
+    if (currentMode === 'tournament') {
+      // See the constants/comment above: 150 (diacritics) + 75 (no-hint) +
+      // up to 75 (total-time tier) = the same 300-point ceiling Solo's
+      // MAX_SPEED_BONUS uses, just split into three earned components.
+      timeBonus = tournamentTimeBonus(totalTimeUsed);
+      bonus = diacriticsBonusTotal + noHintBonusTotal + timeBonus;
+    } else {
+      const totalPossibleTime = ROUND_SECONDS * rounds.length;
+      bonus = Math.round(MAX_SPEED_BONUS * (savedTime / totalPossibleTime));
+    }
+    // Tournament's correct-answer score can reach 100/round (vs. Solo's 40
+    // max from CORRECT_POINT_CHECKPOINTS), so 15 rounds alone can already
+    // reach 1,500 -- the cap is raised to 1,800 there to leave room for the
+    // same up-to-300 speed bonus, same reasoning as Scramble's.
+    const maxScore = currentMode === 'tournament' ? 1800 : 1500;
+    const finalScore = Math.max(0, Math.min(maxScore, score + bonus));
     finalScoreEl.textContent = finalScore;
-    resultDetailEl.textContent = `${solvedCount} of ${rounds.length} proverbs solved`;
+    const detail = `${solvedCount} of ${rounds.length} proverbs solved${currentMode === 'tournament' ? ' · Tournament' : ''}`;
+    resultDetailEl.textContent = detail;
+    if (currentMode === 'tournament') {
+      const diacriticsMax = TOURNAMENT_DIACRITICS_BONUS * rounds.length;
+      const noHintMax = TOURNAMENT_NO_HINT_BONUS * rounds.length;
+      bonusBreakdownEl.textContent = `🎁 Speed bonus: ${bonus}/300 — 🇻🇳 diacritics ${diacriticsBonusTotal}/${diacriticsMax} · 💡 no-hint ${noHintBonusTotal}/${noHintMax} · ⏱ time ${timeBonus}/75`;
+      bonusBreakdownEl.classList.remove('hidden');
+    } else {
+      bonusBreakdownEl.classList.add('hidden');
+    }
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
-    Festival.submitScore(socket, 'proverb', finalScore);
+    Festival.submitScore(socket, 'proverb', finalScore, detail, currentMode);
+    if (currentMode === 'tournament') {
+      // Every question-done report so far only carried the running
+      // per-round score -- the diacritics/no-hint/time bonuses above are
+      // only known once the whole run ends. Push the bonus-inclusive final
+      // score into the live standings too, so the live top score converges
+      // to the real total instead of looking permanently short by up to 300.
+      Festival.submitTournamentQuestionDone(socket, 'proverb', index, finalScore);
+    }
   }
 
   submitBtn.addEventListener('click', () => attempt(answerInput.value));
@@ -321,22 +574,48 @@ if (me) {
     if (e.key === 'Enter') attempt(answerInput.value);
   });
   skipBtn.addEventListener('click', () => {
-    if (finished || transitioning) return;
+    if (currentMode === 'tournament' || finished || transitioning) return;
     clearInterval(roundTimerHandle);
     flash('Skipped', 'bad');
     revealAnswer();
     advance(3000);
   });
   hintBtn.addEventListener('click', () => {
-    if (finished || transitioning || hintsLeft <= 0 || elapsedInRound() < HINT_UNLOCK_AT) return;
+    if (currentMode === 'tournament' || finished || transitioning || hintsLeft <= 0 || elapsedInRound() < HINT_UNLOCK_AT) return;
     hintsLeft -= 1;
     updateHintButton();
     hintEl.textContent = `Hint: ${rounds[index].hint}`;
   });
-  const gate = Festival.gateGame(socket, 'proverb', startGame);
+  soloModeBtn.addEventListener('click', () => {
+    currentMode = 'solo';
+    startGame();
+  });
+  tournamentModeBtn.addEventListener('click', () => {
+    tournamentModeBtn.disabled = true;
+    const { id: playerId, name } = Festival.getPlayer();
+    socket.emit('tournament:join', { playerId, name, game: 'proverb' }, (res) => {
+      tournamentModeBtn.disabled = false;
+      if (!res || !res.ok) {
+        if (res && res.error === 'round-in-progress') {
+          alert('A Tournament round is already in progress. Please wait for the admin to start a new round.');
+        } else {
+          alert('Could not join the tournament: ' + ((res && res.error) || 'unknown error'));
+        }
+        return;
+      }
+      currentMode = 'tournament';
+      roundState = res.round;
+      pendingProverbOrder = res.content.proverbOrder;
+      modeScreen.classList.add('hidden');
+      renderLobby(res.round);
+      tournamentLobbyScreenEl.classList.remove('hidden');
+    });
+  });
+
+  const gate = Festival.gateGame(socket, 'proverb', showModeScreen);
   document.getElementById('play-again-btn').addEventListener('click', () => {
     if (gate.isOpen()) {
-      startGame();
+      showModeScreen();
     } else {
       gate.block();
     }

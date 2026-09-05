@@ -89,6 +89,46 @@ input[type="text"] {
   margin: 20px 0;
 }
 
+.tournament-lobby-players {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+.player-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0));
+  background-color: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 16px 6px 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  animation: player-chip-in 0.25s ease both;
+}
+.player-chip-avatar {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--gold));
+  color: #12151c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+}
+@keyframes player-chip-in {
+  from { opacity: 0; transform: scale(0.85) translateY(3px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
 .sponsor-logo {
   position: fixed;
   top: 10px;
@@ -166,6 +206,7 @@ input[type="text"] {
 .leaderboard-list .total { font-weight: 700; font-variant-numeric: tabular-nums; }
 .leaderboard-list .breakdown { color: var(--muted); font-size: 11px; }
 .leaderboard-list li.me { background: rgba(91, 140, 255, 0.12); border-radius: 8px; }
+.leaderboard-list li.empty { color: var(--muted); justify-content: center; }
 
 .modal-overlay {
   position: fixed;

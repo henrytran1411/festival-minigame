@@ -42,9 +42,9 @@ window.Festival = (function () {
     s.emit('register', { playerId: id, name });
   }
 
-  function submitScore(s, game, score, detail) {
+  function submitScore(s, game, score, detail, mode) {
     const { id, name } = getPlayer();
-    s.emit('score:submit', { playerId: id, name, game, score, detail });
+    s.emit('score:submit', { playerId: id, name, game, score, detail, mode });
   }
 
   // Reserves one lifetime attempt for `game` before the caller may start play.
@@ -290,6 +290,102 @@ window.Festival = (function () {
     };
   }
 
+  // Reactively reports whether `game`'s Tournament option is currently
+  // enabled by the admin (see admin:set-tournament-hidden on the server) --
+  // fires immediately with the current value, then again any time it
+  // changes. Doesn't block anything by itself; callers use it to show/hide
+  // their own Tournament button on the mode-select screen.
+  function watchTournamentMode(s, game, onChange) {
+    function handle(state) {
+      onChange(!state.tournamentHidden);
+    }
+    s.on('game-window', (state) => {
+      if (state.game === game) handle(state);
+    });
+    s.on('game-window-all', (all) => {
+      if (all[game]) handle(all[game]);
+    });
+  }
+
+  // Reactively reports `game`'s Tournament round pacing -- { phase:
+  // 'lobby'|'active', questionIndex, totalQuestions, playerCount } -- fires
+  // immediately with whatever the server already knows (the
+  // 'tournament:round-state-all' snapshot sent right after connect), then
+  // again on every 'tournament:round-state' broadcast: a player joining the
+  // lobby, or the admin starting the round / advancing to the next question
+  // (see server.js's tournamentRound and admin:tournament-start/-next).
+  function watchTournamentRoundState(s, game, onChange) {
+    s.on('tournament:round-state-all', (all) => {
+      if (all[game]) onChange(all[game]);
+    });
+    s.on('tournament:round-state', (state) => {
+      if (state.game === game) onChange(state);
+    });
+  }
+
+  // Reports that a Tournament player has finished (correctly answered, timed
+  // out, or otherwise resolved) their CURRENT question/word -- updates their
+  // live score (so the server can broadcast the live top score, see
+  // watchTournamentTopScore) AND tells the server this player is done with
+  // `questionIndex`, so it can detect once EVERY joined participant has
+  // finished and end the turn early for anyone still waiting out their own
+  // clock -- see watchTournamentQuestionOver. This is separate from the
+  // final scores[game] leaderboard, which only updates once the whole run
+  // finishes (submitScore).
+  function submitTournamentQuestionDone(s, game, questionIndex, score) {
+    const { id, name } = getPlayer();
+    s.emit('tournament:question-done', { playerId: id, name, game, questionIndex, score });
+  }
+
+  // Reactively reports when EVERY currently-joined Tournament player has
+  // finished the CURRENT question (see submitTournamentQuestionDone) --
+  // fires with { questionIndex } so a still-active client (e.g. one that
+  // answered correctly early and is otherwise just waiting out the rest of
+  // its own clock) can end its own question immediately instead.
+  function watchTournamentQuestionOver(s, game, onEvent) {
+    s.on('tournament:question-over', (payload) => {
+      if (payload.game === game) onEvent(payload);
+    });
+  }
+
+  // Reactively reports `game`'s live Tournament standings -- fires on every
+  // 'tournament:top-score' broadcast, which the server sends whenever any
+  // player joins or their live progress changes the lead (see
+  // submitTournamentQuestionDone / server.js's tournamentLiveScores). onChange
+  // receives { playerCount, top } where `top` is up to 10 { name, score }
+  // entries, best-first. Resets to an empty round when the admin starts a
+  // new tournament round. Pass a tournament:join callback's `standings` as
+  // the initial value before the first broadcast arrives.
+  function watchTournamentTopScore(s, game, onChange) {
+    s.on('tournament:top-score', (payload) => {
+      if (payload.game !== game) return;
+      onChange({ playerCount: payload.playerCount, top: payload.top });
+    });
+  }
+
+  // Renders a Tournament lobby's joined players as avatar chips (an
+  // initial-letter badge + name) into a container -- bigger and more
+  // distinct than a plain name list, so a crowded lobby still reads well.
+  function renderTournamentLobbyPlayers(containerEl, names) {
+    const signature = 'players:' + names.join('|');
+    if (skipIfUnchanged(containerEl, signature)) return;
+    containerEl.innerHTML = '';
+    names.forEach((name) => {
+      const chip = document.createElement('span');
+      chip.className = 'player-chip';
+
+      const avatar = document.createElement('span');
+      avatar.className = 'player-chip-avatar';
+      avatar.textContent = (name.trim()[0] || '?').toUpperCase();
+
+      const label = document.createElement('span');
+      label.textContent = name;
+
+      chip.append(avatar, label);
+      containerEl.appendChild(chip);
+    });
+  }
+
   // -- Rules language (English / Tiếng Việt) ------------------------------
   // One persisted preference, shared across every page's Rules modal (the
   // hub's 4 scored games and each of the 6 backup games) -- pick a language
@@ -347,6 +443,12 @@ window.Festival = (function () {
     renderBlindTop,
     formatCountdown,
     gateGame,
+    watchTournamentMode,
+    watchTournamentRoundState,
+    submitTournamentQuestionDone,
+    watchTournamentQuestionOver,
+    watchTournamentTopScore,
+    renderTournamentLobbyPlayers,
     GAME_LABELS,
     getRulesLang,
     setRulesLang,

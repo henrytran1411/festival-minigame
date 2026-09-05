@@ -64,10 +64,20 @@ if (me) {
   const timerEl = document.getElementById('timer');
   const movesEl = document.getElementById('moves');
   const liveScoreEl = document.getElementById('live-score');
+  const modeScreen = document.getElementById('mode-screen');
   const playScreen = document.getElementById('play-screen');
   const resultScreen = document.getElementById('result-screen');
   const finalScoreEl = document.getElementById('final-score');
   const resultDetailEl = document.getElementById('result-detail');
+  const modeBadgeEl = document.getElementById('mode-badge');
+  const soloModeBtn = document.getElementById('solo-mode-btn');
+  const tournamentModeBtn = document.getElementById('tournament-mode-btn');
+  Festival.watchTournamentMode(socket, 'memory', (available) => {
+    tournamentModeBtn.style.display = available ? '' : 'none';
+    // While the admin has Tournament mode open, only Tournament is offered
+    // -- Solo comes back once the admin hides Tournament again.
+    soloModeBtn.style.display = available ? 'none' : '';
+  });
 
   const meta = window.FESTIVAL_GAMES.find((g) => g.key === 'memory');
   const rulesModalEl = document.getElementById('rules-modal');
@@ -90,6 +100,11 @@ if (me) {
 
   let cards, cardEls, faceEls, badgeEls, flipped, matchedCount, moves, startTime, timerHandle, finished, busy;
   let cardOpenCounts, matchPoints;
+  // 'solo' | 'tournament' -- picked on the mode screen before each run.
+  // Unlike Proverb/Scramble, Memory's Tournament board is NOT shared -- each
+  // player still gets their own random card shuffle, same as Solo. Picking
+  // Tournament only tags the run for the leaderboard.
+  let currentMode = 'solo';
 
   function shuffle(arr) {
     const a = [...arr];
@@ -98,6 +113,12 @@ if (me) {
       [a[i], a[j]] = [a[j], a[i]];
     }
     return a;
+  }
+
+  function showModeScreen() {
+    playScreen.classList.add('hidden');
+    resultScreen.classList.add('hidden');
+    modeScreen.classList.remove('hidden');
   }
 
   function startGame() {
@@ -112,6 +133,8 @@ if (me) {
     startTime = performance.now();
     movesEl.textContent = '0';
     timerEl.textContent = Festival.formatCountdown(GAME_TIME_LIMIT_SECONDS * 1000);
+    modeBadgeEl.textContent = currentMode === 'tournament' ? '🏆 Tournament' : '';
+    modeScreen.classList.add('hidden');
     resultScreen.classList.add('hidden');
     playScreen.classList.remove('hidden');
     buildGrid();
@@ -215,7 +238,7 @@ if (me) {
     const score = Math.max(0, Math.min(1500, matchPoints));
     finalScoreEl.textContent = score;
     liveScoreEl.textContent = String(score);
-    const detail = `Time's up · ${matchedCount}/${ICONS.length} pairs matched · ${moves} moves`;
+    const detail = `Time's up · ${matchedCount}/${ICONS.length} pairs matched · ${moves} moves${currentMode === 'tournament' ? ' · Tournament' : ''}`;
     resultDetailEl.textContent = detail;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
@@ -229,17 +252,26 @@ if (me) {
     const score = computeScore(seconds);
     finalScoreEl.textContent = score;
     liveScoreEl.textContent = String(score);
-    const detail = `${seconds}s · ${moves} moves`;
+    const detail = `${seconds}s · ${moves} moves${currentMode === 'tournament' ? ' · Tournament' : ''}`;
     resultDetailEl.textContent = detail;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
     Festival.submitScore(socket, 'memory', score, detail);
   }
 
-  const gate = Festival.gateGame(socket, 'memory', startGame);
+  soloModeBtn.addEventListener('click', () => {
+    currentMode = 'solo';
+    startGame();
+  });
+  tournamentModeBtn.addEventListener('click', () => {
+    currentMode = 'tournament';
+    startGame();
+  });
+
+  const gate = Festival.gateGame(socket, 'memory', showModeScreen);
   document.getElementById('play-again-btn').addEventListener('click', () => {
     if (gate.isOpen()) {
-      startGame();
+      showModeScreen();
     } else {
       gate.block();
     }

@@ -10,12 +10,22 @@ if (me) {
   const timeScoreEl = document.getElementById('time-score');
   const inputScoreEl = document.getElementById('input-score');
   const attemptInfoEl = document.getElementById('attempt-info');
+  const modeScreen = document.getElementById('mode-screen');
   const playScreen = document.getElementById('play-screen');
   const resultScreen = document.getElementById('result-screen');
   const resultTitleEl = document.getElementById('result-title');
   const finalScoreEl = document.getElementById('final-score');
   const resultDetailEl = document.getElementById('result-detail');
   const exhaustedScreen = document.getElementById('exhausted-screen');
+  const modeBadgeEl = document.getElementById('mode-badge');
+  const soloModeBtn = document.getElementById('solo-mode-btn');
+  const tournamentModeBtn = document.getElementById('tournament-mode-btn');
+  Festival.watchTournamentMode(socket, 'sudoku', (available) => {
+    tournamentModeBtn.style.display = available ? '' : 'none';
+    // While the admin has Tournament mode open, only Tournament is offered
+    // -- Solo comes back once the admin hides Tournament again.
+    soloModeBtn.style.display = available ? 'none' : '';
+  });
 
   // Anti-cheat tuning. These are best-effort deterrents, not proof of cheating —
   // anything client-side can be bypassed by someone determined enough. Tab/window
@@ -53,6 +63,19 @@ if (me) {
   let attemptsUsed = 0, attemptsMax = null;
   let cellWrongLog, flaggedBruteForceCells;
   let lowProbStreak, flaggedLowProbStreak;
+  // 'solo' | 'tournament' -- picked on the mode screen before each attempt.
+  // Unlike Proverb/Scramble, Sudoku's Tournament puzzle is NOT shared -- each
+  // player still gets their own random puzzle, same as Solo. Picking
+  // Tournament only tags the attempt for the leaderboard. Both modes draw
+  // from the same 3 total attempts.
+  let currentMode = 'solo';
+
+  function showModeScreen() {
+    playScreen.classList.add('hidden');
+    resultScreen.classList.add('hidden');
+    exhaustedScreen.classList.add('hidden');
+    modeScreen.classList.remove('hidden');
+  }
 
   async function tryStartGame() {
     const res = await Festival.requestAttempt(socket, 'sudoku');
@@ -68,6 +91,7 @@ if (me) {
   function showExhausted() {
     playScreen.classList.add('hidden');
     resultScreen.classList.add('hidden');
+    modeScreen.classList.add('hidden');
     exhaustedScreen.classList.remove('hidden');
   }
 
@@ -90,6 +114,8 @@ if (me) {
     timeScoreEl.textContent = String(speedBonusFor(0));
     inputScoreEl.textContent = String(inputScoreFor());
     if (attemptsMax) attemptInfoEl.textContent = `${attemptsUsed}/${attemptsMax}`;
+    modeBadgeEl.textContent = currentMode === 'tournament' ? '🏆 Tournament' : '';
+    modeScreen.classList.add('hidden');
     exhaustedScreen.classList.add('hidden');
     resultScreen.classList.add('hidden');
     playScreen.classList.remove('hidden');
@@ -280,7 +306,7 @@ if (me) {
     const score = computeScore(seconds);
     finalScoreEl.textContent = score;
     resultTitleEl.textContent = 'Solved! 🎉';
-    const detail = `${seconds}s · ${mistakes} mistake${mistakes === 1 ? '' : 's'}`;
+    const detail = `${seconds}s · ${mistakes} mistake${mistakes === 1 ? '' : 's'}${currentMode === 'tournament' ? ' · Tournament' : ''}`;
     resultDetailEl.textContent = detail;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
@@ -300,7 +326,7 @@ if (me) {
     const score = Math.max(0, Math.min(1500, correctCount * GIVE_UP_POINTS_PER_BOX));
     finalScoreEl.textContent = score;
     resultTitleEl.textContent = 'Attempt ended';
-    const detail = `Gave up · ${correctCount} of ${totalBlanks} boxes filled correctly`;
+    const detail = `Gave up · ${correctCount} of ${totalBlanks} boxes filled correctly${currentMode === 'tournament' ? ' · Tournament' : ''}`;
     resultDetailEl.textContent = detail;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
@@ -309,10 +335,19 @@ if (me) {
 
   document.getElementById('give-up-btn').addEventListener('click', giveUp);
 
-  const gate = Festival.gateGame(socket, 'sudoku', tryStartGame);
+  soloModeBtn.addEventListener('click', () => {
+    currentMode = 'solo';
+    tryStartGame();
+  });
+  tournamentModeBtn.addEventListener('click', () => {
+    currentMode = 'tournament';
+    tryStartGame();
+  });
+
+  const gate = Festival.gateGame(socket, 'sudoku', showModeScreen);
   document.getElementById('play-again-btn').addEventListener('click', () => {
     if (gate.isOpen()) {
-      tryStartGame();
+      showModeScreen();
     } else {
       gate.block();
     }
