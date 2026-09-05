@@ -354,6 +354,13 @@
             <option value="opponent">Opponent goes first</option>
           </select>
         </div>
+        <div>
+          <p style="font-size:13px; color:var(--muted);">👑 King ship</p>
+          <select id="include-king-select">
+            <option value="yes">Included</option>
+            <option value="no">Left out</option>
+          </select>
+        </div>
       </div>
 
       <p style="font-size:13px; color:var(--muted); margin-top:14px;">Starting ammo <span style="font-weight:400;">(both players get the same loadout, on top of anything found in-game)</span></p>
@@ -491,12 +498,12 @@
       <div class="lang-en">
         <h2>How to Play Battleship</h2>
         <ul>
-          <li>Each player secretly places a fleet of 6 ships on a 10x10 grid: Carrier (5 cells), Battleship (4), Cruiser (3), Submarine (3), Destroyer (2), King (1) — each ship is a straight, unbroken line (the King is just a single cell), and ships can't overlap.</li>
+          <li>Each player secretly places a fleet on a 10x10 grid: Carrier (5 cells), Battleship (4), Cruiser (3), Submarine (3), Destroyer (2), and — unless the host left it out of this room — King (1). Each ship is a straight, unbroken line (the King is just a single cell), and ships can't overlap.</li>
           <li>Once both fleets are placed, players fire one shot at a time at a cell on the opponent's grid.</li>
           <li>A shot is either a <b>miss</b> (empty water) or a <b>hit</b> (part of a ship). <b>A hit keeps your turn — fire again!</b> A miss passes the turn to your opponent.</li>
           <li>When every cell of a ship has been hit, that ship is <b>sunk</b> and revealed to both players.</li>
           <li>You only ever see hit/miss markers on the enemy grid, plus the full outline of any of their ships you've sunk — never their still-afloat ship positions.</li>
-          <li><b>👑 The King</b> has no defense of its own, but doesn't necessarily go down for good on one hit: the instant it's hit, if you still have an undamaged Cruiser, Submarine, or Destroyer somewhere on the board (<b>fully unhit</b>, judged independently of each other), it trades places with the King instead of dying. That undamaged ship relocates to sit centered on the King's cell (inheriting the hit that just landed there as its own first hit), and the King reappears — alive and unhit — at a random one of that ship's own old cells, marked with a crown so you can always spot it. Everything in a Nuclear-Bomb-shaped area around the King's old cell that isn't sitting under a ship is healed back to unfired water so there's room for the swap. This can happen again and again over the course of a game — the King only sinks for good once no undamaged Cruiser/Submarine/Destroyer is left, or nothing fits anywhere.</li>
+          <li><b>👑 The King</b> (only in rooms where the host included it) has no defense of its own, but doesn't necessarily go down for good on one hit: the instant it's hit, if you still have an undamaged Cruiser, Submarine, or Destroyer somewhere on the board (<b>fully unhit</b>, judged independently of each other), it trades places with the King instead of dying. That undamaged ship relocates to sit centered on the King's cell (inheriting the hit that just landed there as its own first hit), and the King reappears — alive and unhit — at a random one of that ship's own old cells, marked with a crown so you can always spot it. Everything in a Nuclear-Bomb-shaped area around the King's old cell that isn't sitting under a ship is healed back to unfired water so there's room for the swap. This can happen again and again over the course of a game — the King only sinks for good once no undamaged Cruiser/Submarine/Destroyer is left, or nothing fits anywhere.</li>
           <li><b>🎁 Supply drops:</b> each board secretly hides a few extra cells (always plain water), each already holding one specific special weapon. Hit one and you instantly gain a charge of whatever it holds — capped per weapon type at your room's starting loadout (minimum 1 even if the host set that weapon's loadout to 0); finding a duplicate once you're at the cap is wasted.</li>
           <li><b>🧭 Hints</b> — two ways to learn where a hidden supply drop is before you hit it (you still have to actually fire there to claim it):
             <ul>
@@ -514,19 +521,19 @@
             Landing at least one hit anywhere in a special weapon's blast still earns you the bonus turn, same as a normal hit.
           </li>
           <li><b>Game end:</b> the first player to sink every one of the opponent's ships wins. Both fleets are fully revealed once the game is over.</li>
-          <li><b>Room settings</b> (chosen by whoever creates the room, fixed for that room including rematches): arena size (10x10/15x15/20x20 — the fleet stays the same 6 ships regardless), a default map theme, an optional per-turn clock (if you don't fire in time, the game fires a reasonable shot for you automatically — it doesn't end your game), an optional total time bank per player (chess-clock style — run yours out and you lose immediately), who takes the first shot, and a starting ammo loadout (0-3 of each weapon, granted to both players the instant placement begins).</li>
+          <li><b>Room settings</b> (chosen by whoever creates the room, fixed for that room including rematches): arena size (10x10/15x15/20x20 — the fleet size stays the same regardless), a default map theme, an optional per-turn clock (if you don't fire in time, the game fires a reasonable shot for you automatically — it doesn't end your game), an optional total time bank per player (chess-clock style — run yours out and you lose immediately), who takes the first shot, whether the 👑 King ship is included at all, and a starting ammo loadout (0-3 of each weapon, granted to both players the instant placement begins).</li>
           <li><b>🖼️ Map themes</b> are purely a visual backdrop — no gameplay effect. The room's default map is just a starting point: use the "My map" picker (top-right, next to Rules) to see the board over any of the 18 real-world locations, independently of what your opponent has chosen — you don't need to match each other.</li>
         </ul>
       </div>
       <div class="lang-vi">
         <h2>Cách chơi Battleship</h2>
         <ul>
-          <li>Mỗi người chơi bí mật đặt một hạm đội gồm 6 tàu trên lưới 10x10: Tàu Sân Bay (5 ô), Thiết Giáp Hạm (4 ô), Tuần Dương Hạm (3 ô), Tàu Ngầm (3 ô), Khu Trục Hạm (2 ô), Vua (1 ô) — mỗi tàu là một đường thẳng liền mạch (riêng Vua chỉ là 1 ô đơn), và các tàu không được chồng lên nhau.</li>
+          <li>Mỗi người chơi bí mật đặt một hạm đội trên lưới 10x10: Tàu Sân Bay (5 ô), Thiết Giáp Hạm (4 ô), Tuần Dương Hạm (3 ô), Tàu Ngầm (3 ô), Khu Trục Hạm (2 ô), và — trừ khi chủ phòng bỏ ra khỏi phòng này — Vua (1 ô). Mỗi tàu là một đường thẳng liền mạch (riêng Vua chỉ là 1 ô đơn), và các tàu không được chồng lên nhau.</li>
           <li>Khi cả hai hạm đội đã đặt xong, người chơi lần lượt bắn từng phát một vào một ô trên lưới của đối phương.</li>
           <li>Một phát bắn là <b>trượt</b> (nước trống) hoặc <b>trúng</b> (phần của một tàu). <b>Trúng thì được bắn tiếp!</b> Trượt thì chuyển lượt cho đối phương.</li>
           <li>Khi mọi ô của một tàu đều đã bị trúng, tàu đó <b>chìm</b> và được lộ diện cho cả hai người chơi thấy.</li>
           <li>Bạn chỉ thấy các dấu trúng/trượt trên lưới của đối phương, cộng với hình dạng đầy đủ của bất kỳ tàu nào của họ mà bạn đã đánh chìm — không bao giờ thấy vị trí các tàu còn nguyên vẹn của họ.</li>
-          <li><b>👑 Vua</b> không có khả năng tự vệ, nhưng không nhất thiết chìm hẳn chỉ sau 1 phát trúng: ngay khi bị bắn trúng, nếu bạn vẫn còn một tàu Tuần Dương Hạm, Tàu Ngầm, hoặc Khu Trục Hạm nào đó trên bàn cờ <b>chưa bị bắn trúng ô nào</b> (xét độc lập từng tàu), tàu đó sẽ hoán đổi vị trí với Vua thay vì để Vua chìm. Tàu chưa bị trúng đó sẽ di chuyển đến vị trí căn giữa ô của Vua (thừa hưởng phát trúng vừa rồi như phát trúng đầu tiên của chính nó ngay tại đó), còn Vua sẽ xuất hiện trở lại — còn sống, chưa bị trúng — tại một trong các ô cũ của tàu đó, chọn ngẫu nhiên, và được đánh dấu bằng biểu tượng vương miện để bạn luôn biết Vua đang ở đâu. Toàn bộ khu vực hình Bom Hạt Nhân quanh ô cũ của Vua mà không có tàu nào chiếm giữ sẽ được hồi phục về nước chưa bắn, để có chỗ cho cuộc hoán đổi. Điều này có thể lặp lại nhiều lần trong suốt ván đấu — Vua chỉ thực sự chìm khi không còn tàu Tuần Dương Hạm/Tàu Ngầm/Khu Trục Hạm nào nguyên vẹn, hoặc không còn chỗ nào vừa để hoán đổi.</li>
+          <li><b>👑 Vua</b> (chỉ có ở những phòng mà chủ phòng chọn đưa vào) không có khả năng tự vệ, nhưng không nhất thiết chìm hẳn chỉ sau 1 phát trúng: ngay khi bị bắn trúng, nếu bạn vẫn còn một tàu Tuần Dương Hạm, Tàu Ngầm, hoặc Khu Trục Hạm nào đó trên bàn cờ <b>chưa bị bắn trúng ô nào</b> (xét độc lập từng tàu), tàu đó sẽ hoán đổi vị trí với Vua thay vì để Vua chìm. Tàu chưa bị trúng đó sẽ di chuyển đến vị trí căn giữa ô của Vua (thừa hưởng phát trúng vừa rồi như phát trúng đầu tiên của chính nó ngay tại đó), còn Vua sẽ xuất hiện trở lại — còn sống, chưa bị trúng — tại một trong các ô cũ của tàu đó, chọn ngẫu nhiên, và được đánh dấu bằng biểu tượng vương miện để bạn luôn biết Vua đang ở đâu. Toàn bộ khu vực hình Bom Hạt Nhân quanh ô cũ của Vua mà không có tàu nào chiếm giữ sẽ được hồi phục về nước chưa bắn, để có chỗ cho cuộc hoán đổi. Điều này có thể lặp lại nhiều lần trong suốt ván đấu — Vua chỉ thực sự chìm khi không còn tàu Tuần Dương Hạm/Tàu Ngầm/Khu Trục Hạm nào nguyên vẹn, hoặc không còn chỗ nào vừa để hoán đổi.</li>
           <li><b>🎁 Tiếp tế:</b> mỗi bàn cờ bí mật giấu vài ô đặc biệt (luôn là nước trống), mỗi ô đã sẵn giữ một loại đạn đặc biệt cụ thể. Bắn trúng một ô như vậy sẽ ngay lập tức cho bạn 1 lượt đạn của loại đó — giới hạn theo từng loại đạn bằng số lượng khởi đầu của phòng (tối thiểu là 1 dù chủ phòng đặt loại đạn đó là 0); tìm thấy thêm khi đã đạt giới hạn sẽ bị lãng phí.</li>
           <li><b>🧭 Gợi ý</b> — hai cách để biết vị trí một ô tiếp tế ẩn trước khi bạn bắn trúng nó (bạn vẫn phải thực sự bắn vào đó để nhận được):
             <ul>
@@ -544,7 +551,7 @@
             Chỉ cần trúng ít nhất 1 ô trong phạm vi nổ của đạn đặc biệt là vẫn được bắn tiếp, giống như trúng thường.
           </li>
           <li><b>Kết thúc ván:</b> người đầu tiên đánh chìm hết mọi tàu của đối phương thắng. Cả hai hạm đội sẽ được lộ diện hoàn toàn khi ván chơi kết thúc.</li>
-          <li><b>Cài đặt phòng</b> (do người tạo phòng chọn, cố định cho phòng đó kể cả khi chơi lại): kích thước đấu trường (10x10/15x15/20x20 — hạm đội vẫn giữ nguyên 6 tàu), một bản đồ mặc định, tùy chọn đồng hồ đếm giờ mỗi lượt (nếu không bắn kịp, game sẽ tự bắn giúp bạn một phát hợp lý — không kết thúc ván của bạn), tùy chọn tổng thời gian cho mỗi người chơi (kiểu đồng hồ cờ vua — hết giờ là thua ngay), ai bắn trước, và số đạn khởi đầu (0-3 mỗi loại, cấp cho cả hai người chơi ngay khi bắt đầu đặt tàu).</li>
+          <li><b>Cài đặt phòng</b> (do người tạo phòng chọn, cố định cho phòng đó kể cả khi chơi lại): kích thước đấu trường (10x10/15x15/20x20 — số tàu vẫn giữ nguyên), một bản đồ mặc định, tùy chọn đồng hồ đếm giờ mỗi lượt (nếu không bắn kịp, game sẽ tự bắn giúp bạn một phát hợp lý — không kết thúc ván của bạn), tùy chọn tổng thời gian cho mỗi người chơi (kiểu đồng hồ cờ vua — hết giờ là thua ngay), ai bắn trước, có đưa tàu 👑 Vua vào hay không, và số đạn khởi đầu (0-3 mỗi loại, cấp cho cả hai người chơi ngay khi bắt đầu đặt tàu).</li>
           <li><b>🖼️ Bản đồ</b> chỉ là hình nền trang trí — không ảnh hưởng đến gameplay. Bản đồ mặc định của phòng chỉ là điểm khởi đầu: dùng bộ chọn "My map" (góc trên phải, cạnh Rules) để xem bàn cờ trên bất kỳ bản đồ nào trong số 18 địa danh có thật, độc lập với lựa chọn của đối phương — hai người không cần chọn giống nhau.</li>
         </ul>
       </div>

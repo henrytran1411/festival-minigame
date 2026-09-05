@@ -89,6 +89,12 @@
 //   - Starting ammo: 0-3 charges of each special weapon, granted to BOTH
 //     players the moment placement begins (and every rematch) -- on top
 //     of whatever they find via supply drops during play.
+//   - Include King ship: on by default, but a host can turn it off for a
+//     more straightforward game -- with it off, the fleet is the same 5
+//     ships (Carrier/Battleship/Cruiser/Submarine/Destroyer, 17 cells
+//     total) and the King's swap-to-safety mechanic simply never comes up
+//     (nothing named 'King' is ever placed, so trySwapKingToSafety() is
+//     never reached). See fleetSpecFor().
 // Bots are never subject to the per-turn clock or time bank -- they
 // already act on their own short "thinking" delay regardless.
 
@@ -108,6 +114,15 @@ const FLEET_SPEC = [
   { name: 'Destroyer', size: 2 },
   { name: 'King', size: 1 },
 ];
+// The same fleet with the King left out entirely -- for rooms created with
+// includeKing:false. Nothing else needs to know King is gone: the King
+// swap-to-safety mechanic (trySwapKingToSafety) only ever fires when a
+// ship named 'King' actually sunk, which simply never happens when it was
+// never placed.
+const NON_KING_FLEET_SPEC = FLEET_SPEC.filter((s) => s.name !== 'King');
+function fleetSpecFor(includeKing) {
+  return includeKing ? FLEET_SPEC : NON_KING_FLEET_SPEC;
+}
 const TOTAL_SHIP_CELLS = FLEET_SPEC.reduce((sum, s) => sum + s.size, 0);
 // Ships the King can trade places with to dodge death -- see trySwapKingToSafety().
 const KING_PROTECTS = ['Cruiser', 'Submarine', 'Destroyer'];
@@ -259,14 +274,15 @@ function inBounds(r, c, size) {
   return r >= 0 && r < size && c >= 0 && c < size;
 }
 
-// Validates a client-submitted fleet against FLEET_SPEC: exactly one ship
-// per spec (matched by name+size), every ship's cells form a straight,
+// Validates a client-submitted fleet against `fleetSpec` (a room's fleet,
+// with or without the King -- see fleetSpecFor()): exactly one ship per
+// spec (matched by name+size), every ship's cells form a straight,
 // contiguous line of the right length, fully in-bounds for this room's
 // `size`, and no ship overlaps another. Returns { grid, ships } on
 // success (grid[r][c] is the index into `ships`, or null for water) or
 // null if anything is invalid.
-function validateFleet(rawShips, size) {
-  if (!Array.isArray(rawShips) || rawShips.length !== FLEET_SPEC.length) return null;
+function validateFleet(rawShips, size, fleetSpec = FLEET_SPEC) {
+  if (!Array.isArray(rawShips) || rawShips.length !== fleetSpec.length) return null;
   const grid = freshGrid(size);
   const usedNames = new Set();
   const ships = [];
@@ -274,7 +290,7 @@ function validateFleet(rawShips, size) {
   for (let i = 0; i < rawShips.length; i += 1) {
     const raw = rawShips[i];
     if (!raw || typeof raw.name !== 'string') return null;
-    const spec = FLEET_SPEC.find((f) => f.name === raw.name);
+    const spec = fleetSpec.find((f) => f.name === raw.name);
     if (!spec || usedNames.has(spec.name)) return null;
     usedNames.add(spec.name);
 
@@ -300,21 +316,22 @@ function validateFleet(rawShips, size) {
     ships.push({ name: spec.name, size: spec.size, cells, sunk: false });
   }
 
-  if (usedNames.size !== FLEET_SPEC.length) return null;
+  if (usedNames.size !== fleetSpec.length) return null;
   return { grid, ships };
 }
 
 // Rejection-sampling random placer -- used for bots (and available to the
 // client as the "Randomize" convenience, though the client does its own
 // equivalent locally rather than round-tripping through the server for
-// it). Only 18 ship cells on even the smallest supported board means
-// this converges in only a few attempts almost always; a generous retry
-// cap keeps it provably terminating rather than a true infinite loop.
-function randomFleet(size) {
+// it). Only 18 ship cells (17 without the King) on even the smallest
+// supported board means this converges in only a few attempts almost
+// always; a generous retry cap keeps it provably terminating rather than
+// a true infinite loop.
+function randomFleet(size, fleetSpec = FLEET_SPEC) {
   const grid = freshGrid(size);
   const ships = [];
-  for (let i = 0; i < FLEET_SPEC.length; i += 1) {
-    const spec = FLEET_SPEC[i];
+  for (let i = 0; i < fleetSpec.length; i += 1) {
+    const spec = fleetSpec[i];
     let placed = false;
     for (let attempt = 0; attempt < 1000 && !placed; attempt += 1) {
       const horizontal = Math.random() < 0.5;
@@ -328,7 +345,7 @@ function randomFleet(size) {
       ships.push({ name: spec.name, size: spec.size, cells, sunk: false });
       placed = true;
     }
-    if (!placed) return randomFleet(size); // pathologically unlucky run -- just start over
+    if (!placed) return randomFleet(size, fleetSpec); // pathologically unlucky run -- just start over
   }
   return { grid, ships };
 }
@@ -482,6 +499,7 @@ function sanitizeOptions(raw) {
   const timeBankMinutes = TIME_BANK_MINUTE_OPTIONS.includes(Number(opts.timeBankMinutes)) ? Number(opts.timeBankMinutes) : null;
   const firstPlayer = FIRST_PLAYER_OPTIONS.includes(opts.firstPlayer) ? opts.firstPlayer : 'random';
   const mapTheme = MAP_THEMES[opts.mapTheme] ? opts.mapTheme : DEFAULT_MAP_THEME;
+  const includeKing = opts.includeKing !== false; // default true -- only an explicit false turns it off
   const rawStartingAmmo = opts.startingAmmo || {};
   const startingAmmo = {
     cross: sanitizeStartingAmmoCount(rawStartingAmmo.cross),
@@ -494,6 +512,7 @@ function sanitizeOptions(raw) {
     timeBankSeconds: timeBankMinutes ? timeBankMinutes * 60 : null,
     firstPlayer,
     mapTheme,
+    includeKing,
     startingAmmo,
   };
 }
@@ -503,12 +522,14 @@ class BattleshipRoom {
     this.id = id;
     this.name = name;
     this.password = password;
-    const { gridSize, timePerTurn, timeBankSeconds, firstPlayer, mapTheme, startingAmmo } = sanitizeOptions(options);
+    const { gridSize, timePerTurn, timeBankSeconds, firstPlayer, mapTheme, includeKing, startingAmmo } = sanitizeOptions(options);
     this.gridSize = gridSize;
     this.timePerTurn = timePerTurn; // seconds, or null for unlimited
     this.timeBankSeconds = timeBankSeconds; // seconds, or null for unlimited
     this.firstPlayer = firstPlayer; // 'random' | 'host' | 'opponent'
     this.mapTheme = mapTheme;
+    this.includeKing = includeKing; // whether the King ship is part of this room's fleet
+    this.fleetSpec = fleetSpecFor(includeKing);
     this.startingAmmo = startingAmmo; // { cross, nuclear, scatter } charges granted at the start of every game
     this.hostPlayerId = null; // set by attachBattleship() right after the creator is pushed into players
     this.status = 'waiting'; // 'waiting' | 'placing' | 'playing' | 'finished'
@@ -549,6 +570,7 @@ class BattleshipRoom {
       gridSize: this.gridSize,
       mapTheme: this.mapTheme,
       mapThemeLabel: MAP_THEMES[this.mapTheme],
+      includeKing: this.includeKing,
     };
   }
 
@@ -601,14 +623,14 @@ class BattleshipRoom {
     clearTimeout(this.botTimer);
     clearTimeout(this.turnTimer);
     clearTimeout(this.timeBankTimer);
-    this.players.filter((p) => p.isBot).forEach((bot) => this.submitFleet(bot, randomFleet(this.gridSize).ships));
+    this.players.filter((p) => p.isBot).forEach((bot) => this.submitFleet(bot, randomFleet(this.gridSize, this.fleetSpec).ships));
   }
 
   // Applies one player's fleet placement. Returns { ok, error? }.
   submitFleet(player, rawShips) {
     if (this.status !== 'placing') return { ok: false, error: 'not-placing' };
     if (player.ready) return { ok: false, error: 'already-ready' };
-    const validated = validateFleet(rawShips, this.gridSize);
+    const validated = validateFleet(rawShips, this.gridSize, this.fleetSpec);
     if (!validated) return { ok: false, error: 'invalid-fleet' };
     player.ships = validated.ships;
     player.grid = validated.grid;
@@ -936,7 +958,8 @@ class BattleshipRoom {
       roomName: this.name,
       status: this.status,
       gridSize: this.gridSize,
-      fleetSpec: FLEET_SPEC,
+      fleetSpec: this.fleetSpec,
+      includeKing: this.includeKing,
       weaponTypes: WEAPON_TYPES,
       weaponLabels: WEAPON_LABELS,
       timePerTurn: this.timePerTurn,
@@ -1019,7 +1042,7 @@ function attachBattleship(io) {
     });
 
     socket.on('battleship:createRoom', ({
-      roomName, password, playerId, name, gridSize, timePerTurn, timeBankMinutes, firstPlayer, mapTheme, startingAmmo,
+      roomName, password, playerId, name, gridSize, timePerTurn, timeBankMinutes, firstPlayer, mapTheme, includeKing, startingAmmo,
     }, callback) => {
       const cleanRoomName = String(roomName || '').trim().slice(0, 30);
       const cleanPassword = String(password || '');
@@ -1031,7 +1054,7 @@ function attachBattleship(io) {
 
       roomCounter += 1;
       const room = new BattleshipRoom(`room_${roomCounter}`, cleanRoomName, cleanPassword, {
-        gridSize, timePerTurn, timeBankMinutes, firstPlayer, mapTheme, startingAmmo,
+        gridSize, timePerTurn, timeBankMinutes, firstPlayer, mapTheme, includeKing, startingAmmo,
       });
       room.nsp = nsp;
       room.hostPlayerId = playerId;
@@ -1161,6 +1184,8 @@ module.exports.resolveShot = resolveShot;
 module.exports.chooseBotShot = chooseBotShot;
 module.exports.freshGrid = freshGrid;
 module.exports.FLEET_SPEC = FLEET_SPEC;
+module.exports.NON_KING_FLEET_SPEC = NON_KING_FLEET_SPEC;
+module.exports.fleetSpecFor = fleetSpecFor;
 module.exports.TOTAL_SHIP_CELLS = TOTAL_SHIP_CELLS;
 module.exports.MAX_PLAYERS = MAX_PLAYERS;
 module.exports.WEAPON_TYPES = WEAPON_TYPES;

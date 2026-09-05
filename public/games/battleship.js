@@ -7,7 +7,11 @@ if (me) {
   // -- defaults to the standard size only for the brief window before any
   // state has arrived (lobby screen, which never needs a grid at all).
   let GRID_SIZE = 10;
-  const FLEET_SPEC = [
+  // Same idea as GRID_SIZE -- the room's actual fleet (with or without the
+  // King, see includeKing) arrives on every state broadcast; this full
+  // 6-ship list is just the default for the brief window before any state
+  // has arrived (lobby screen, which never needs a fleet at all).
+  let FLEET_SPEC = [
     { name: 'Carrier', size: 5 },
     { name: 'Battleship', size: 4 },
     { name: 'Cruiser', size: 3 },
@@ -75,6 +79,7 @@ if (me) {
   const myThemeSelect = document.getElementById('my-theme-select');
   function applyBoardStyling(state) {
     GRID_SIZE = state.gridSize || GRID_SIZE;
+    FLEET_SPEC = (state.fleetSpec && state.fleetSpec.length) ? state.fleetSpec : FLEET_SPEC;
     const cellSize = CELL_SIZE_FOR[GRID_SIZE] || 26;
     const themeKey = myThemeOverride() || state.mapTheme || DEFAULT_THEME;
     const theme = THEME_COLORS[themeKey] || THEME_COLORS[DEFAULT_THEME];
@@ -120,6 +125,7 @@ if (me) {
   const timePerTurnSelect = document.getElementById('time-per-turn-select');
   const timeBankSelect = document.getElementById('time-bank-select');
   const firstPlayerSelect = document.getElementById('first-player-select');
+  const includeKingSelect = document.getElementById('include-king-select');
   const startCrossSelect = document.getElementById('start-cross-select');
   const startNuclearSelect = document.getElementById('start-nuclear-select');
   const startScatterSelect = document.getElementById('start-scatter-select');
@@ -441,7 +447,7 @@ if (me) {
       name.textContent = room.name;
       const meta = document.createElement('div');
       meta.className = 'room-meta' + (room.status === 'waiting' ? '' : ' playing');
-      meta.textContent = `${statusLabel(room.status)} · ${room.playerCount}/2 players · ${room.gridSize}x${room.gridSize} · ${room.mapThemeLabel}`;
+      meta.textContent = `${statusLabel(room.status)} · ${room.playerCount}/2 players · ${room.gridSize}x${room.gridSize} · ${room.mapThemeLabel} · ${room.includeKing ? '👑 King in' : 'No King'}`;
       info.append(name, meta);
       const joinBtn = document.createElement('button');
       joinBtn.className = 'secondary';
@@ -464,6 +470,7 @@ if (me) {
       state.timePerTurn ? `${state.timePerTurn}s per turn` : 'Unlimited time per turn',
       state.timeBankSeconds ? `${Math.round(state.timeBankSeconds / 60)}m per player` : 'Unlimited time per player',
       `${firstPlayerLabel} goes first`,
+      state.includeKing ? '👑 King ship included' : 'No King ship',
       startingAmmoParts.length ? `Start with: ${startingAmmoParts.join(', ')}` : 'No starting ammo (find it in-game)',
     ].join(' · ');
     playerListEl.innerHTML = '';
@@ -780,6 +787,7 @@ if (me) {
     timePerTurnSelect.value = '0';
     timeBankSelect.value = '0';
     firstPlayerSelect.value = 'random';
+    includeKingSelect.value = 'yes';
     startCrossSelect.value = '0';
     startNuclearSelect.value = '0';
     startScatterSelect.value = '0';
@@ -811,6 +819,7 @@ if (me) {
       timePerTurn: Number(timePerTurnSelect.value) || 0,
       timeBankMinutes: Number(timeBankSelect.value) || 0,
       firstPlayer: firstPlayerSelect.value,
+      includeKing: includeKingSelect.value === 'yes',
       startingAmmo: {
         cross: Number(startCrossSelect.value) || 0,
         nuclear: Number(startNuclearSelect.value) || 0,
