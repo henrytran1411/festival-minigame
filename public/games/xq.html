@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cờ Tướng Úp — Autumn Festival</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .xq-wrap { max-width: 620px; }
+
+    .xq-log {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      max-height: 130px;
+      overflow-y: auto;
+      margin-top: 14px;
+    }
+    .xq-log div { padding: 2px 0; }
+
+    .xq-player-list { list-style: none; padding: 0; margin: 12px 0; }
+    .xq-player-list li { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .xq-player-list li:last-child { border-bottom: none; }
+
+    .room-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; }
+    .room-row .room-info { display: flex; flex-direction: column; }
+    .room-row .room-name { font-weight: 600; font-size: 14px; }
+    .room-row .room-meta { font-size: 12px; color: var(--muted); }
+    .room-row .room-meta.playing { color: var(--gold); }
+    .room-row button { padding: 6px 14px; font-size: 13px; }
+
+    #lobby-screen input, #create-room-screen input, #create-room-screen select, #password-modal input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 14px;
+    }
+    .xq-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 10px; }
+    @media (max-width: 420px) { .xq-config-grid { grid-template-columns: 1fr; } }
+    .xq-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+
+    .xq-seats { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .xq-seat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      text-align: center;
+      min-width: 120px;
+      flex: 1;
+    }
+    .xq-seat.turn { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); }
+    .xq-seat.check { border-color: var(--bad); box-shadow: 0 0 0 2px rgba(230, 25, 75, 0.4); }
+    .xq-seat.offline { opacity: 0.55; }
+    .xq-seat .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .xq-seat .color-dot.red { background: #c0392b; border: 1px solid #7a1f18; }
+    .xq-seat .color-dot.black { background: #1a1a1a; border: 1px solid #555; }
+    .xq-seat .name { font-size: 13px; font-weight: 600; }
+    .xq-seat .captured { font-size: 11px; color: var(--muted); }
+
+    .xq-turn-banner { text-align: center; font-weight: 700; margin-bottom: 6px; min-height: 22px; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+    .xq-turn-banner.mine { color: var(--good); }
+    .xq-turn-banner.thinking { color: var(--gold); }
+    .xq-turn-banner.check { color: var(--bad); }
+    .xq-thinking-dots { display: inline-block; width: 1.5em; text-align: left; animation: xq-thinking-dots 1.2s steps(4) infinite; overflow: hidden; white-space: nowrap; }
+    @keyframes xq-thinking-dots { 0% { width: 0; } 100% { width: 1.5em; } }
+    .xq-clock { text-align: center; font-size: 12px; color: var(--muted); margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+    .xq-clock.low { color: var(--bad); font-weight: 700; }
+
+    /* -- Board -------------------------------------------------------
+       A real wooden Xiangqi board: pale wood panel, thin engraved-look
+       grid lines with pieces sitting ON the intersections (not filling
+       cells), an open river gap with no vertical lines crossing it, full
+       corner-to-corner palace diagonals, and small corner-bracket
+       position markers at the traditional Cannon/Soldier points -- drawn
+       as one SVG per render, same technique as Go's board (see go.js's
+       buildBoardSvg). */
+    .xq-board-wrap { display: flex; justify-content: center; margin: 8px 0; }
+    #board svg { max-width: 100%; height: auto; display: block; touch-action: manipulation; }
+    .xq-point { cursor: default; }
+    .xq-point.clickable { cursor: pointer; }
+
+    #rules-modal ul { padding-left: 18px; }
+    #rules-modal li { margin-bottom: 8px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap xq-wrap">
+    <div class="top-bar">
+      <h1>🀄 Cờ Tướng Úp <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
+      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+    </div>
+
+    <div id="lobby-screen" class="card">
+      <h2 style="margin-top:0; text-align:center;">Cờ Tướng Úp Rooms</h2>
+      <ul id="room-list" class="xq-player-list"></ul>
+      <p id="no-rooms-msg" style="color:var(--muted); font-size:13px; text-align:center; display:none;">No rooms yet — create one to get started.</p>
+      <div class="xq-actions">
+        <button id="show-create-btn">+ Create Room</button>
+      </div>
+    </div>
+
+    <div id="create-room-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;">Create Room</h2>
+      <p style="font-size:13px; color:var(--muted);">Room name</p>
+      <input type="text" id="room-name-input" maxlength="30" placeholder="e.g. Xiangqi Table 1" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Password</p>
+      <input type="text" id="room-password-input" maxlength="30" placeholder="Anything — share it with your opponent" />
+
+      <div class="xq-config-grid">
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Time per turn</p>
+          <select id="time-per-turn-select">
+            <option value="0">Unlimited</option>
+            <option value="30">30s</option>
+            <option value="45">45s</option>
+            <option value="60">60s</option>
+            <option value="90">90s</option>
+          </select>
+        </div>
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Who plays Red (moves first)?</p>
+          <select id="first-player-select">
+            <option value="random">Random</option>
+            <option value="host">I go first</option>
+            <option value="opponent">Opponent goes first</option>
+          </select>
+        </div>
+      </div>
+
+      <p id="create-room-error" style="color:var(--bad); font-size:13px; display:none;"></p>
+      <div class="xq-actions">
+        <button id="create-room-btn">Create &amp; Join</button>
+        <button class="secondary" id="cancel-create-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="waiting-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
+      <p id="waiting-config" style="text-align:center; font-size:12px; color:var(--muted); margin-top:-6px;"></p>
+      <ul id="player-list" class="xq-player-list"></ul>
+      <div class="xq-actions">
+        <button class="secondary" id="add-bot-btn">🤖 Add Bot Opponent</button>
+        <button id="start-btn" disabled>▶ Start Game</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center; margin-top:8px;">No one else around? Add a bot and play solo.</p>
+      <div class="xq-actions">
+        <button class="danger" id="leave-waiting-btn">Leave Room</button>
+      </div>
+      <div id="waiting-log" class="xq-log"></div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+      <div class="xq-seats" id="seats-row"></div>
+      <div class="xq-turn-banner" id="turn-banner"></div>
+      <div class="xq-clock" id="turn-clock"></div>
+
+      <div class="xq-board-wrap">
+        <div id="board"></div>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center;">Click one of your pieces (hidden or revealed) to see — and click — where it can legally go.</p>
+
+      <div class="xq-actions">
+        <button class="danger" id="leave-btn">Leave Room</button>
+      </div>
+      <div id="game-log" class="xq-log"></div>
+    </div>
+
+    <div id="finished-screen" class="card result-card hidden">
+      <div class="xq-winner" id="winner-text" style="text-align:center; font-size:22px; font-weight:800; margin:10px 0;"></div>
+      <div class="actions">
+        <button id="new-game-btn">Play Again</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 id="password-modal-title">Enter Password</h2>
+      <input type="text" id="join-password-input" placeholder="Room password" />
+      <p id="password-error" style="color:var(--bad); font-size:13px; display:none;">Wrong password.</p>
+      <div class="xq-actions">
+        <button id="password-submit-btn">Join</button>
+        <button class="secondary" id="password-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="rules-lang-toggle">
+        <button type="button" class="rules-lang-en">English</button>
+        <button type="button" class="rules-lang-vi">Tiếng Việt</button>
+      </div>
+      <div class="lang-en">
+        <h2>How to Play Cờ Tướng Úp</h2>
+        <ul>
+          <li>Standard Xiangqi (Chinese Chess) board and starting squares. Both <b>Generals start face-up</b>, in plain sight the whole game. Every OTHER piece (2 Advisors, 2 Elephants, 2 Horses, 2 Chariots, 2 Cannons, 5 Soldiers per side) is shuffled and dealt <b>face-down</b> onto that side's remaining usual starting squares — so you always know a hidden piece's <b>color</b> (which half it's on) and exactly what movement pattern its square offers (the squares themselves are never shuffled, only which piece sits where), but not which real piece is under it.</li>
+          <li>On your turn you move ONE piece — hidden or revealed. Moving a still-<b>hidden</b> piece is its "first move": it must follow the CLASSIC, unmodified movement rule of the SQUARE it's currently on (e.g. a hidden piece sitting on a Cannon's home square moves/captures like a Cannon on this move, whatever it actually turns out to be — and a hidden piece sitting on an Advisor's or Elephant's square still can't leave the palace / cross the river on this move, even though a revealed one now can, see below) — and that move flips it face-up. From then on it moves like what it really is. There's no separate "flip in place" action; moving a hidden piece both reveals AND relocates it in one move.</li>
+          <li>Once ACTUALLY revealed, a piece moves like normal Xiangqi, with two cờ-úp-specific changes that only apply from this point on: <b>General</b> — 1 step orthogonally, confined to the 3x3 palace; <b>Advisor</b> — 1 step diagonally, <u>no longer confined to the palace</u>; <b>Elephant</b> — exactly 2 diagonally, blocked if the midpoint ("eye") is occupied, <u>may now cross the river</u>; <b>Horse</b> — moves like a knight, blocked if the adjacent orthogonal square in the direction of travel ("leg") is occupied; <b>Chariot</b> — any distance orthogonally, blocked by the first piece in its path; <b>Cannon</b> — slides freely like a Chariot when NOT capturing, but can only capture by jumping over exactly one piece (of either color) and landing on the first piece beyond it; <b>Soldier</b> — 1 step forward only, until it crosses the river, after which it can also step sideways (never backward).</li>
+          <li>Moving onto a square captures whatever is there — including a still-hidden enemy piece ("blind capture"): you find out what it was the moment you take it. A hidden piece still blocks lines of sight and movement paths (Chariot/Cannon rays, Horse's leg, Elephant's eye) exactly like a revealed one, using whichever pattern currently applies to it.</li>
+          <li>Since both Generals are always visible, real check rules apply: you may never make a move that leaves your own General under attack. <b>👑 Flying Generals:</b> if the two Generals end up on the same file with nothing between them, the General to move may capture the other at any distance down that file — this is also a check threat, so a move that would expose this face-off is illegal in the first place.</li>
+          <li><b>Win the game</b> by checkmating the opponent (they're in check with no way out), or — equivalent in effect — if it's their turn and they have no legal move at all, in or out of check. There's no stalemate-as-draw here: either way, that player simply loses. Capturing the General directly is also a win but should be rare in practice, since check-avoidance means a well-played opponent would already be checkmated first.</li>
+          <li><b>🤝 Draws</b> (this project's own addition, since the source rules don't specify one, but real check-avoidance can otherwise reduce a game to a position neither side can ever force a decision from): the game is drawn if only the two bare Generals are left, or after 60 moves in a row with no capture and no piece revealed for the first time.</li>
+          <li><b>Room settings</b> (chosen by whoever creates the room): an optional per-turn clock (miss it and a random legal move is played for you), and who plays Red (Red always moves first).</li>
+        </ul>
+      </div>
+      <div class="lang-vi">
+        <h2>Cách chơi Cờ Tướng Úp</h2>
+        <ul>
+          <li>Bàn cờ và các ô xuất phát tiêu chuẩn của Cờ Tướng. Cả hai <b>Tướng đều để ngửa</b> ngay từ đầu, lộ diện suốt ván đấu. Mọi quân KHÁC (mỗi bên 2 Sĩ, 2 Tượng, 2 Mã, 2 Xe, 2 Pháo, 5 Tốt) được xáo trộn và úp xuống các ô xuất phát còn lại của bên đó — nên bạn luôn biết <b>màu quân</b> của một ô úp (nằm ở nửa bàn cờ nào) và biết chính xác quy tắc di chuyển mà ô đó cho phép (bản thân các ô không bao giờ bị xáo trộn, chỉ có quân nào nằm ở đâu là bị xáo trộn), nhưng không biết quân thật bên dưới là gì.</li>
+          <li>Đến lượt bạn, bạn đi MỘT quân — úp hoặc đã lật. Đi một quân còn <b>úp</b> chính là "nước đi đầu" của nó: quân đó phải đi theo đúng luật CỔ ĐIỂN, chưa sửa đổi của Ô mà nó đang đứng (ví dụ quân úp đứng ở ô xuất phát của Pháo sẽ đi/ăn quân như một Pháo ở nước này, bất kể thực chất nó là quân gì — và quân úp đứng ở ô Sĩ hoặc Tượng vẫn KHÔNG được ra khỏi cung / qua sông ở nước này, dù một quân Sĩ/Tượng đã lật thì được, xem bên dưới) — và nước đi đó sẽ lật quân đó ngửa lên. Từ đó về sau nó đi theo đúng luật của quân thật. Không có hành động "lật tại chỗ" riêng biệt; đi một quân úp vừa lật vừa di chuyển nó trong cùng một nước.</li>
+          <li>Một khi ĐÃ THỰC SỰ lộ diện, quân di chuyển như Cờ Tướng thông thường, với hai thay đổi riêng của cờ úp chỉ áp dụng từ lúc này: <b>Tướng</b> — đi 1 ô theo trục ngang/dọc, chỉ trong cung (3x3); <b>Sĩ</b> — đi 1 ô chéo, <u>không còn bị giới hạn trong cung</u>; <b>Tượng</b> — đi đúng 2 ô chéo, bị chặn nếu điểm giữa ("mắt tượng") có quân, <u>được phép qua sông</u>; <b>Mã</b> — đi hình chữ L, bị chặn nếu ô vuông liền kề theo hướng đi ("chân mã") có quân; <b>Xe</b> — đi bất kỳ khoảng cách nào theo trục ngang/dọc, bị chặn bởi quân đầu tiên trên đường đi; <b>Pháo</b> — đi như Xe khi không ăn quân, nhưng chỉ ăn quân được bằng cách nhảy qua đúng 1 quân bất kỳ (gọi là "ngòi") rồi đáp xuống quân đầu tiên phía sau ngòi đó; <b>Tốt</b> — chỉ đi thẳng 1 ô cho đến khi qua sông, sau đó có thể đi ngang (không bao giờ đi lùi).</li>
+          <li>Đi quân vào một ô sẽ ăn bất cứ thứ gì đang ở đó — kể cả một quân địch còn đang úp ("ăn mù"): bạn sẽ biết đó là quân gì ngay khi ăn được. Một quân úp vẫn cản đường đi/tầm nhìn (đường đi của Xe/Pháo, chân Mã, mắt Tượng) giống hệt một quân đã lật, theo đúng quy tắc đang áp dụng cho nó lúc đó.</li>
+          <li>Vì cả hai Tướng luôn lộ diện, luật chiếu tướng thực sự được áp dụng: bạn không bao giờ được đi một nước khiến Tướng của mình bị chiếu. <b>👑 Tướng đối mặt:</b> nếu hai Tướng cùng nằm trên một cột dọc mà không có quân nào ở giữa, bên đi có thể ăn Tướng đối phương ở bất kỳ khoảng cách nào trên cột đó — đây cũng là một mối đe dọa chiếu tướng, nên một nước đi dẫn đến thế đối mặt này là nước đi không hợp lệ ngay từ đầu.</li>
+          <li><b>Thắng ván</b> bằng cách chiếu bí đối phương (đang bị chiếu và không còn cách nào thoát), hoặc — về bản chất tương đương — nếu đến lượt đối phương mà họ không còn nước đi hợp lệ nào, dù có đang bị chiếu hay không. Không có hòa kiểu "hết nước đi" ở đây: dù thế nào, người đó cũng thua. Ăn trực tiếp được Tướng cũng là thắng, nhưng trên thực tế sẽ hiếm khi xảy ra, vì luật tránh chiếu đã khiến đối phương chơi đúng luật bị chiếu bí trước đó rồi.</li>
+          <li><b>🤝 Hòa ván</b> (phần bổ sung riêng của dự án này, vì luật gốc không quy định, nhưng luật tránh chiếu thực sự có thể khiến ván đấu rơi vào thế không bên nào ép được kết quả): ván đấu hòa nếu chỉ còn lại hai Tướng trơ trọi, hoặc sau 60 nước liên tiếp không ăn quân và không có quân nào được lật lần đầu.</li>
+          <li><b>Cài đặt phòng</b> (do người tạo phòng chọn): tùy chọn đồng hồ đếm giờ mỗi lượt (hết giờ sẽ tự động đi một nước hợp lệ ngẫu nhiên giúp bạn), và ai được cầm quân Đỏ (Đỏ luôn đi trước).</li>
+        </ul>
+      </div>
+      <button class="modal-close">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../common.js"></script>
+  <script src="xq.js"></script>
+</body>
+</html>

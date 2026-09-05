@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cờ Vua — Autumn Festival</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .cx-wrap { max-width: 560px; }
+
+    .cx-log {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      max-height: 130px;
+      overflow-y: auto;
+      margin-top: 14px;
+    }
+    .cx-log div { padding: 2px 0; }
+
+    .cx-player-list { list-style: none; padding: 0; margin: 12px 0; }
+    .cx-player-list li { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .cx-player-list li:last-child { border-bottom: none; }
+
+    .room-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; }
+    .room-row .room-info { display: flex; flex-direction: column; }
+    .room-row .room-name { font-weight: 600; font-size: 14px; }
+    .room-row .room-meta { font-size: 12px; color: var(--muted); }
+    .room-row .room-meta.playing { color: var(--gold); }
+    .room-row button { padding: 6px 14px; font-size: 13px; }
+
+    #lobby-screen input, #create-room-screen input, #create-room-screen select, #password-modal input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 14px;
+    }
+    .cx-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 10px; }
+    @media (max-width: 420px) { .cx-config-grid { grid-template-columns: 1fr; } }
+    .cx-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+
+    .cx-seats { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .cx-seat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      text-align: center;
+      min-width: 120px;
+      flex: 1;
+    }
+    .cx-seat.turn { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.4); }
+    .cx-seat.check { border-color: var(--bad); box-shadow: 0 0 0 2px rgba(230, 25, 75, 0.4); }
+    .cx-seat.offline { opacity: 0.55; }
+    .cx-seat .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .cx-seat .color-dot.white { background: #f4f4f4; border: 1px solid #999; }
+    .cx-seat .color-dot.black { background: #1a1a1a; border: 1px solid #555; }
+    .cx-seat .name { font-size: 13px; font-weight: 600; }
+    .cx-seat .captured { font-size: 15px; letter-spacing: 1px; min-height: 16px; }
+
+    .cx-turn-banner { text-align: center; font-weight: 700; margin-bottom: 6px; min-height: 22px; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+    .cx-turn-banner.mine { color: var(--good); }
+    .cx-turn-banner.thinking { color: var(--gold); }
+    .cx-turn-banner.check { color: var(--bad); }
+    .cx-thinking-dots { display: inline-block; width: 1.5em; text-align: left; animation: cx-thinking-dots 1.2s steps(4) infinite; overflow: hidden; white-space: nowrap; }
+    @keyframes cx-thinking-dots { 0% { width: 0; } 100% { width: 1.5em; } }
+    .cx-clock { text-align: center; font-size: 12px; color: var(--muted); margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+    .cx-clock.low { color: var(--bad); font-weight: 700; }
+
+    /* -- Board ------------------------------------------------------- */
+    .cx-board-wrap { display: flex; justify-content: center; margin: 8px 0; }
+    .cx-board {
+      --cx-cell: 48px;
+      display: grid;
+      grid-template-columns: repeat(8, var(--cx-cell));
+      grid-template-rows: repeat(8, var(--cx-cell));
+      border: 3px solid #4a3728;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    @media (max-width: 420px) {
+      .cx-board { --cx-cell: 38px; }
+    }
+    .cx-cell {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: calc(var(--cx-cell) * 0.62);
+      line-height: 1;
+      cursor: default;
+      user-select: none;
+    }
+    .cx-cell.light { background: #eed9b6; }
+    .cx-cell.dark { background: #8a6d4a; }
+    .cx-cell.clickable { cursor: pointer; }
+    .cx-cell.king-in-check { background: #c0392b !important; }
+    .cx-cell.selected::after {
+      content: '';
+      position: absolute;
+      inset: 6%;
+      border-radius: 6px;
+      box-shadow: 0 0 0 3px var(--gold);
+      pointer-events: none;
+    }
+    .cx-cell.legal-dest::after {
+      content: '';
+      position: absolute;
+      width: 28%;
+      height: 28%;
+      border-radius: 50%;
+      background: rgba(58, 196, 125, 0.75);
+      pointer-events: none;
+    }
+    .cx-cell.legal-dest.has-piece::after {
+      width: 90%;
+      height: 90%;
+      background: transparent;
+      box-shadow: inset 0 0 0 4px rgba(230, 25, 75, 0.8);
+    }
+    .cx-cell.just-moved { box-shadow: inset 0 0 0 3px var(--gold); }
+    .cx-piece.white { color: #f7f5f0; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 1px #000; }
+    .cx-piece.black { color: #161616; text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
+
+    .cx-promo-modal .modal-card { max-width: 280px; text-align: center; }
+    .cx-promo-options { display: flex; gap: 8px; justify-content: center; margin: 14px 0; }
+    .cx-promo-options button { font-size: 28px; padding: 10px 14px; }
+
+    #rules-modal ul { padding-left: 18px; }
+    #rules-modal li { margin-bottom: 8px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap cx-wrap">
+    <div class="top-bar">
+      <h1>♟️ Cờ Vua <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
+      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+    </div>
+
+    <div id="lobby-screen" class="card">
+      <h2 style="margin-top:0; text-align:center;">Cờ Vua Rooms</h2>
+      <ul id="room-list" class="cx-player-list"></ul>
+      <p id="no-rooms-msg" style="color:var(--muted); font-size:13px; text-align:center; display:none;">No rooms yet — create one to get started.</p>
+      <div class="cx-actions">
+        <button id="show-create-btn">+ Create Room</button>
+      </div>
+    </div>
+
+    <div id="create-room-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;">Create Room</h2>
+      <p style="font-size:13px; color:var(--muted);">Room name</p>
+      <input type="text" id="room-name-input" maxlength="30" placeholder="e.g. Chess Table 1" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Password</p>
+      <input type="text" id="room-password-input" maxlength="30" placeholder="Anything — share it with your opponent" />
+
+      <div class="cx-config-grid">
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Time per turn</p>
+          <select id="time-per-turn-select">
+            <option value="0">Unlimited</option>
+            <option value="30">30s</option>
+            <option value="45">45s</option>
+            <option value="60">60s</option>
+            <option value="90">90s</option>
+            <option value="120">120s</option>
+          </select>
+        </div>
+        <div>
+          <p style="font-size:13px; color:var(--muted);">Who plays White (moves first)?</p>
+          <select id="first-player-select">
+            <option value="random">Random</option>
+            <option value="host">I go first</option>
+            <option value="opponent">Opponent goes first</option>
+          </select>
+        </div>
+      </div>
+
+      <p id="create-room-error" style="color:var(--bad); font-size:13px; display:none;"></p>
+      <div class="cx-actions">
+        <button id="create-room-btn">Create &amp; Join</button>
+        <button class="secondary" id="cancel-create-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="waiting-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
+      <p id="waiting-config" style="text-align:center; font-size:12px; color:var(--muted); margin-top:-6px;"></p>
+      <ul id="player-list" class="cx-player-list"></ul>
+      <div class="cx-actions">
+        <button class="secondary" id="add-bot-btn">🤖 Add Bot Opponent</button>
+        <button id="start-btn" disabled>▶ Start Game</button>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center; margin-top:8px;">No one else around? Add a bot and play solo.</p>
+      <div class="cx-actions">
+        <button class="danger" id="leave-waiting-btn">Leave Room</button>
+      </div>
+      <div id="waiting-log" class="cx-log"></div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+      <div class="cx-seats" id="seats-row"></div>
+      <div class="cx-turn-banner" id="turn-banner"></div>
+      <div class="cx-clock" id="turn-clock"></div>
+
+      <div class="cx-board-wrap">
+        <div class="cx-board" id="board"></div>
+      </div>
+      <p style="color:var(--muted); font-size:12px; text-align:center;">Click one of your pieces to see (and click) where it can legally go.</p>
+
+      <div class="cx-actions">
+        <button class="danger" id="resign-btn">🏳️ Resign</button>
+        <button class="danger" id="leave-btn">Leave Room</button>
+      </div>
+      <div id="game-log" class="cx-log"></div>
+    </div>
+
+    <div id="finished-screen" class="card result-card hidden">
+      <div class="cx-winner" id="winner-text" style="text-align:center; font-size:22px; font-weight:800; margin:10px 0;"></div>
+      <div class="actions">
+        <button id="new-game-btn">Play Again</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 id="password-modal-title">Enter Password</h2>
+      <input type="text" id="join-password-input" placeholder="Room password" />
+      <p id="password-error" style="color:var(--bad); font-size:13px; display:none;">Wrong password.</p>
+      <div class="cx-actions">
+        <button id="password-submit-btn">Join</button>
+        <button class="secondary" id="password-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="promo-modal" class="modal-overlay hidden cx-promo-modal">
+    <div class="modal-card">
+      <h2>Promote to...</h2>
+      <div class="cx-promo-options" id="promo-options"></div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="rules-lang-toggle">
+        <button type="button" class="rules-lang-en">English</button>
+        <button type="button" class="rules-lang-vi">Tiếng Việt</button>
+      </div>
+      <div class="lang-en">
+        <h2>How to Play Cờ Vua (Chess)</h2>
+        <ul>
+          <li>Standard international chess. White moves first, then players alternate turns.</li>
+          <li><b>Pawn</b> — 1 step forward (2 steps from its starting square), captures 1 step diagonally forward only. <b>En passant:</b> if an enemy pawn just moved 2 squares and landed beside yours, you may capture it as if it had only moved 1 square — but only immediately on your very next turn.</li>
+          <li><b>Knight</b> — moves in an L-shape (2+1 squares), and is the only piece that can jump over others.</li>
+          <li><b>Bishop</b> — any distance diagonally. <b>Rook</b> — any distance horizontally/vertically. <b>Queen</b> — any distance in any direction. All three are blocked by the first piece in their path.</li>
+          <li><b>King</b> — 1 step in any direction. <b>Castling:</b> if the King and the Rook on one side have never moved, the squares between them are empty, and the King is not currently in check, doesn't pass through, and doesn't land on a square attacked by the enemy, the King moves 2 squares toward that Rook and the Rook hops to the square just on the other side of the King.</li>
+          <li>Reaching the far rank with a pawn <b>promotes</b> it — you choose Queen, Rook, Bishop, or Knight.</li>
+          <li>You may never make a move that leaves your own King under attack ("in check"). <b>Checkmate</b> (in check, with no legal move to escape it) ends the game — that player loses.</li>
+          <li>If it's your turn, you're NOT in check, and you have no legal move, it's a <b>stalemate</b> — a draw. The game is also drawn if neither side has enough material left to possibly checkmate, or after 50 moves in a row with no capture and no pawn move.</li>
+          <li>You can <b>Resign</b> at any time to concede the game to your opponent.</li>
+          <li><b>Room settings</b> (chosen by whoever creates the room): an optional per-turn clock (miss it and a random legal move is played for you), and who plays White (White always moves first).</li>
+        </ul>
+      </div>
+      <div class="lang-vi">
+        <h2>Cách chơi Cờ Vua</h2>
+        <ul>
+          <li>Cờ vua quốc tế tiêu chuẩn. Trắng đi trước, sau đó hai bên lần lượt thay phiên.</li>
+          <li><b>Tốt</b> — đi thẳng 1 ô (2 ô nếu đi từ vị trí xuất phát), chỉ ăn quân chéo 1 ô phía trước. <b>Bắt tốt qua đường (en passant):</b> nếu tốt đối phương vừa đi 2 ô và dừng cạnh tốt của bạn, bạn có thể ăn nó như thể nó chỉ đi 1 ô — nhưng chỉ được thực hiện ngay lượt kế tiếp.</li>
+          <li><b>Mã</b> — đi hình chữ L (2+1 ô), là quân duy nhất có thể nhảy qua quân khác.</li>
+          <li><b>Tượng</b> — đi chéo bất kỳ khoảng cách nào. <b>Xe</b> — đi ngang/dọc bất kỳ khoảng cách nào. <b>Hậu</b> — đi bất kỳ hướng nào, khoảng cách bất kỳ. Cả ba đều bị chặn bởi quân đầu tiên trên đường đi.</li>
+          <li><b>Vua</b> — đi 1 ô theo bất kỳ hướng nào. <b>Nhập thành:</b> nếu Vua và Xe ở một bên chưa từng di chuyển, các ô giữa chúng đều trống, Vua hiện không bị chiếu, không đi qua và không đáp xuống ô bị đối phương kiểm soát, Vua đi 2 ô về phía Xe đó và Xe nhảy sang ô ngay bên kia của Vua.</li>
+          <li>Đưa Tốt đến hàng cuối cùng sẽ <b>phong cấp</b> — bạn chọn Hậu, Xe, Tượng, hoặc Mã.</li>
+          <li>Bạn không bao giờ được đi một nước khiến Vua của mình bị chiếu. <b>Chiếu hết (checkmate)</b> (đang bị chiếu và không có nước nào thoát) sẽ kết thúc ván — người đó thua.</li>
+          <li>Nếu đến lượt bạn, bạn KHÔNG bị chiếu, và bạn không còn nước đi hợp lệ nào, đó là <b>hết nước (stalemate)</b> — hòa. Ván cũng hòa nếu không bên nào còn đủ quân để chiếu hết, hoặc sau 50 nước liên tiếp không ăn quân và không đi Tốt.</li>
+          <li>Bạn có thể <b>Đầu hàng (Resign)</b> bất cứ lúc nào để nhường chiến thắng cho đối phương.</li>
+          <li><b>Cài đặt phòng</b> (do người tạo phòng chọn): tùy chọn đồng hồ đếm giờ mỗi lượt (hết giờ sẽ tự động đi một nước hợp lệ ngẫu nhiên giúp bạn), và ai được cầm quân Trắng (Trắng luôn đi trước).</li>
+        </ul>
+      </div>
+      <button class="modal-close">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../common.js"></script>
+  <script src="chess.js"></script>
+</body>
+</html>
