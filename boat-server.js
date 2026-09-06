@@ -53,7 +53,11 @@ const MIN_SPEED = 4;
 const TRACK_TURN_COUNT = 12;
 const TURN_SPACING = 90;
 const FINISH_STRETCH = 90;
-const TRACK_LENGTH = TRACK_TURN_COUNT * TURN_SPACING + FINISH_STRETCH;
+// Host-selectable race-length multiplier: scales BOTH the number of turns
+// and the total distance proportionally, so a longer race also means more
+// navigation content for the Leader/Rowers, not just a longer flat stretch.
+const RACE_LENGTH_MULTIPLIERS = [1, 2, 3, 5, 8];
+const DEFAULT_RACE_LENGTH_MULTIPLIER = 1;
 const TURN_LOOKAHEAD_WINDOW = 40; // a turn resolves once the boat is this close to its marker
 const TURN_MISS_GRACE = 10; // distance past a marker before it's auto-scored "missed" if never called
 const PENALTY_MS = 3000; // wrong/missed turn -- speed debuff duration
@@ -77,18 +81,19 @@ const DRUM_TAP_ENERGY_RAISE = 4;
 const DRUM_TAP_ENERGY_ACTIVE = 2;
 const DRUM_TAP_ENERGY_COOLDOWN_PENALTY = 1;
 
-const MAX_RACE_MS = 8 * 60 * 1000; // safety cap so a stalled race still ends
+const MAX_RACE_MS_BASE = 8 * 60 * 1000; // safety cap so a stalled race still ends -- scaled by the race-length multiplier
 const DIRECTIONS = ['trai', 'phai', 'thang'];
 const BOT_NAMES = ['🤖 Bot An', '🤖 Bot Bình', '🤖 Bot Chi', '🤖 Bot Dũng', '🤖 Bot Giang', '🤖 Bot Hà', '🤖 Bot Khoa', '🤖 Bot Linh', '🤖 Bot Minh', '🤖 Bot Nam', '🤖 Bot Oanh', '🤖 Bot Phúc'];
 
 function rowerSlotsFor(teamSize) { return teamSize - 2; }
 
-function generateTrack() {
+function generateTrack(multiplier) {
+  const turnCount = TRACK_TURN_COUNT * multiplier;
   const turns = [];
-  for (let i = 0; i < TRACK_TURN_COUNT; i += 1) {
+  for (let i = 0; i < turnCount; i += 1) {
     turns.push({ position: (i + 1) * TURN_SPACING, direction: DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)] });
   }
-  return { turns, length: TRACK_LENGTH };
+  return { turns, length: turnCount * TURN_SPACING + FINISH_STRETCH };
 }
 
 function freshRowerState() {
@@ -126,17 +131,20 @@ function freshBoatState(rowerSlots, name) {
 }
 
 class BoatRoom {
-  constructor(id, name, password, teamSize, mapTheme) {
+  constructor(id, name, password, teamSize, mapTheme, raceLengthMultiplier) {
     this.id = id;
     this.name = name;
     this.password = password;
     this.teamSize = TEAM_SIZES.includes(Number(teamSize)) ? Number(teamSize) : DEFAULT_TEAM_SIZE;
     this.rowerSlots = rowerSlotsFor(this.teamSize);
     this.mapTheme = MAP_THEMES[mapTheme] ? mapTheme : DEFAULT_MAP_THEME;
+    this.raceLengthMultiplier = RACE_LENGTH_MULTIPLIERS.includes(Number(raceLengthMultiplier))
+      ? Number(raceLengthMultiplier)
+      : DEFAULT_RACE_LENGTH_MULTIPLIER;
     this.status = 'waiting'; // 'waiting' | 'racing' | 'finished'
     this.players = []; // { id, name, connected, socketId, isBot }
     this.botCounter = 0;
-    this.track = generateTrack();
+    this.track = generateTrack(this.raceLengthMultiplier);
     this.boats = {};
     this.boatOrder = []; // ordered boat keys -- rendering/ranking order
     this.boatCounter = 0;
@@ -196,6 +204,7 @@ class BoatRoom {
       boatCount: this.boatOrder.length,
       mapTheme: this.mapTheme,
       mapThemeLabel: MAP_THEMES[this.mapTheme],
+      raceLengthMultiplier: this.raceLengthMultiplier,
       playerCount: this.players.filter((p) => p.connected).length,
       slotsFilled: filled,
       slotsTotal: this.teamSize * this.boatOrder.length,
@@ -480,7 +489,7 @@ class BoatRoom {
     this.boatOrder.forEach((k) => this.tickBoat(k));
 
     const allDone = this.boatOrder.every((k) => this.boats[k].finishedAt);
-    const timedOut = Boolean(this.raceStartedAt) && Date.now() - this.raceStartedAt > MAX_RACE_MS;
+    const timedOut = Boolean(this.raceStartedAt) && Date.now() - this.raceStartedAt > MAX_RACE_MS_BASE * this.raceLengthMultiplier;
 
     // Ranks are only ever assigned once, right when the race actually
     // concludes (every boat finished, or the safety timeout hits) --
@@ -564,6 +573,7 @@ class BoatRoom {
       rowerSlots: this.rowerSlots,
       mapTheme: this.mapTheme,
       mapThemeLabel: MAP_THEMES[this.mapTheme],
+      raceLengthMultiplier: this.raceLengthMultiplier,
       raceStartedAt: this.raceStartedAt,
       rowPhaseDurations: { raise: RAISE_MS, active: ACTIVE_MS, cooldown: COOLDOWN_MS },
       leaderSignalCooldownMs: LEADER_SIGNAL_COOLDOWN_MS,
@@ -621,7 +631,7 @@ function attachBoat(io) {
       if (typeof callback === 'function') callback({ ok: true, rooms: roomList() });
     });
 
-    socket.on('boat:createRoom', ({ roomName, password, playerId, name, teamSize, mapTheme }, callback) => {
+    socket.on('boat:createRoom', ({ roomName, password, playerId, name, teamSize, mapTheme, raceLengthMultiplier }, callback) => {
       const cleanRoomName = String(roomName || '').trim().slice(0, 30);
       const cleanPassword = String(password || '');
       if (!cleanRoomName) { if (typeof callback === 'function') callback({ ok: false, error: 'invalid-name' }); return; }
@@ -631,7 +641,7 @@ function attachBoat(io) {
       if (nameTaken) { if (typeof callback === 'function') callback({ ok: false, error: 'name-taken' }); return; }
 
       roomCounter += 1;
-      const room = new BoatRoom(`room_${roomCounter}`, cleanRoomName, cleanPassword, teamSize, mapTheme);
+      const room = new BoatRoom(`room_${roomCounter}`, cleanRoomName, cleanPassword, teamSize, mapTheme, raceLengthMultiplier);
       const clean = String(name || 'Player').trim().slice(0, 20) || 'Player';
       room.players.push({ id: playerId, name: clean, connected: true, socketId: socket.id, isBot: false });
       room.pushLog(`${clean} created the room.`);
@@ -792,6 +802,8 @@ module.exports.LEADER_SIGNAL_COOLDOWN_MS = LEADER_SIGNAL_COOLDOWN_MS;
 module.exports.LEADER_STREAK_TARGET = LEADER_STREAK_TARGET;
 module.exports.DRUM_TAP_COOLDOWN_MS = DRUM_TAP_COOLDOWN_MS;
 module.exports.MAX_BOATS = MAX_BOATS;
+module.exports.RACE_LENGTH_MULTIPLIERS = RACE_LENGTH_MULTIPLIERS;
+module.exports.DEFAULT_RACE_LENGTH_MULTIPLIER = DEFAULT_RACE_LENGTH_MULTIPLIER;
 module.exports.STARTING_BOAT_COUNT = STARTING_BOAT_COUNT;
 module.exports.generateTrack = generateTrack;
 module.exports.rowerSlotsFor = rowerSlotsFor;

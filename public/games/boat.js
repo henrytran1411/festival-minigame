@@ -150,7 +150,7 @@ if (me) {
       name.textContent = room.name;
       const meta = document.createElement('div');
       meta.className = 'room-meta' + (room.status === 'racing' ? ' racing' : '');
-      meta.textContent = `${statusLabel(room.status)} · ${room.boatCount} boat${room.boatCount === 1 ? '' : 's'} · ${room.playerCount} joined · ${room.slotsFilled}/${room.slotsTotal} seats filled · 🗺 ${room.mapThemeLabel}`;
+      meta.textContent = `${statusLabel(room.status)} · ${room.boatCount} boat${room.boatCount === 1 ? '' : 's'} · ${room.playerCount} joined · ${room.slotsFilled}/${room.slotsTotal} seats filled · 🗺 ${room.mapThemeLabel} · 📏 x${room.raceLengthMultiplier}`;
       info.append(name, meta);
       const joinBtn = document.createElement('button');
       joinBtn.className = 'secondary';
@@ -256,43 +256,42 @@ if (me) {
   }
 
   // Builds one lane + marker per boat (only when the actual set of boats
-  // changes, e.g. entering a fresh race) -- an evenly-sized horizontal
-  // strip per boat, however many there are (up to MAX_BOATS).
+  // changes, e.g. entering a fresh race) -- an evenly-sized vertical
+  // column per boat, however many there are (up to MAX_BOATS).
   function ensureRaceLanes(state) {
     const signature = state.boatOrder.join(',');
     if (signature === raceLanesSignature) return;
     raceLanesSignature = signature;
     raceLanes = {};
     raceSceneEl.querySelectorAll('.race-scene-lane').forEach((el) => el.remove());
-    const laneHeightPct = 100 / state.boatOrder.length;
+    const laneWidthPct = 100 / state.boatOrder.length;
     state.boatOrder.forEach((key, i) => {
       const laneEl = document.createElement('div');
       laneEl.className = 'race-scene-lane';
-      laneEl.style.top = (i * laneHeightPct) + '%';
-      laneEl.style.height = laneHeightPct + '%';
+      laneEl.style.left = (i * laneWidthPct) + '%';
+      laneEl.style.width = laneWidthPct + '%';
       const markerEl = document.createElement('div');
       markerEl.className = 'race-scene-boat';
-      markerEl.textContent = '🚣';
+      const emojiEl = document.createElement('span');
+      emojiEl.className = 'race-scene-boat-emoji';
+      emojiEl.textContent = '🚣';
       const tagEl = document.createElement('span');
       tagEl.className = 'race-scene-tag';
-      markerEl.appendChild(tagEl);
+      markerEl.append(emojiEl, tagEl);
       laneEl.appendChild(markerEl);
       raceSceneEl.appendChild(laneEl);
       raceLanes[key] = { laneEl, markerEl, tagEl };
     });
-    // Taller scenes as more boats join -- each lane keeps a sane minimum
-    // height instead of squeezing to near-nothing at 15 boats.
-    raceSceneEl.style.height = Math.max(160, state.boatOrder.length * 40) + 'px';
   }
 
-  // Boats travel left-to-right across their lane -- 2% keeps the marker
-  // fully inside the frame at the start, 90% stops it just short of the
-  // finish-line stripe (which sits at right:4%, i.e. ~96% from the left).
+  // Boats travel bottom-to-top up their lane -- 2% keeps the marker fully
+  // inside the frame at the start, 90% stops it just short of the
+  // finish-line stripe (which sits at top:4%, i.e. ~96% up from the bottom).
   function renderTrack(key, boat, isMine) {
     const lane = raceLanes[key];
     if (!lane) return;
     const pct = Math.min(1, boat.progress / boat.length);
-    lane.markerEl.style.left = (2 + pct * 88) + '%';
+    lane.markerEl.style.bottom = (2 + pct * 88) + '%';
     lane.tagEl.textContent = boat.name + (isMine ? ' (you)' : '');
     lane.tagEl.className = 'race-scene-tag' + (isMine ? ' mine' : '');
   }
@@ -530,7 +529,8 @@ if (me) {
     }
     const teamSize = Number(document.querySelector('input[name="team-size"]:checked').value);
     const mapTheme = mapThemeSelect.value;
-    socket.emit('boat:createRoom', { roomName, password, playerId: me.id, name: me.name, teamSize, mapTheme }, (res) => {
+    const raceLengthMultiplier = Number(document.querySelector('input[name="race-length"]:checked').value);
+    socket.emit('boat:createRoom', { roomName, password, playerId: me.id, name: me.name, teamSize, mapTheme, raceLengthMultiplier }, (res) => {
       if (res && res.ok) {
         enterRoom(res.roomId);
       } else {

@@ -41,7 +41,7 @@
 
     .boat-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
 
-    .budget-options { display: flex; gap: 10px; margin-top: 6px; }
+    .budget-options { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
     .budget-options label {
       flex: 1;
       text-align: center;
@@ -81,17 +81,21 @@
     .seat-row .seat-name.empty { color: var(--muted); font-weight: 400; font-style: italic; }
     .seat-row button { padding: 4px 10px; font-size: 12px; }
 
-    /* Horizontal race scene -- a themed river backdrop (same map art as
-       Battleship) with both boats racing left-to-right across it, instead
-       of two plain gradient-fill progress bars. */
+    /* Vertical race scene -- a themed river backdrop (same map art as
+       Battleship, every theme image a perfect 1024x1024 square) with every
+       boat racing bottom-to-top across it, instead of two plain
+       gradient-fill progress bars. aspect-ratio 1/1 matches the source
+       images exactly, so the full picture always shows at its correct
+       proportions instead of a wide/short box cropping most of it away. */
     .race-scene {
       position: relative;
       width: 100%;
-      min-height: 160px;
+      max-width: 560px;
+      aspect-ratio: 1 / 1;
       border-radius: 12px;
       overflow: hidden;
       border: 1px solid var(--border);
-      margin: 8px 0 14px;
+      margin: 8px auto 14px;
       background-color: #10222b;
       background-size: cover;
       background-position: center;
@@ -106,28 +110,31 @@
     }
     .race-scene-finish {
       position: absolute;
-      top: 0;
-      bottom: 0;
-      right: 4%;
-      width: 6px;
+      left: 0;
+      right: 0;
+      top: 4%;
+      height: 6px;
       background: repeating-linear-gradient(45deg, #fff 0 6px, #111 6px 12px);
       box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
     }
-    /* Lane top/height are set inline via JS (100% / boat count), so any
-       number of boats up to MAX_BOATS get an evenly-spaced lane. */
-    .race-scene-lane { position: absolute; left: 0; right: 0; }
+    /* Lane left/width are set inline via JS (100% / boat count), so any
+       number of boats up to MAX_BOATS get an evenly-spaced vertical lane. */
+    .race-scene-lane { position: absolute; top: 0; bottom: 0; }
     .race-scene-boat {
       position: absolute;
-      top: 50%;
-      left: 2%;
-      transform: translate(-10%, -50%);
+      left: 50%;
+      bottom: 2%;
+      transform: translate(-50%, 10%);
       font-size: 26px;
-      transition: left 0.1s linear;
+      transition: bottom 0.1s linear;
       text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
       display: flex;
       flex-direction: column;
       align-items: center;
     }
+    /* Wraps just the emoji (not the name tag below it) so it can be styled
+       independently of the rest of the marker. */
+    .race-scene-boat-emoji { display: inline-block; }
     .race-scene-tag {
       font-size: 11px;
       font-weight: 700;
@@ -239,6 +246,14 @@
         <option value="hoangsa">Hoàng Sa</option>
         <option value="truongsa">Trường Sa</option>
       </select>
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Race distance</p>
+      <div class="budget-options">
+        <label><input type="radio" name="race-length" value="1" checked /><span>x1<br /><small style="font-weight:400; color:var(--muted);">Default</small></span></label>
+        <label><input type="radio" name="race-length" value="2" /><span>x2</span></label>
+        <label><input type="radio" name="race-length" value="3" /><span>x3</span></label>
+        <label><input type="radio" name="race-length" value="5" /><span>x5</span></label>
+        <label><input type="radio" name="race-length" value="8" /><span>x8</span></label>
+      </div>
       <p id="create-room-error" style="color:var(--bad); font-size:13px; display:none;"></p>
       <div class="boat-actions">
         <button id="create-room-btn">Create &amp; Join</button>
