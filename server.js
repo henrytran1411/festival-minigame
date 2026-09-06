@@ -449,6 +449,21 @@ function clearDemoData() {
   return removed;
 }
 
+// Removes any player record created by a load-test/bot-simulation script --
+// every such script this session has prefixed its synthetic playerIds with
+// "bot-" or "test-" (never used by a real client), so this can clean up
+// simulated data without touching real players.
+function clearBotData() {
+  let removed = 0;
+  [...players.keys()].forEach((id) => {
+    if (id.startsWith('bot-') || id.startsWith('test-')) {
+      players.delete(id);
+      removed += 1;
+    }
+  });
+  return removed;
+}
+
 io.on('connection', (socket) => {
   socket.emit('leaderboard', leaderboardSnapshot());
   socket.emit('game-window-all', allGameWindowsSnapshot());
@@ -802,6 +817,16 @@ io.on('connection', (socket) => {
       return;
     }
     const removed = clearDemoData();
+    io.emit('leaderboard', leaderboardSnapshot());
+    if (typeof callback === 'function') callback({ ok: true, removed });
+  });
+
+  socket.on('admin:clear-bot-data', (payload, callback) => {
+    if (!socket.isAdmin) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'not authorized' });
+      return;
+    }
+    const removed = clearBotData();
     io.emit('leaderboard', leaderboardSnapshot());
     if (typeof callback === 'function') callback({ ok: true, removed });
   });
