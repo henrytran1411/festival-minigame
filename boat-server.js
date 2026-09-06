@@ -40,8 +40,8 @@ const ACTIVE_MS = 2000;
 const COOLDOWN_MS = 2000;
 
 const ENERGY_MAX = 100;
-const E_ROW = 12; // energy spent per completed rowing cycle
-const E_LEAD = 8; // energy spent per leader signal attempt (right or wrong)
+const E_ROW = 20; // energy spent per completed rowing cycle -- was 12 (net energy-POSITIVE under continuous rowing, no real pressure); 20 nets -1/sec sustained
+const E_LEAD = 5; // energy spent per leader signal attempt (right or wrong) -- was 8, too harsh vs. Rowers/Drummer at that rate
 const R_BASE = 3; // base energy regen / sec
 const STUN_MS = 3000; // "kiệt sức" duration once energy hits 0
 
@@ -83,7 +83,7 @@ const DRUM_TAP_COOLDOWN_MS = 100;
 const DRUM_TAP_ENERGY_RAISE = 2;
 const DRUM_TAP_ENERGY_ACTIVE = 1;
 const DRUM_TAP_ENERGY_COOLDOWN_PENALTY = 1;
-const DRUM_TAP_ENERGY_COST = 4;
+const DRUM_TAP_ENERGY_COST = 2; // was 4 -- still punishing at bot/max tap rate, much more forgiving at a realistic human tap pace
 
 const MAX_RACE_MS_BASE = 8 * 60 * 1000; // safety cap so a stalled race still ends -- scaled by the race-length multiplier
 const DIRECTIONS = ['trai', 'phai', 'thang'];
