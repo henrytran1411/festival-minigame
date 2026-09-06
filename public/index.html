@@ -12,6 +12,14 @@
       <h1>🍁 Autumn Festival Tournament</h1>
       <p style="color:var(--muted); font-size:14px;">Play all 4 games. Every point counts toward the overall leaderboard.</p>
       <input id="name-input" type="text" maxlength="20" placeholder="Your name" autocomplete="off" style="margin:16px 0;" />
+
+      <div class="avatar-picker">
+        <p class="avatar-picker-label">Choose your avatar</p>
+        <div class="avatar-options" id="avatar-options"></div>
+        <input type="file" id="avatar-upload-input" accept="image/*" class="hidden" />
+        <p id="avatar-error" class="avatar-error hidden"></p>
+      </div>
+
       <button id="join-btn" style="width:100%;">Let's play</button>
     </div>
 

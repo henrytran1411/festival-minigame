@@ -290,6 +290,18 @@ function revealRow(board, entry, rank, tier) {
     rankEl.className = 'rank ' + medalClassForRank(rank);
     rankEl.textContent = String(rank);
 
+    const avatarEl = document.createElement('span');
+    avatarEl.className = 'player-chip-avatar';
+    const avatarImgUrl = Festival.avatarImageUrl(entry.avatar);
+    if (avatarImgUrl) {
+      const img = document.createElement('img');
+      img.src = avatarImgUrl;
+      img.alt = entry.name;
+      avatarEl.appendChild(img);
+    } else {
+      avatarEl.textContent = (entry.name.trim()[0] || '?').toUpperCase();
+    }
+
     const nameEl = document.createElement('span');
     nameEl.className = 'name';
     nameEl.textContent = entry.name;
@@ -306,7 +318,7 @@ function revealRow(board, entry, rank, tier) {
     totalEl.className = 'total';
     totalEl.textContent = entry.total;
 
-    li.append(rankEl, nameEl, totalEl);
+    li.append(rankEl, avatarEl, nameEl, totalEl);
     insertRowSorted(board.listEl, li, rank);
     requestAnimationFrame(() => li.classList.add('shown'));
 
@@ -378,7 +390,7 @@ socket.on('leaderboard', (entries) => {
     if (board.revealed) {
       Festival.renderGameLeaderboard(board.listEl, entries, g.key, { limit: 10 });
     } else if (!board.revealing) {
-      const projected = entries.map((p) => ({ id: p.id, name: p.name, total: p.scores[g.key] || 0, updatedAt: p.gameUpdatedAt?.[g.key] || 0 }));
+      const projected = entries.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar || null, total: p.scores[g.key] || 0, updatedAt: p.gameUpdatedAt?.[g.key] || 0 }));
       Festival.renderBlindTop(board.listEl, projected, { limit: 10, orderBy: 'recent' });
     }
   });

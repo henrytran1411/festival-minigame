@@ -9,9 +9,113 @@ const leaderboardList = document.getElementById('leaderboard-list');
 const rulesModal = document.getElementById('rules-modal');
 const rulesTitle = document.getElementById('rules-title');
 const rulesBody = document.getElementById('rules-body');
+const avatarOptionsEl = document.getElementById('avatar-options');
+const avatarUploadInputEl = document.getElementById('avatar-upload-input');
+const avatarErrorEl = document.getElementById('avatar-error');
 
 let latestLeaderboard = [];
 let me = Festival.getPlayer();
+let currentAvatar = Festival.getAvatar();
+
+const AVATAR_MAX_DATA_URL_LENGTH = 190000; // stays under server.js's 200,000-char cap with room to spare
+const AVATAR_THUMBNAIL_SIZE = 160;
+
+function setAvatarError(message) {
+  avatarErrorEl.textContent = message || '';
+  avatarErrorEl.classList.toggle('hidden', !message);
+}
+
+function applyAvatar(avatar) {
+  currentAvatar = avatar;
+  Festival.setAvatar(avatar);
+  Festival.setAvatarOnServer(socket, avatar).then((res) => {
+    if (!res.ok) setAvatarError("Couldn't save that avatar — try a different photo.");
+  });
+  renderAvatarPicker();
+}
+
+function renderAvatarPicker() {
+  avatarOptionsEl.innerHTML = '';
+  Festival.AVATAR_PRESETS.forEach((preset) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'avatar-option' + (currentAvatar && currentAvatar.type === 'preset' && currentAvatar.key === preset.key ? ' selected' : '');
+    btn.title = preset.label;
+    const img = document.createElement('img');
+    img.src = encodeURI(preset.image);
+    img.alt = preset.label;
+    btn.appendChild(img);
+    btn.addEventListener('click', () => {
+      setAvatarError('');
+      applyAvatar({ type: 'preset', key: preset.key });
+    });
+    avatarOptionsEl.appendChild(btn);
+  });
+
+  const uploadTile = document.createElement('button');
+  uploadTile.type = 'button';
+  const isUpload = currentAvatar && currentAvatar.type === 'upload';
+  uploadTile.className = 'avatar-upload-option' + (isUpload ? ' selected' : '');
+  uploadTile.title = 'Upload your own photo';
+  if (isUpload) {
+    const img = document.createElement('img');
+    img.src = currentAvatar.src;
+    img.alt = 'Your photo';
+    uploadTile.appendChild(img);
+  } else {
+    uploadTile.textContent = '📷';
+  }
+  uploadTile.addEventListener('click', () => avatarUploadInputEl.click());
+  avatarOptionsEl.appendChild(uploadTile);
+}
+
+function downscaleImageToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('read-failed'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('decode-failed'));
+      img.onload = () => {
+        const size = AVATAR_THUMBNAIL_SIZE;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        // Cover-crop: scale so the shorter side fills the square, centered.
+        const scale = Math.max(size / img.width, size / img.height);
+        const drawW = img.width * scale;
+        const drawH = img.height * scale;
+        ctx.drawImage(img, (size - drawW) / 2, (size - drawH) / 2, drawW, drawH);
+        let dataUrl = null;
+        for (const quality of [0.72, 0.5, 0.35, 0.2]) {
+          const candidate = canvas.toDataURL('image/jpeg', quality);
+          if (candidate.length <= AVATAR_MAX_DATA_URL_LENGTH) { dataUrl = candidate; break; }
+        }
+        if (!dataUrl) reject(new Error('too-large'));
+        else resolve(dataUrl);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+avatarUploadInputEl.addEventListener('change', () => {
+  const file = avatarUploadInputEl.files && avatarUploadInputEl.files[0];
+  avatarUploadInputEl.value = '';
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    setAvatarError('Please choose an image file.');
+    return;
+  }
+  setAvatarError('');
+  downscaleImageToDataUrl(file).then((dataUrl) => {
+    applyAvatar({ type: 'upload', src: dataUrl });
+  }).catch(() => {
+    setAvatarError("Couldn't use that photo — try a smaller or simpler image.");
+  });
+});
 
 const gameWindowStates = {};
 window.FESTIVAL_GAMES.forEach((g) => {
@@ -56,6 +160,8 @@ function showNameScreen() {
   nameScreen.classList.remove('hidden');
   nameInput.value = me.name || '';
   nameInput.focus();
+  setAvatarError('');
+  renderAvatarPicker();
 }
 
 function buildGameGrid() {

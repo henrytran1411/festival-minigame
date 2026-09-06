@@ -2,10 +2,51 @@
 window.Festival = (function () {
   const ID_KEY = 'festival_player_id';
   const NAME_KEY = 'festival_player_name';
+  const AVATAR_KEY = 'festival_player_avatar';
   const GAME_LABELS = { sudoku: 'Sudoku', scramble: 'Word Scramble', memory: 'Memory Match', proverb: 'Ca Dao Đố Vui' };
+
+  // The 4 Mid-Autumn folklore characters already illustrated for Đuổi Niên
+  // Thú (see nien-server.js's CHARACTERS) -- reused here as preset avatar
+  // choices so there's only one set of character art in the project.
+  const AVATAR_PRESETS = [
+    { key: 'chiHang', label: 'Chị Hằng', image: '/games/nienmonster/characters/chị hằng.png' },
+    { key: 'chuCuoi', label: 'Chú Cuội', image: '/games/nienmonster/characters/chú cuội.png' },
+    { key: 'ongDia', label: 'Ông Địa', image: '/games/nienmonster/characters/ông địa.png' },
+    { key: 'thoNgoc', label: 'Thỏ Ngọc', image: '/games/nienmonster/characters/thỏ ngọc.png' },
+  ];
 
   function makeId() {
     return 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+  }
+
+  function getAvatar() {
+    const raw = localStorage.getItem(AVATAR_KEY);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function setAvatar(avatar) {
+    if (avatar) localStorage.setItem(AVATAR_KEY, JSON.stringify(avatar));
+    else localStorage.removeItem(AVATAR_KEY);
+  }
+
+  // Resolves an avatar object (preset or uploaded) to a displayable <img> src,
+  // or null if there's nothing to show (caller falls back to initials).
+  // Preset image paths have spaces/diacritics -- encodeURI so they resolve as
+  // a single path segment instead of breaking on the raw characters.
+  function avatarImageUrl(avatar) {
+    if (!avatar || typeof avatar !== 'object') return null;
+    if (avatar.type === 'preset') {
+      const preset = AVATAR_PRESETS.find((p) => p.key === avatar.key);
+      return preset ? encodeURI(preset.image) : null;
+    }
+    if (avatar.type === 'upload' && typeof avatar.src === 'string') return avatar.src;
+    return null;
   }
 
   function getPlayer() {
@@ -15,7 +56,7 @@ window.Festival = (function () {
       localStorage.setItem(ID_KEY, id);
     }
     const name = localStorage.getItem(NAME_KEY) || '';
-    return { id, name };
+    return { id, name, avatar: getAvatar() };
   }
 
   function setName(name) {
@@ -38,8 +79,18 @@ window.Festival = (function () {
   }
 
   function register(s) {
-    const { id, name } = getPlayer();
-    s.emit('register', { playerId: id, name });
+    const { id, name, avatar } = getPlayer();
+    s.emit('register', { playerId: id, name, avatar });
+  }
+
+  // Pushes a just-picked avatar to the server immediately (with a callback,
+  // unlike register()'s fire-and-forget) so the picker UI can surface a
+  // rejection -- e.g. an uploaded image that's too large or the wrong type.
+  function setAvatarOnServer(s, avatar) {
+    return new Promise((resolve) => {
+      const { id, name } = getPlayer();
+      s.emit('player:set-avatar', { playerId: id, name, avatar }, (res) => resolve(res || { ok: false, error: 'no-response' }));
+    });
   }
 
   function submitScore(s, game, score, detail, mode) {
@@ -92,10 +143,28 @@ window.Festival = (function () {
     return false;
   }
 
+  // Builds the small circular avatar badge shared by every leaderboard-style
+  // row (real avatar image if the player picked/uploaded one, else their
+  // initial letter) -- used wherever a player's identity is actually shown.
+  function avatarBadge(nameForFallback, avatar) {
+    const el = document.createElement('span');
+    el.className = 'player-chip-avatar';
+    const imgUrl = avatarImageUrl(avatar);
+    if (imgUrl) {
+      const img = document.createElement('img');
+      img.src = imgUrl;
+      img.alt = nameForFallback;
+      el.appendChild(img);
+    } else {
+      el.textContent = (nameForFallback.trim()[0] || '?').toUpperCase();
+    }
+    return el;
+  }
+
   function renderLeaderboard(listEl, entries, { myId = null, showBreakdown = false, limit = null } = {}) {
     const rows = limit ? entries.slice(0, limit) : entries;
     const signature = 'full:' + rows
-      .map((p) => `${p.id}:${p.total}:${showBreakdown ? JSON.stringify(p.scores) + JSON.stringify(p.details) : ''}`)
+      .map((p) => `${p.id}:${p.total}:${p.avatar ? JSON.stringify(p.avatar) : ''}:${showBreakdown ? JSON.stringify(p.scores) + JSON.stringify(p.details) : ''}`)
       .join('|');
     if (skipIfUnchanged(listEl, signature)) return;
     listEl.innerHTML = '';
@@ -106,6 +175,8 @@ window.Festival = (function () {
       const rank = document.createElement('span');
       rank.className = 'rank ' + medalClass(i);
       rank.textContent = String(i + 1);
+
+      const avatarEl = avatarBadge(p.name, p.avatar);
 
       const name = document.createElement('span');
       name.className = 'name';
@@ -127,7 +198,7 @@ window.Festival = (function () {
       total.className = 'total';
       total.textContent = p.total;
 
-      li.append(rank, name, total);
+      li.append(rank, avatarEl, name, total);
       listEl.appendChild(li);
     });
   }
@@ -139,7 +210,7 @@ window.Festival = (function () {
       .sort((a, b) => (b.scores[gameKey] || 0) - (a.scores[gameKey] || 0) || a.name.localeCompare(b.name))
       .slice(0, limit);
 
-    const signature = 'game:' + rows.map((p) => `${p.id}:${p.scores[gameKey]}:${p.details?.[gameKey] || ''}`).join('|');
+    const signature = 'game:' + rows.map((p) => `${p.id}:${p.scores[gameKey]}:${p.avatar ? JSON.stringify(p.avatar) : ''}:${p.details?.[gameKey] || ''}`).join('|');
     if (skipIfUnchanged(listEl, signature)) return;
     listEl.innerHTML = '';
     rows.forEach((p, i) => {
@@ -149,6 +220,8 @@ window.Festival = (function () {
       const rank = document.createElement('span');
       rank.className = 'rank ' + medalClass(i);
       rank.textContent = String(i + 1);
+
+      const avatarEl = avatarBadge(p.name, p.avatar);
 
       const name = document.createElement('span');
       name.className = 'name';
@@ -165,7 +238,7 @@ window.Festival = (function () {
       score.className = 'total';
       score.textContent = p.scores[gameKey] || 0;
 
-      li.append(rank, name, score);
+      li.append(rank, avatarEl, name, score);
       listEl.appendChild(li);
     });
   }
@@ -182,7 +255,7 @@ window.Festival = (function () {
       .filter((p) => (p.total || 0) > 0)
       .sort((a, b) => b.total - a.total)
       .slice(0, limit)
-      .map((p) => ({ id: p.id, name: p.name, updatedAt: p.updatedAt || 0 }));
+      .map((p) => ({ id: p.id, name: p.name, avatar: p.avatar || null, updatedAt: p.updatedAt || 0 }));
 
     if (orderBy === 'recent') {
       top.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -190,9 +263,9 @@ window.Festival = (function () {
       top.sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    // Blind rows show no score, so only membership + display order matter —
-    // the signature is just the ordered id/name sequence.
-    const signature = 'blind:' + top.map((p) => p.id ?? p.name).join(',');
+    // Blind rows already show the name (just not rank/score), so the avatar
+    // isn't hiding anything extra here -- include it in the signature too.
+    const signature = 'blind:' + top.map((p) => `${p.id ?? p.name}:${p.avatar ? JSON.stringify(p.avatar) : ''}`).join(',');
     if (skipIfUnchanged(listEl, signature)) return;
 
     listEl.innerHTML = '';
@@ -205,6 +278,8 @@ window.Festival = (function () {
       rank.className = 'rank';
       rank.textContent = '❔';
 
+      const avatarEl = avatarBadge(p.name, p.avatar);
+
       const nameEl = document.createElement('span');
       nameEl.className = 'name';
       nameEl.textContent = p.name;
@@ -213,7 +288,7 @@ window.Festival = (function () {
       total.className = 'total';
       total.textContent = '???';
 
-      li.append(rank, nameEl, total);
+      li.append(rank, avatarEl, nameEl, total);
       listEl.appendChild(li);
     });
   }
@@ -380,25 +455,35 @@ window.Festival = (function () {
     });
   }
 
-  // Renders a Tournament lobby's joined players as avatar chips (an
-  // initial-letter badge + name) into a container -- bigger and more
-  // distinct than a plain name list, so a crowded lobby still reads well.
-  function renderTournamentLobbyPlayers(containerEl, names) {
-    const signature = 'players:' + names.join('|');
+  // Renders a Tournament lobby's joined players as avatar chips (their
+  // chosen preset/uploaded avatar, or an initial-letter badge if they never
+  // picked one) into a container -- bigger and more distinct than a plain
+  // name list, so a crowded lobby still reads well. `players` is an array of
+  // { name, avatar } (see server.js's roundStatePayload).
+  function renderTournamentLobbyPlayers(containerEl, players) {
+    const signature = 'players:' + players.map((p) => `${p.name}:${p.avatar ? JSON.stringify(p.avatar) : ''}`).join('|');
     if (skipIfUnchanged(containerEl, signature)) return;
     containerEl.innerHTML = '';
-    names.forEach((name) => {
+    players.forEach(({ name, avatar }) => {
       const chip = document.createElement('span');
       chip.className = 'player-chip';
 
-      const avatar = document.createElement('span');
-      avatar.className = 'player-chip-avatar';
-      avatar.textContent = (name.trim()[0] || '?').toUpperCase();
+      const avatarEl = document.createElement('span');
+      avatarEl.className = 'player-chip-avatar';
+      const imgUrl = avatarImageUrl(avatar);
+      if (imgUrl) {
+        const img = document.createElement('img');
+        img.src = imgUrl;
+        img.alt = name;
+        avatarEl.appendChild(img);
+      } else {
+        avatarEl.textContent = (name.trim()[0] || '?').toUpperCase();
+      }
 
       const label = document.createElement('span');
       label.textContent = name;
 
-      chip.append(avatar, label);
+      chip.append(avatarEl, label);
       containerEl.appendChild(chip);
     });
   }
@@ -449,6 +534,11 @@ window.Festival = (function () {
   return {
     getPlayer,
     setName,
+    getAvatar,
+    setAvatar,
+    avatarImageUrl,
+    setAvatarOnServer,
+    AVATAR_PRESETS,
     requireNameOrRedirect,
     connect,
     register,

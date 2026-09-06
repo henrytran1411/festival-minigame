@@ -155,8 +155,12 @@ TOURNAMENT_RETRY_GAMES.forEach((g) => { tournamentAttempts[g] = new Map(); });
 // in-progress peek never permanently overrides -- or gets confused with -- a
 // worse but already-confirmed result from giving up or timing out.
 function liveStandings(game, limit = 10) {
-  return [...tournamentLiveScores[game].values()]
-    .map((e) => ({ name: e.name, score: Math.max(e.bestFinalScore, e.liveScore) }))
+  return [...tournamentLiveScores[game].entries()]
+    .map(([id, e]) => ({
+      name: e.name,
+      score: Math.max(e.bestFinalScore, e.liveScore),
+      avatar: (players.get(id) || {}).avatar || null,
+    }))
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
     .slice(0, limit);
 }
@@ -204,14 +208,16 @@ TOURNAMENT_GAMES.forEach((g) => { tournamentRound[g] = freshTournamentRound(g); 
 
 function roundStatePayload(game) {
   const round = tournamentRound[game];
-  const players = [...tournamentParticipants[game].values()].sort((a, b) => a.localeCompare(b));
+  const playerList = [...tournamentParticipants[game].entries()]
+    .map(([id, name]) => ({ name, avatar: (players.get(id) || {}).avatar || null }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   return {
     game,
     phase: round.phase,
     questionIndex: round.questionIndex,
     totalQuestions: round.totalQuestions,
-    playerCount: players.length,
-    players,
+    playerCount: playerList.length,
+    players: playerList,
   };
 }
 
@@ -349,6 +355,29 @@ function sanitizeDetail(detail) {
   return String(detail || '').trim().slice(0, 80);
 }
 
+// Keep in sync with public/common.js's AVATAR_PRESETS -- these are the only
+// preset keys a client can legitimately claim.
+const AVATAR_PRESET_KEYS = ['chiHang', 'chuCuoi', 'ongDia', 'thoNgoc'];
+// Generous ceiling for a client-downscaled/compressed square thumbnail --
+// rejects anything a client shouldn't have been able to produce (or an
+// attempt to stuff something much bigger into player state).
+const MAX_AVATAR_DATA_URL_LENGTH = 200 * 1000;
+
+function sanitizeAvatar(avatar) {
+  if (!avatar || typeof avatar !== 'object') return null;
+  if (avatar.type === 'preset') {
+    const key = String(avatar.key || '');
+    return AVATAR_PRESET_KEYS.includes(key) ? { type: 'preset', key } : null;
+  }
+  if (avatar.type === 'upload') {
+    const src = String(avatar.src || '');
+    if (src.length > MAX_AVATAR_DATA_URL_LENGTH) return null;
+    if (!/^data:image\/(png|jpe?g|webp);base64,/.test(src)) return null;
+    return { type: 'upload', src };
+  }
+  return null;
+}
+
 function totalFor(player) {
   return GAMES.reduce((sum, g) => sum + (player.scores[g] || 0), 0);
 }
@@ -358,6 +387,7 @@ function leaderboardSnapshot() {
     .map(([id, p]) => ({
       id,
       name: p.name,
+      avatar: p.avatar || null,
       scores: p.scores,
       details: p.details,
       total: totalFor(p),
@@ -372,7 +402,7 @@ function leaderboardSnapshot() {
 function topForGame(gameKey, limit) {
   return [...players.values()]
     .filter((p) => (p.scores[gameKey] || 0) > 0)
-    .map((p) => ({ name: p.name, total: p.scores[gameKey], detail: p.details[gameKey] || '' }))
+    .map((p) => ({ name: p.name, avatar: p.avatar || null, total: p.scores[gameKey], detail: p.details[gameKey] || '' }))
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
     .slice(0, limit);
 }
@@ -382,6 +412,7 @@ function getOrCreatePlayer(playerId) {
   if (!player) {
     player = {
       name: 'Player',
+      avatar: null,
       scores: { sudoku: 0, scramble: 0, memory: 0, proverb: 0 },
       details: { sudoku: '', scramble: '', memory: '', proverb: '' },
       attempts: { sudoku: 0, scramble: 0, memory: 0, proverb: 0 },
@@ -548,11 +579,38 @@ io.on('connection', (socket) => {
     if (typeof callback === 'function') callback({ ok: true, state: gameWindowSnapshot(game) });
   });
 
-  socket.on('register', ({ playerId, name }) => {
+  socket.on('register', ({ playerId, name, avatar }) => {
     if (typeof playerId !== 'string' || !playerId) return;
     const player = getOrCreatePlayer(playerId);
     player.name = sanitizeName(name);
+    // A missing/invalid avatar here just means "nothing chosen yet" (or this
+    // page hasn't loaded one from localStorage) -- never clobber an avatar
+    // already saved from a previous register/player:set-avatar with a blank one.
+    if (avatar) {
+      const clean = sanitizeAvatar(avatar);
+      if (clean) player.avatar = clean;
+    }
     io.emit('leaderboard', leaderboardSnapshot());
+  });
+
+  // Interactive avatar pick/upload from the name-entry or change-name screen
+  // -- unlike register()'s fire-and-forget sync, this has a callback so the
+  // picker UI can show an error (e.g. an upload rejected as too large).
+  socket.on('player:set-avatar', ({ playerId, name, avatar }, callback) => {
+    if (typeof playerId !== 'string' || !playerId) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'invalid-player' });
+      return;
+    }
+    const clean = sanitizeAvatar(avatar);
+    if (avatar && !clean) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'invalid-avatar' });
+      return;
+    }
+    const player = getOrCreatePlayer(playerId);
+    if (name) player.name = sanitizeName(name);
+    player.avatar = clean; // null explicitly clears it
+    io.emit('leaderboard', leaderboardSnapshot());
+    if (typeof callback === 'function') callback({ ok: true });
   });
 
   socket.on('score:submit', ({ playerId, name, game, score, detail, mode }) => {
