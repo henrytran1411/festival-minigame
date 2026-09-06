@@ -75,11 +75,15 @@ const LEADER_STREAK_TARGET = 5;
 // Drummer: taps are rate-limited to one per DRUM_TAP_COOLDOWN_MS (a 0.1s
 // countdown), and each accepted tap's energy effect on the whole crew
 // (leader + rowers) depends on whichever rowing-cycle phase is active the
-// instant it lands.
+// instant it lands. Each tap also costs the Drummer their OWN energy
+// (DRUM_TAP_ENERGY_COST) -- like Leader/Rowers, they now have a real energy
+// pool with passive regen and a stun once it hits 0, so tapping as fast as
+// possible forever isn't free.
 const DRUM_TAP_COOLDOWN_MS = 100;
-const DRUM_TAP_ENERGY_RAISE = 4;
-const DRUM_TAP_ENERGY_ACTIVE = 2;
+const DRUM_TAP_ENERGY_RAISE = 2;
+const DRUM_TAP_ENERGY_ACTIVE = 1;
 const DRUM_TAP_ENERGY_COOLDOWN_PENALTY = 1;
+const DRUM_TAP_ENERGY_COST = 4;
 
 const MAX_RACE_MS_BASE = 8 * 60 * 1000; // safety cap so a stalled race still ends -- scaled by the race-length multiplier
 const DIRECTIONS = ['trai', 'phai', 'thang'];
@@ -121,6 +125,8 @@ function freshBoatState(rowerSlots, name) {
     // Leader works ahead, filling rowerQueue up to QUEUE_MAX.
     leaderProgress: { turnIndex: 0, streak: 0, lastSignalAt: 0 },
     drummerLastTapAt: 0,
+    drummerEnergy: ENERGY_MAX,
+    drummerStunnedUntil: 0,
     rowCycle: { phase: 'waiting', phaseEndsAt: 0, currentDirection: null, cycleIndex: 0 },
     rowers: new Array(rowerSlots).fill(null).map(freshRowerState),
     penaltyUntil: 0,
@@ -321,6 +327,7 @@ class BoatRoom {
   submitDrumTap(boatKey) {
     const boat = this.boats[boatKey];
     const now = Date.now();
+    if (boat.drummerStunnedUntil > now) return { ok: false, error: 'stunned' };
     if (now - boat.drummerLastTapAt < DRUM_TAP_COOLDOWN_MS) return { ok: false, error: 'cooldown' };
     boat.drummerLastTapAt = now;
 
@@ -334,6 +341,10 @@ class BoatRoom {
       if (boat.leaderId) boat.leaderEnergy = Math.max(0, Math.min(ENERGY_MAX, boat.leaderEnergy + delta));
       boat.rowers.forEach((r) => { r.energy = Math.max(0, Math.min(ENERGY_MAX, r.energy + delta)); });
     }
+
+    boat.drummerEnergy = Math.max(0, boat.drummerEnergy - DRUM_TAP_ENERGY_COST);
+    if (boat.drummerEnergy <= 0) boat.drummerStunnedUntil = now + STUN_MS;
+
     return { ok: true, phase, delta };
   }
 
@@ -403,6 +414,10 @@ class BoatRoom {
       if (r.stunnedUntil && now >= r.stunnedUntil) r.stunnedUntil = 0;
       if (!r.stunnedUntil) r.energy = Math.min(ENERGY_MAX, r.energy + R_BASE * dt);
     });
+    if (boat.drummerId) {
+      if (boat.drummerStunnedUntil && now >= boat.drummerStunnedUntil) boat.drummerStunnedUntil = 0;
+      if (!boat.drummerStunnedUntil) boat.drummerEnergy = Math.min(ENERGY_MAX, boat.drummerEnergy + R_BASE * dt);
+    }
 
     const cyc = boat.rowCycle;
     if (cyc.phase === 'waiting') {
@@ -543,7 +558,12 @@ class BoatRoom {
       finishedAt: boat.finishedAt,
       finishRank: boat.finishRank,
       leader: { name: nameFor(boat.leaderId), energy: Math.round(boat.leaderEnergy), stunnedUntil: boat.leaderStunnedUntil },
-      drummer: { name: nameFor(boat.drummerId), nextTapReadyAt: boat.drummerLastTapAt + DRUM_TAP_COOLDOWN_MS },
+      drummer: {
+        name: nameFor(boat.drummerId),
+        nextTapReadyAt: boat.drummerLastTapAt + DRUM_TAP_COOLDOWN_MS,
+        energy: Math.round(boat.drummerEnergy * 10) / 10,
+        stunnedUntil: boat.drummerStunnedUntil,
+      },
       rowers: boat.rowers.map((r, i) => ({ name: nameFor(boat.rowerIds[i]), energy: Math.round(r.energy), stunnedUntil: r.stunnedUntil, lastResult: r.lastResult })),
       queue: boat.rowerQueue.slice(0, QUEUE_MAX),
       lastTurnResults: boat.turnResults.slice(-3),
@@ -801,6 +821,10 @@ module.exports.QUEUE_MAX = QUEUE_MAX;
 module.exports.LEADER_SIGNAL_COOLDOWN_MS = LEADER_SIGNAL_COOLDOWN_MS;
 module.exports.LEADER_STREAK_TARGET = LEADER_STREAK_TARGET;
 module.exports.DRUM_TAP_COOLDOWN_MS = DRUM_TAP_COOLDOWN_MS;
+module.exports.DRUM_TAP_ENERGY_RAISE = DRUM_TAP_ENERGY_RAISE;
+module.exports.DRUM_TAP_ENERGY_ACTIVE = DRUM_TAP_ENERGY_ACTIVE;
+module.exports.DRUM_TAP_ENERGY_COOLDOWN_PENALTY = DRUM_TAP_ENERGY_COOLDOWN_PENALTY;
+module.exports.DRUM_TAP_ENERGY_COST = DRUM_TAP_ENERGY_COST;
 module.exports.MAX_BOATS = MAX_BOATS;
 module.exports.RACE_LENGTH_MULTIPLIERS = RACE_LENGTH_MULTIPLIERS;
 module.exports.DEFAULT_RACE_LENGTH_MULTIPLIER = DEFAULT_RACE_LENGTH_MULTIPLIER;

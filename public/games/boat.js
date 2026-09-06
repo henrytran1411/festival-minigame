@@ -84,6 +84,9 @@ if (me) {
   const drumPhaseCountdownEl = document.getElementById('drum-phase-countdown');
   const drumEffectLabelEl = document.getElementById('drum-effect-label');
   const drumTapBtn = document.getElementById('drum-tap-btn');
+  const drummerEnergyValueEl = document.getElementById('drummer-energy-value');
+  const drummerEnergyBarEl = document.getElementById('drummer-energy-bar');
+  const drummerStunnedEl = document.getElementById('drummer-stunned');
 
   const rowerPanelEl = document.getElementById('rower-panel');
   const queueStripEl = document.getElementById('queue-strip');
@@ -347,6 +350,10 @@ if (me) {
       const effect = (state.drumTapEffects && state.drumTapEffects[phase]) || 0;
       drumEffectLabelEl.textContent = `Tap now: ${effect >= 0 ? '+' : ''}${effect} energy`;
       drumEffectLabelEl.className = 'drum-effect-label' + (effect > 0 ? ' positive' : effect < 0 ? ' negative' : '');
+      drummerEnergyValueEl.textContent = boat.drummer.energy;
+      drummerEnergyBarEl.style.width = boat.drummer.energy + '%';
+      drummerEnergyBarEl.classList.toggle('low', boat.drummer.energy < 30);
+      drummerStunnedEl.classList.toggle('hidden', boat.drummer.stunnedUntil <= Date.now());
     }
 
     if (role === 'rower' && boat) {
@@ -400,7 +407,7 @@ if (me) {
     if (role === 'drummer') {
       const remaining = Math.max(0, Math.round(boat.rowCycle.phaseEndsAt - now));
       drumPhaseCountdownEl.textContent = `${remaining} ms`;
-      drumTapBtn.disabled = boat.drummer.nextTapReadyAt > now;
+      drumTapBtn.disabled = boat.drummer.nextTapReadyAt > now || boat.drummer.stunnedUntil > now;
     }
 
     if (role === 'leader' && boat.leaderProgress) {

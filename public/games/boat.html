@@ -305,6 +305,9 @@
         <div class="phase-countdown" id="drum-phase-countdown">0 ms</div>
         <div class="drum-effect-label" id="drum-effect-label">Tap now: +0.00 energy</div>
         <button type="button" class="drum-tap-btn" id="drum-tap-btn">TAP (Space)</button>
+        <div class="energy-label"><span>Your energy (each tap costs 4)</span><span id="drummer-energy-value">100</span></div>
+        <div class="energy-bar-track"><div class="energy-bar-fill" id="drummer-energy-bar"></div></div>
+        <div class="stunned-banner hidden" id="drummer-stunned">😵 Kiệt sức!</div>
       </div>
 
       <div id="rower-panel" class="role-panel hidden">
@@ -360,7 +363,7 @@
         <ul>
           <li>Each boat needs a full crew of 6 or 8: 1 <b>Leader</b>, 1 <b>Drummer</b>, and 4 or 6 <b>Rowers</b> — claim a seat on any boat in the waiting room (there are 2 by default; anyone can add more, up to 15, and rename any boat), or add bots to fill whatever's left.</li>
           <li><b>Leader:</b> you can see the boat's next couple of turns ahead of everyone else. You can call one flag (Trái/Phải/Thẳng) every 0.5s — call the correct one 5 times in a row to confirm it into the crew's queue (max 3 stacked up); a wrong call doesn't reset your streak to zero, just knocks it down by 1. Watch the "Streak x/5" label to track your progress.</li>
-          <li><b>Drummer:</b> your screen shows the SAME rowing-cycle countdown as the Rowers. Tap (or press Space) during <b>Giơ mái chèo</b> for a big energy boost to the whole crew, during <b>Đập/Chèo nước</b> for a normal boost — but tapping during <b>Rút mái chèo</b> costs the crew a little energy instead, so hold off then.</li>
+          <li><b>Drummer:</b> your screen shows the SAME rowing-cycle countdown as the Rowers. Tap (or press Space) during <b>Giơ mái chèo</b> for a boost to the whole crew's energy, during <b>Đập/Chèo nước</b> for a smaller boost — but tapping during <b>Rút mái chèo</b> costs the crew a little energy instead, so hold off then. Every tap also costs a bit of your OWN energy, so you can't just tap nonstop forever — pace yourself, or you'll run out and get stunned too.</li>
           <li><b>Rowers:</b> the crew rows together in a synchronized 5-second cycle — 1s to raise the paddle, 2s to hold the correct direction (Trái = left only, Phải = right only, Thẳng = both), 2s to recover. A live millisecond countdown tells you exactly when to hold and release. Hold the matching button(s) (or Space for Trái) during the 2s window, following whatever's at the front of the Leader's confirmed queue.</li>
           <li>Rowing and calling flags both cost energy — run out and you're stunned ("kiệt sức") for 3 seconds, unable to act. A well-timed Drummer is the fastest way to keep everyone topped up.</li>
           <li>If every rower nails the same window together, the boat gets a Super Boost. A wrong or missed turn briefly slows the boat down instead.</li>
@@ -372,7 +375,7 @@
         <ul>
           <li>Mỗi thuyền cần đủ 6 hoặc 8 người: 1 <b>Người Điều Hướng</b>, 1 <b>Người Đánh Trống</b>, và 4 hoặc 6 <b>Người Chèo Thuyền</b> — chọn một ghế ở bất kỳ thuyền nào trong phòng chờ (mặc định có 2 thuyền; ai cũng có thể thêm thuyền, tối đa 15, và đổi tên bất kỳ thuyền nào), hoặc thêm bot để lấp đầy chỗ trống.</li>
           <li><b>Người Điều Hướng:</b> bạn thấy được vài khúc cua tiếp theo trước mọi người. Bạn có thể chọn 1 hướng mỗi 0,5 giây — chọn đúng 5 lần liên tiếp để xác nhận vào hàng chờ của đội (tối đa xếp chồng 3 lệnh); chọn sai không đưa chuỗi về 0 mà chỉ giảm 1. Theo dõi nhãn "Streak x/5" để biết tiến độ.</li>
-          <li><b>Người Đánh Trống:</b> màn hình của bạn hiển thị CÙNG một bộ đếm ngược chu kỳ chèo như Người Chèo Thuyền. Gõ (hoặc nhấn Space) trong lúc <b>Giơ mái chèo</b> để tăng mạnh năng lượng cho cả đội, trong lúc <b>Đập/Chèo nước</b> để tăng bình thường — nhưng gõ trong lúc <b>Rút mái chèo</b> sẽ làm cả đội mất một chút năng lượng, nên hãy dừng lại lúc đó.</li>
+          <li><b>Người Đánh Trống:</b> màn hình của bạn hiển thị CÙNG một bộ đếm ngược chu kỳ chèo như Người Chèo Thuyền. Gõ (hoặc nhấn Space) trong lúc <b>Giơ mái chèo</b> để tăng năng lượng cho cả đội, trong lúc <b>Đập/Chèo nước</b> để tăng ít hơn — nhưng gõ trong lúc <b>Rút mái chèo</b> sẽ làm cả đội mất một chút năng lượng, nên hãy dừng lại lúc đó. Mỗi lần gõ cũng tốn một chút năng lượng của chính bạn, nên không thể gõ liên tục mãi mãi — hãy gõ có chừng mực, nếu không bạn cũng sẽ kiệt sức.</li>
           <li><b>Người Chèo Thuyền:</b> cả đội chèo cùng nhau theo chu kỳ đồng bộ 5 giây — 1 giây giơ mái chèo, 2 giây giữ đúng hướng (Trái = chỉ giữ trái, Phải = chỉ giữ phải, Thẳng = giữ cả hai), 2 giây hồi sức. Bộ đếm ngược tính bằng mili-giây cho bạn biết chính xác lúc nào nên giữ và lúc nào nên thả. Giữ đúng nút (hoặc Space cho hướng Trái) trong 2 giây đó, theo hướng đang ở đầu hàng chờ đã được Người Điều Hướng xác nhận.</li>
           <li>Chèo và phất cờ đều tốn năng lượng — cạn năng lượng sẽ khiến bạn <b>kiệt sức</b> trong 3 giây, không thể hành động. Người Đánh Trống gõ đúng lúc là cách nhanh nhất để cả đội đầy năng lượng trở lại.</li>
           <li>Nếu tất cả tay chèo cùng làm đúng trong cùng một nhịp, thuyền sẽ được tăng tốc "Super Boost". Rẽ sai hoặc bỏ lỡ khúc cua sẽ khiến thuyền chậm lại một lúc.</li>
