@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chèo Thuyền — Autumn Festival</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .boat-wrap { max-width: 900px; }
+
+    .boat-log {
+      background: #1a1d24;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      max-height: 110px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+    .boat-log div { padding: 2px 0; }
+
+    .room-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; }
+    .room-row .room-info { display: flex; flex-direction: column; }
+    .room-row .room-name { font-weight: 600; font-size: 14px; }
+    .room-row .room-meta { font-size: 12px; color: var(--muted); }
+    .room-row .room-meta.racing { color: var(--gold); }
+    .room-row button { padding: 6px 14px; font-size: 13px; }
+
+    #lobby-screen input, #create-room-screen input, #password-modal input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .boat-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+
+    .budget-options { display: flex; gap: 10px; margin-top: 6px; }
+    .budget-options label {
+      flex: 1;
+      text-align: center;
+      padding: 10px 6px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .budget-options input { display: none; }
+    .budget-options input:checked + span { color: var(--gold); font-weight: 700; }
+    .budget-options label:has(input:checked) { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.3); }
+
+    .crew-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 10px; }
+    @media (min-width: 760px) { .crew-grid { grid-template-columns: 1fr 1fr; } }
+    .crew-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+    .crew-card h3 { margin: 0 0 8px; text-align: center; font-size: 15px; }
+    .seat-list { list-style: none; margin: 0; padding: 0; }
+    .seat-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .seat-row:last-child { border-bottom: none; }
+    .seat-row .seat-label { color: var(--muted); min-width: 70px; }
+    .seat-row .seat-name { flex: 1; font-weight: 600; }
+    .seat-row .seat-name.empty { color: var(--muted); font-weight: 400; font-style: italic; }
+    .seat-row button { padding: 4px 10px; font-size: 12px; }
+
+    .race-track-wrap { margin: 8px 0 14px; }
+    .race-track { position: relative; height: 30px; background: #1a1d24; border: 1px solid var(--border); border-radius: 8px; margin-top: 4px; overflow: hidden; }
+    .race-track-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--accent), var(--gold)); transition: width 0.1s linear; }
+    .race-track-boat { position: absolute; top: 50%; transform: translate(-50%, -50%); font-size: 18px; transition: left 0.1s linear; }
+    .race-track-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+    .race-track-label .mine { color: var(--gold); font-weight: 700; }
+
+    .role-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-top: 12px; }
+    .role-panel h3 { margin: 0 0 10px; text-align: center; }
+
+    .energy-bar-track { background: #1a1d24; border-radius: 6px; height: 12px; overflow: hidden; margin-top: 4px; }
+    .energy-bar-fill { background: linear-gradient(90deg, #06d6a0, var(--gold)); height: 100%; transition: width 0.15s linear; }
+    .energy-bar-fill.low { background: linear-gradient(90deg, var(--bad), #ff9a5a); }
+    .energy-label { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+    .stunned-banner { text-align: center; color: var(--bad); font-weight: 700; margin-top: 6px; }
+
+    .flag-row { display: flex; gap: 10px; justify-content: center; margin: 14px 0; }
+    .flag-btn { flex: 1; max-width: 140px; padding: 18px 8px; font-size: 28px; border-radius: 12px; }
+    .flag-btn .label { display: block; font-size: 13px; margin-top: 4px; }
+    .upcoming-truth { text-align: center; font-size: 15px; margin: 8px 0; }
+    .upcoming-truth .dir { font-size: 30px; display: block; margin: 6px 0; }
+
+    .queue-strip { display: flex; gap: 8px; justify-content: center; margin: 10px 0; }
+    .queue-chip { width: 46px; height: 46px; border-radius: 10px; background: #1a1d24; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+    .queue-chip.current { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.35); }
+    .queue-chip.empty { opacity: 0.3; }
+
+    .row-phase-banner { text-align: center; font-weight: 700; margin: 8px 0; font-size: 15px; }
+    .row-phase-banner.raise { color: var(--muted); }
+    .row-phase-banner.active { color: var(--gold); }
+    .row-phase-banner.cooldown { color: var(--accent); }
+
+    .phase-countdown {
+      text-align: center; font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums;
+      font-family: 'Courier New', monospace; color: var(--gold); margin-bottom: 10px;
+    }
+
+    .hold-row { display: flex; gap: 16px; justify-content: center; margin: 16px 0; }
+    .hold-btn {
+      width: 120px; height: 120px; border-radius: 50%; font-size: 20px; font-weight: 800;
+      background: var(--panel); border: 3px solid var(--border); color: var(--text);
+      touch-action: none; user-select: none; -webkit-user-select: none;
+    }
+    .hold-btn.pressed { border-color: var(--gold); box-shadow: 0 0 0 4px rgba(255, 209, 102, 0.35); background: rgba(255, 209, 102, 0.12); }
+
+    .drum-tap-btn { display: block; margin: 10px auto; padding: 18px 40px; font-size: 18px; border-radius: 14px; }
+    .drum-effect-label { text-align: center; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+    .drum-effect-label.positive { color: #06d6a0; }
+    .drum-effect-label.negative { color: var(--bad); }
+
+    .streak-label { text-align: center; font-size: 15px; font-weight: 700; margin-top: 10px; }
+    .cooldown-label { text-align: center; font-size: 12px; color: var(--muted); min-height: 16px; }
+
+    .turn-result-strip { display: flex; gap: 6px; justify-content: center; margin: 8px 0; font-size: 18px; }
+    .turn-result-strip span.correct { color: #06d6a0; }
+    .turn-result-strip span.wrong { color: var(--bad); }
+  </style>
+</head>
+<body>
+  <div class="wrap boat-wrap">
+    <div class="top-bar">
+      <h1>🚣 Chèo Thuyền <span style="color:var(--muted); font-size:13px; font-weight:400;">(backup game — not scored)</span></h1>
+      <div><a href="../index.html">← Hub</a> · <a href="#" id="rules-link">Rules</a></div>
+    </div>
+
+    <div id="lobby-screen" class="card">
+      <h2 style="margin-top:0; text-align:center;">Boat Race Rooms</h2>
+      <ul id="room-list" class="seat-list"></ul>
+      <p id="no-rooms-msg" style="color:var(--muted); font-size:13px; text-align:center; display:none;">No rooms yet — create one to get started.</p>
+      <div class="boat-actions">
+        <button id="show-create-btn">+ Create Room</button>
+      </div>
+    </div>
+
+    <div id="create-room-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;">Create Room</h2>
+      <p style="font-size:13px; color:var(--muted);">Room name</p>
+      <input type="text" id="room-name-input" maxlength="30" placeholder="e.g. Dragon Boat 1" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Password</p>
+      <input type="text" id="room-password-input" maxlength="30" placeholder="Anything — share it with your group" />
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">Crew size (per boat)</p>
+      <div class="budget-options">
+        <label><input type="radio" name="team-size" value="6" checked /><span>6<br /><small style="font-weight:400; color:var(--muted);">1 Leader · 1 Drummer · 4 Rowers</small></span></label>
+        <label><input type="radio" name="team-size" value="8" /><span>8<br /><small style="font-weight:400; color:var(--muted);">1 Leader · 1 Drummer · 6 Rowers</small></span></label>
+      </div>
+      <p id="create-room-error" style="color:var(--bad); font-size:13px; display:none;"></p>
+      <div class="boat-actions">
+        <button id="create-room-btn">Create &amp; Join</button>
+        <button class="secondary" id="cancel-create-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="waiting-screen" class="card hidden">
+      <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
+      <p style="color:var(--muted); font-size:12px; text-align:center;">Claim a seat on either boat. No one else around? Add bots to fill every empty seat and test any role solo.</p>
+      <div class="crew-grid" id="crew-grid"></div>
+      <div class="boat-actions">
+        <button class="secondary" id="add-bots-btn">🤖 Fill Empty Seats with Bots</button>
+        <button id="start-btn" disabled>▶ Start Race</button>
+      </div>
+      <div class="boat-actions">
+        <button class="danger" id="leave-waiting-btn">Leave Room</button>
+      </div>
+      <div id="waiting-log" class="boat-log"></div>
+    </div>
+
+    <div id="race-screen" class="hidden">
+      <div class="race-track-wrap">
+        <div class="race-track-label"><span id="label-a">Boat A</span><span id="label-b">Boat B</span></div>
+        <div class="race-track" id="track-a"><div class="race-track-fill" id="fill-a"></div><div class="race-track-boat" id="marker-a">🚣</div></div>
+        <div class="race-track" id="track-b" style="margin-top:6px;"><div class="race-track-fill" id="fill-b"></div><div class="race-track-boat" id="marker-b">🚣</div></div>
+      </div>
+      <div class="turn-result-strip" id="turn-results"></div>
+
+      <div id="leader-panel" class="role-panel hidden">
+        <h3>🚩 Leader — call the turns</h3>
+        <div class="upcoming-truth">Next turn is<span class="dir" id="upcoming-dir">—</span></div>
+        <div class="flag-row">
+          <button type="button" class="flag-btn" data-dir="trai">⬅️<span class="label">Trái</span></button>
+          <button type="button" class="flag-btn" data-dir="thang">⬆️<span class="label">Thẳng</span></button>
+          <button type="button" class="flag-btn" data-dir="phai">➡️<span class="label">Phải</span></button>
+        </div>
+        <div class="streak-label">Streak: <span id="leader-streak">0</span>/<span id="leader-streak-target">5</span></div>
+        <div class="cooldown-label" id="leader-cooldown-label"></div>
+        <div class="energy-label"><span>Energy</span><span id="leader-energy-value">100</span></div>
+        <div class="energy-bar-track"><div class="energy-bar-fill" id="leader-energy-bar"></div></div>
+        <div class="stunned-banner hidden" id="leader-stunned">😵 Kiệt sức!</div>
+      </div>
+
+      <div id="drummer-panel" class="role-panel hidden">
+        <h3>🥁 Drummer — tap with the rowing cycle</h3>
+        <div class="row-phase-banner" id="drum-phase-banner">—</div>
+        <div class="phase-countdown" id="drum-phase-countdown">0 ms</div>
+        <div class="drum-effect-label" id="drum-effect-label">Tap now: +0.00 energy</div>
+        <button type="button" class="drum-tap-btn" id="drum-tap-btn">TAP (Space)</button>
+      </div>
+
+      <div id="rower-panel" class="role-panel hidden">
+        <h3>🚣 Rower — follow the queue</h3>
+        <div class="queue-strip" id="queue-strip"></div>
+        <div class="row-phase-banner" id="row-phase-banner">Waiting for a call…</div>
+        <div class="phase-countdown" id="row-phase-countdown">0 ms</div>
+        <div class="hold-row">
+          <button type="button" class="hold-btn" id="hold-left" data-side="left">⬅️<br />Trái<br /><small>(Space)</small></button>
+          <button type="button" class="hold-btn" id="hold-right" data-side="right">➡️<br />Phải</button>
+        </div>
+        <div class="energy-label"><span>Energy</span><span id="rower-energy-value">100</span></div>
+        <div class="energy-bar-track"><div class="energy-bar-fill" id="rower-energy-bar"></div></div>
+        <div class="stunned-banner hidden" id="rower-stunned">😵 Kiệt sức!</div>
+      </div>
+
+      <div class="boat-actions">
+        <button class="danger" id="leave-race-btn">Leave Room</button>
+      </div>
+      <div id="race-log" class="boat-log"></div>
+    </div>
+
+    <div id="finished-screen" class="card result-card hidden">
+      <div class="nien-winner" id="finish-title" style="text-align:center; font-size:20px; font-weight:800; margin:10px 0;"></div>
+      <p id="finish-detail" style="text-align:center; color:var(--muted);"></p>
+      <div class="actions">
+        <button id="new-race-btn">Back to Room</button>
+        <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 id="password-modal-title">Enter Password</h2>
+      <input type="text" id="join-password-input" placeholder="Room password" />
+      <p id="password-error" style="color:var(--bad); font-size:13px; display:none;">Wrong password.</p>
+      <div class="boat-actions">
+        <button id="password-submit-btn">Join</button>
+        <button class="secondary" id="password-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="rules-lang-toggle">
+        <button type="button" class="rules-lang-en">English</button>
+        <button type="button" class="rules-lang-vi">Tiếng Việt</button>
+      </div>
+      <div class="lang-en">
+        <h2>How to Play Chèo Thuyền</h2>
+        <ul>
+          <li>Each boat needs a full crew of 6 or 8: 1 <b>Leader</b>, 1 <b>Drummer</b>, and 4 or 6 <b>Rowers</b> — claim a seat on Boat A or Boat B in the waiting room, or add bots to fill whatever's left.</li>
+          <li><b>Leader:</b> you can see the boat's next couple of turns ahead of everyone else. You can call one flag (Trái/Phải/Thẳng) every 0.5s — call the correct one 5 times in a row to confirm it into the crew's queue (max 3 stacked up); a wrong call doesn't reset your streak to zero, just knocks it down by 1. Watch the "Streak x/5" label to track your progress.</li>
+          <li><b>Drummer:</b> your screen shows the SAME rowing-cycle countdown as the Rowers. Tap (or press Space) during <b>Giơ mái chèo</b> for a big energy boost to the whole crew, during <b>Đập/Chèo nước</b> for a normal boost — but tapping during <b>Rút mái chèo</b> costs the crew a little energy instead, so hold off then.</li>
+          <li><b>Rowers:</b> the crew rows together in a synchronized 5-second cycle — 1s to raise the paddle, 2s to hold the correct direction (Trái = left only, Phải = right only, Thẳng = both), 2s to recover. A live millisecond countdown tells you exactly when to hold and release. Hold the matching button(s) (or Space for Trái) during the 2s window, following whatever's at the front of the Leader's confirmed queue.</li>
+          <li>Rowing and calling flags both cost energy — run out and you're stunned ("kiệt sức") for 3 seconds, unable to act. A well-timed Drummer is the fastest way to keep everyone topped up.</li>
+          <li>If every rower nails the same window together, the boat gets a Super Boost. A wrong or missed turn briefly slows the boat down instead.</li>
+          <li>First boat to the finish line wins the race.</li>
+        </ul>
+      </div>
+      <div class="lang-vi">
+        <h2>Cách chơi Chèo Thuyền</h2>
+        <ul>
+          <li>Mỗi thuyền cần đủ 6 hoặc 8 người: 1 <b>Người Điều Hướng</b>, 1 <b>Người Đánh Trống</b>, và 4 hoặc 6 <b>Người Chèo Thuyền</b> — chọn một ghế ở Thuyền A hoặc Thuyền B trong phòng chờ, hoặc thêm bot để lấp đầy chỗ trống.</li>
+          <li><b>Người Điều Hướng:</b> bạn thấy được vài khúc cua tiếp theo trước mọi người. Bạn có thể chọn 1 hướng mỗi 0,5 giây — chọn đúng 5 lần liên tiếp để xác nhận vào hàng chờ của đội (tối đa xếp chồng 3 lệnh); chọn sai không đưa chuỗi về 0 mà chỉ giảm 1. Theo dõi nhãn "Streak x/5" để biết tiến độ.</li>
+          <li><b>Người Đánh Trống:</b> màn hình của bạn hiển thị CÙNG một bộ đếm ngược chu kỳ chèo như Người Chèo Thuyền. Gõ (hoặc nhấn Space) trong lúc <b>Giơ mái chèo</b> để tăng mạnh năng lượng cho cả đội, trong lúc <b>Đập/Chèo nước</b> để tăng bình thường — nhưng gõ trong lúc <b>Rút mái chèo</b> sẽ làm cả đội mất một chút năng lượng, nên hãy dừng lại lúc đó.</li>
+          <li><b>Người Chèo Thuyền:</b> cả đội chèo cùng nhau theo chu kỳ đồng bộ 5 giây — 1 giây giơ mái chèo, 2 giây giữ đúng hướng (Trái = chỉ giữ trái, Phải = chỉ giữ phải, Thẳng = giữ cả hai), 2 giây hồi sức. Bộ đếm ngược tính bằng mili-giây cho bạn biết chính xác lúc nào nên giữ và lúc nào nên thả. Giữ đúng nút (hoặc Space cho hướng Trái) trong 2 giây đó, theo hướng đang ở đầu hàng chờ đã được Người Điều Hướng xác nhận.</li>
+          <li>Chèo và phất cờ đều tốn năng lượng — cạn năng lượng sẽ khiến bạn <b>kiệt sức</b> trong 3 giây, không thể hành động. Người Đánh Trống gõ đúng lúc là cách nhanh nhất để cả đội đầy năng lượng trở lại.</li>
+          <li>Nếu tất cả tay chèo cùng làm đúng trong cùng một nhịp, thuyền sẽ được tăng tốc "Super Boost". Rẽ sai hoặc bỏ lỡ khúc cua sẽ khiến thuyền chậm lại một lúc.</li>
+          <li>Thuyền nào về đích trước sẽ thắng cuộc đua.</li>
+        </ul>
+      </div>
+      <button class="modal-close">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="../common.js"></script>
+  <script src="boat.js"></script>
+</body>
+</html>
