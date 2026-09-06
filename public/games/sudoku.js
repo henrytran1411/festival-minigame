@@ -11,12 +11,18 @@ if (me) {
   const inputScoreEl = document.getElementById('input-score');
   const attemptInfoEl = document.getElementById('attempt-info');
   const modeScreen = document.getElementById('mode-screen');
+  const tournamentLobbyScreenEl = document.getElementById('tournament-lobby-screen');
+  const tournamentLobbyCountEl = document.getElementById('tournament-lobby-count');
+  const tournamentLobbyPlayersEl = document.getElementById('tournament-lobby-players');
   const playScreen = document.getElementById('play-screen');
   const resultScreen = document.getElementById('result-screen');
   const resultTitleEl = document.getElementById('result-title');
   const finalScoreEl = document.getElementById('final-score');
   const resultDetailEl = document.getElementById('result-detail');
   const exhaustedScreen = document.getElementById('exhausted-screen');
+  const exhaustedTitleEl = document.getElementById('exhausted-title');
+  const exhaustedDetailEl = document.getElementById('exhausted-detail');
+  const exhaustedBackBtn = document.getElementById('exhausted-back-btn');
   const modeBadgeEl = document.getElementById('mode-badge');
   const soloModeBtn = document.getElementById('solo-mode-btn');
   const tournamentModeBtn = document.getElementById('tournament-mode-btn');
@@ -25,6 +31,28 @@ if (me) {
     // While the admin has Tournament mode open, only Tournament is offered
     // -- Solo comes back once the admin hides Tournament again.
     soloModeBtn.style.display = available ? 'none' : '';
+  });
+
+  // Tournament round pacing, server-authoritative (see server.js's
+  // tournamentRound) -- shared with Proverb/Scramble's lobby mechanism, but
+  // Sudoku's puzzle itself is never shared content (see the comment on
+  // `currentMode` below), so there's just one "question" (totalQuestions=1):
+  // once the admin starts the round, this player's own puzzle begins right
+  // away, same as Solo, with no further admin action needed.
+  let roundState = null;
+  function renderLobby(state) {
+    tournamentLobbyCountEl.textContent = `👥 ${state.playerCount} joined`;
+    Festival.renderTournamentLobbyPlayers(tournamentLobbyPlayersEl, state.players);
+  }
+  Festival.watchTournamentRoundState(socket, 'sudoku', (state) => {
+    const wasLobby = roundState && roundState.phase === 'lobby';
+    roundState = state;
+    if (currentMode !== 'tournament' || tournamentLobbyScreenEl.classList.contains('hidden')) return;
+    renderLobby(state);
+    if (state.phase === 'active' && wasLobby) {
+      tournamentLobbyScreenEl.classList.add('hidden');
+      tryTournamentAttempt();
+    }
   });
 
   // Anti-cheat tuning. These are best-effort deterrents, not proof of cheating —
@@ -61,16 +89,23 @@ if (me) {
 
   let puzzle, solution, board, cells, mistakes, correctInputs, startTime, timerHandle, finished, gameActive;
   let attemptsUsed = 0, attemptsMax = null;
+  let tournamentAttemptsUsed = 0, tournamentAttemptsMax = null;
   let cellWrongLog, flaggedBruteForceCells;
   let lowProbStreak, flaggedLowProbStreak;
+  let lastReportedLiveScore = null; // dedupe: updateLiveScore ticks every 500ms, the score doesn't
   // 'solo' | 'tournament' -- picked on the mode screen before each attempt.
   // Unlike Proverb/Scramble, Sudoku's Tournament puzzle is NOT shared -- each
-  // player still gets their own random puzzle, same as Solo. Picking
-  // Tournament only tags the attempt for the leaderboard. Both modes draw
-  // from the same 3 total attempts.
+  // player still gets their own random puzzle, same as Solo. Solo draws from
+  // the lifetime attemptsUsed/attemptsMax pool (Festival.requestAttempt,
+  // via tryStartGame()); every Tournament attempt -- including the first,
+  // right after the admin releases the lobby -- instead draws from a
+  // SEPARATE tournamentAttemptsUsed/Max pool (Festival.requestTournamentAttempt,
+  // via tryTournamentAttempt(), up to TOURNAMENT_MAX_ATTEMPTS on the server)
+  // that never touches the lifetime one, so Solo's cap is unaffected either way.
   let currentMode = 'solo';
 
   function showModeScreen() {
+    tournamentLobbyScreenEl.classList.add('hidden');
     playScreen.classList.add('hidden');
     resultScreen.classList.add('hidden');
     exhaustedScreen.classList.add('hidden');
@@ -80,7 +115,7 @@ if (me) {
   async function tryStartGame() {
     const res = await Festival.requestAttempt(socket, 'sudoku');
     if (!res?.ok) {
-      showExhausted();
+      showExhausted('lifetime');
       return;
     }
     attemptsUsed = res.attemptsUsed;
@@ -88,10 +123,37 @@ if (me) {
     startGame();
   }
 
-  function showExhausted() {
+  // Tournament-only: reserves one of this round's separate retry attempts
+  // (see the `currentMode` comment above) instead of the lifetime pool.
+  async function tryTournamentAttempt() {
+    const res = await Festival.requestTournamentAttempt(socket, 'sudoku');
+    if (!res?.ok) {
+      if (res && res.error === 'exhausted') {
+        showExhausted('tournament');
+      } else {
+        // Round no longer active (e.g. admin started a new one) -- nothing
+        // left to retry into, so send them back to pick a mode again.
+        showModeScreen();
+      }
+      return;
+    }
+    tournamentAttemptsUsed = res.attemptsUsed;
+    tournamentAttemptsMax = res.attemptsMax;
+    startGame();
+  }
+
+  function showExhausted(kind) {
     playScreen.classList.add('hidden');
     resultScreen.classList.add('hidden');
     modeScreen.classList.add('hidden');
+    exhaustedTitleEl.textContent = kind === 'tournament' ? '🔒 No tournament attempts left' : '🔒 No attempts left';
+    exhaustedDetailEl.textContent = kind === 'tournament'
+      ? `You've used all ${tournamentAttemptsMax} of your Tournament attempts for this round.`
+      : "You've used all 3 of your Sudoku attempts for this event.";
+    // A Tournament player who's out of THIS round's retries may still have
+    // Solo attempts left, so send them back to choose rather than the hub.
+    exhaustedBackBtn.textContent = kind === 'tournament' ? '← Choose a Mode' : 'Back to Hub';
+    exhaustedBackBtn.onclick = kind === 'tournament' ? showModeScreen : () => { window.location.href = '../index.html'; };
     exhaustedScreen.classList.remove('hidden');
   }
 
@@ -106,6 +168,7 @@ if (me) {
     flaggedBruteForceCells = new Set();
     lowProbStreak = 0;
     flaggedLowProbStreak = false;
+    lastReportedLiveScore = null;
     startTime = performance.now();
     finished = false;
     gameActive = true;
@@ -113,9 +176,14 @@ if (me) {
     timerEl.textContent = '0s';
     timeScoreEl.textContent = String(speedBonusFor(0));
     inputScoreEl.textContent = String(inputScoreFor());
-    if (attemptsMax) attemptInfoEl.textContent = `${attemptsUsed}/${attemptsMax}`;
+    if (currentMode === 'tournament') {
+      attemptInfoEl.textContent = `🏆 ${tournamentAttemptsUsed}/${tournamentAttemptsMax}`;
+    } else if (attemptsMax) {
+      attemptInfoEl.textContent = `${attemptsUsed}/${attemptsMax}`;
+    }
     modeBadgeEl.textContent = currentMode === 'tournament' ? '🏆 Tournament' : '';
     modeScreen.classList.add('hidden');
+    tournamentLobbyScreenEl.classList.add('hidden');
     exhaustedScreen.classList.add('hidden');
     resultScreen.classList.add('hidden');
     playScreen.classList.remove('hidden');
@@ -155,6 +223,7 @@ if (me) {
     resultDetailEl.textContent = message;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
+    if (currentMode === 'tournament') Festival.submitTournamentQuestionDone(socket, 'sudoku', 0, 0, true);
   }
 
   function updateTimer() {
@@ -178,6 +247,19 @@ if (me) {
     const seconds = Math.floor((performance.now() - startTime) / 1000);
     timeScoreEl.textContent = String(speedBonusFor(seconds));
     inputScoreEl.textContent = String(inputScoreFor());
+    if (currentMode === 'tournament') {
+      // No staged "questions" here (see tournamentRound comment above), so
+      // questionIndex is always 0 -- this just keeps the admin's Live Top
+      // Score page updated with this player's current in-progress score.
+      // Only emit when it actually changed -- this ticks every 500ms for the
+      // whole game, but the score itself only moves on a cell fill or every
+      // couple of seconds of speed-bonus decay.
+      const liveScore = computeScore(seconds);
+      if (liveScore !== lastReportedLiveScore) {
+        lastReportedLiveScore = liveScore;
+        Festival.submitTournamentQuestionDone(socket, 'sudoku', 0, liveScore, false);
+      }
+    }
   }
 
   function buildBoard() {
@@ -310,7 +392,8 @@ if (me) {
     resultDetailEl.textContent = detail;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
-    Festival.submitScore(socket, 'sudoku', score, detail);
+    Festival.submitScore(socket, 'sudoku', score, detail, currentMode);
+    if (currentMode === 'tournament') Festival.submitTournamentQuestionDone(socket, 'sudoku', 0, score, true);
   }
 
   // Lets a player end a puzzle they can't finish instead of being stuck with
@@ -330,7 +413,8 @@ if (me) {
     resultDetailEl.textContent = detail;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
-    Festival.submitScore(socket, 'sudoku', score, detail);
+    Festival.submitScore(socket, 'sudoku', score, detail, currentMode);
+    if (currentMode === 'tournament') Festival.submitTournamentQuestionDone(socket, 'sudoku', 0, score, true);
   }
 
   document.getElementById('give-up-btn').addEventListener('click', giveUp);
@@ -340,12 +424,34 @@ if (me) {
     tryStartGame();
   });
   tournamentModeBtn.addEventListener('click', () => {
-    currentMode = 'tournament';
-    tryStartGame();
+    tournamentModeBtn.disabled = true;
+    const { id: playerId, name } = Festival.getPlayer();
+    socket.emit('tournament:join', { playerId, name, game: 'sudoku' }, (res) => {
+      tournamentModeBtn.disabled = false;
+      if (!res || !res.ok) {
+        if (res && res.error === 'round-in-progress') {
+          alert('A Tournament round is already in progress. Please wait for the admin to start a new round.');
+        } else {
+          alert('Could not join the tournament: ' + ((res && res.error) || 'unknown error'));
+        }
+        return;
+      }
+      currentMode = 'tournament';
+      roundState = res.round;
+      modeScreen.classList.add('hidden');
+      renderLobby(res.round);
+      tournamentLobbyScreenEl.classList.remove('hidden');
+    });
   });
 
   const gate = Festival.gateGame(socket, 'sudoku', showModeScreen);
   document.getElementById('play-again-btn').addEventListener('click', () => {
+    // Still an active Tournament participant -- retry with a fresh puzzle
+    // (up to TOURNAMENT_MAX_ATTEMPTS) instead of leaving the round entirely.
+    if (currentMode === 'tournament' && roundState && roundState.phase === 'active') {
+      tryTournamentAttempt();
+      return;
+    }
     if (gate.isOpen()) {
       showModeScreen();
     } else {

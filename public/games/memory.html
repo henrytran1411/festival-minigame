@@ -15,11 +15,18 @@
 
     <div id="mode-screen" class="card hidden" style="max-width:420px; margin:40px auto; text-align:center;">
       <h2 style="margin-top:0;">Choose a mode</h2>
-      <p style="color:var(--muted); font-size:13px;">Both Solo and Tournament give you your own random card shuffle (different for every player). Tournament just marks the run as an official tournament round on the leaderboard.</p>
+      <p style="color:var(--muted); font-size:13px;">Both Solo and Tournament give you your own random card shuffle (different for every player). Tournament puts you in a shared lobby with everyone else who picks it — the admin starts it for everyone at once — and just marks the run as an official tournament round on the leaderboard.</p>
       <div class="actions" style="justify-content:center;">
         <button id="solo-mode-btn">🎮 Solo</button>
         <button class="secondary" id="tournament-mode-btn">🏆 Tournament</button>
       </div>
+    </div>
+
+    <div id="tournament-lobby-screen" class="card hidden" style="max-width:560px; margin:40px auto; text-align:center;">
+      <h2 style="margin-top:0;">🏟 Tournament Lobby</h2>
+      <p style="color:var(--muted); font-size:13px;">Waiting for the admin to start the tournament…</p>
+      <p id="tournament-lobby-count" style="font-size:18px; font-weight:700;"></p>
+      <div id="tournament-lobby-players" class="tournament-lobby-players"></div>
     </div>
 
     <div id="play-screen" class="hidden">
@@ -28,6 +35,7 @@
         <div>Moves: <b id="moves">0</b></div>
         <div>Score: <b id="live-score">0</b></div>
         <div id="mode-badge" style="color:var(--gold);"></div>
+        <div id="attempt-info" class="hidden"></div>
       </div>
       <div id="grid" class="memory-grid"></div>
     </div>
@@ -39,6 +47,14 @@
       <div class="actions">
         <button id="play-again-btn">Play Again</button>
         <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
+      </div>
+    </div>
+
+    <div id="exhausted-screen" class="card result-card hidden">
+      <div id="exhausted-title">🔒 No tournament attempts left</div>
+      <div style="color:var(--muted); font-size:13px; margin-top:8px;" id="exhausted-detail"></div>
+      <div class="actions">
+        <button class="secondary" id="exhausted-back-btn">← Choose a Mode</button>
       </div>
     </div>
   </div>

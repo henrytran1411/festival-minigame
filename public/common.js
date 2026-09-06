@@ -56,6 +56,17 @@ window.Festival = (function () {
     });
   }
 
+  // Reserves one of a player's retries within the CURRENT Tournament round
+  // (Sudoku/Memory only -- see server.js's TOURNAMENT_RETRY_GAMES). Separate
+  // from requestAttempt's lifetime cap above. Resolves
+  // { ok:true, attemptsUsed, attemptsMax } or { ok:false, error: 'exhausted'|'not-active'|... }.
+  function requestTournamentAttempt(s, game) {
+    const { id } = getPlayer();
+    return new Promise((resolve) => {
+      s.emit('tournament:request-attempt', { playerId: id, game }, (res) => resolve(res || { ok: false, error: 'no response' }));
+    });
+  }
+
   // Fire-and-forget anti-cheat signal for the admin panel — never blocks play.
   function reportCheat(s, game, reason, detail) {
     const { id, name } = getPlayer();
@@ -332,9 +343,9 @@ window.Festival = (function () {
   // clock -- see watchTournamentQuestionOver. This is separate from the
   // final scores[game] leaderboard, which only updates once the whole run
   // finishes (submitScore).
-  function submitTournamentQuestionDone(s, game, questionIndex, score) {
+  function submitTournamentQuestionDone(s, game, questionIndex, score, final) {
     const { id, name } = getPlayer();
-    s.emit('tournament:question-done', { playerId: id, name, game, questionIndex, score });
+    s.emit('tournament:question-done', { playerId: id, name, game, questionIndex, score, final });
   }
 
   // Reactively reports when EVERY currently-joined Tournament player has
@@ -348,15 +359,21 @@ window.Festival = (function () {
     });
   }
 
-  // Reactively reports `game`'s live Tournament standings -- fires on every
+  // Reactively reports `game`'s live Tournament standings -- fires
+  // immediately with whatever the server already knows (the
+  // 'tournament:top-score-all' snapshot sent right after connect, so a page
+  // opened or refreshed after the last score change still sees the current
+  // standings instead of nothing), then again on every later
   // 'tournament:top-score' broadcast, which the server sends whenever any
   // player joins or their live progress changes the lead (see
   // submitTournamentQuestionDone / server.js's tournamentLiveScores). onChange
   // receives { playerCount, top } where `top` is up to 10 { name, score }
   // entries, best-first. Resets to an empty round when the admin starts a
-  // new tournament round. Pass a tournament:join callback's `standings` as
-  // the initial value before the first broadcast arrives.
+  // new tournament round.
   function watchTournamentTopScore(s, game, onChange) {
+    s.on('tournament:top-score-all', (all) => {
+      if (all[game]) onChange({ playerCount: all[game].playerCount, top: all[game].top });
+    });
     s.on('tournament:top-score', (payload) => {
       if (payload.game !== game) return;
       onChange({ playerCount: payload.playerCount, top: payload.top });
@@ -437,6 +454,7 @@ window.Festival = (function () {
     register,
     submitScore,
     requestAttempt,
+    requestTournamentAttempt,
     reportCheat,
     renderLeaderboard,
     renderGameLeaderboard,

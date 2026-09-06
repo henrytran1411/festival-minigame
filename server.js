@@ -31,26 +31,28 @@ const JOIN_WINDOW_MS = 5 * 60 * 1000;
 // Lifetime attempt cap per game. Games not listed here are unlimited.
 const MAX_ATTEMPTS = { sudoku: 3 };
 
-// -- Tournament mode (Memory Match, Ca Dao Đố Vui) -------------------------
-// Solo mode (the only mode either game had before) gives each player their
-// own random shuffle/draw, so scores aren't really comparable -- one player
-// might get an easier card layout or an easier set of proverbs than another
-// purely by luck. Tournament mode removes that luck: everyone who joins
-// gets back the exact same shared shuffle/draw for the current round, and
-// then plays through it independently, at their own pace (not a live
-// synchronized round) -- same content, so the leaderboard comparison is
-// actually fair. Only Proverb and Scramble share content this way: Memory
-// Match and Sudoku Tournament attempts are intentionally NOT shared -- each
-// player gets their own random board/puzzle (same as Solo), same as it would
-// discourage one player solving it and passing the layout/answers to others
-// in the same round. Picking Tournament there only tags the attempt for the
-// leaderboard. The real game CONTENT (the proverb text/emoji/hints in
-// proverb.js, the word list in scramble.js) stays defined client-side as
-// always; the server only generates and hands out the shared shuffle itself
-// (plain numeric indices), which each client maps back onto its own local
-// content array. This keeps content easy to edit in one place without the
-// server needing to know what a proverb or word even is.
-const TOURNAMENT_GAMES = ['proverb', 'scramble'];
+// -- Tournament mode (all 4 games) ------------------------------------------
+// Every scored game's Tournament mode shares the same lobby/pacing shell:
+// players tournament:join a 'lobby' (see tournamentRound/tournamentParticipants
+// below), the admin releases everyone together (admin:tournament-start), and
+// each player's live in-progress score feeds tournamentLiveScores so the
+// admin's Live Top Score page can show it. TOURNAMENT_GAMES (all 4) controls
+// that shell; TOURNAMENT_CONTENT_SHARED_GAMES (Proverb/Scramble only)
+// controls a second, separate thing -- actual shared puzzle CONTENT.
+//
+// For Proverb/Scramble, Tournament also hands everyone the exact same
+// shuffled draw (see generateTournamentContent) and paces them through it
+// question-by-question (questionIndex, admin:tournament-next) -- solo mode's
+// own random draw isn't really comparable across players otherwise. Memory
+// Match and Sudoku are deliberately left OUT of content-sharing: each player
+// still gets their own random board/puzzle (same as Solo), so one player
+// solving it can't hand the layout/answers to others in the same round.
+// Picking Tournament there only gets you the shared lobby/live-score shell,
+// plus tagging the attempt for the leaderboard -- totalQuestions is just 1
+// (see freshTournamentRound), a single continuous attempt with no staged
+// "next question" to advance through.
+const TOURNAMENT_GAMES = GAMES;
+const TOURNAMENT_CONTENT_SHARED_GAMES = ['proverb', 'scramble'];
 const TOURNAMENT_PROVERB_POOL_SIZE = 40; // must match proverb.js's PROVERB_POOL.length
 const TOURNAMENT_PROVERB_ROUNDS = 15; // must match proverb.js's ROUNDS_PER_GAME
 const TOURNAMENT_SCRAMBLE_POOL_SIZE = 20; // must match scramble.js's WORD_POOL.length
@@ -126,15 +128,37 @@ TOURNAMENT_GAMES.forEach((g) => { tournamentLiveScores[g] = new Map(); });
 const tournamentParticipants = {};
 TOURNAMENT_GAMES.forEach((g) => { tournamentParticipants[g] = new Map(); });
 
+// Sudoku and Memory Match generate a fresh random puzzle/board per attempt
+// (unlike Scramble/Proverb's identical shared content for everyone), so a
+// retry there is fair and meaningful -- each joined participant gets up to
+// TOURNAMENT_MAX_ATTEMPTS plays within the current round (see
+// tournament:request-attempt below), independent of Sudoku's separate
+// lifetime Solo+Tournament cap (MAX_ATTEMPTS). Reset whenever the admin
+// starts a new tournament round.
+const TOURNAMENT_RETRY_GAMES = ['sudoku', 'memory'];
+const TOURNAMENT_MAX_ATTEMPTS = 3;
+const tournamentAttempts = {}; // game -> Map<playerId, attemptsUsed>
+TOURNAMENT_RETRY_GAMES.forEach((g) => { tournamentAttempts[g] = new Map(); });
+
 // Best-first live standings, capped at `limit` -- used for both the
 // tournament:top-score broadcast (always sends up to 10, so clients can
 // expand from 3 to 10 without a round-trip) and the initial tournament:join
 // snapshot.
+// Each entry tracks TWO numbers, not one -- see tournament:question-done:
+//  - bestFinalScore: only ever raised by a CONFIRMED completed attempt
+//    (Scramble/Proverb's every report; Sudoku/Memory's finish/give-up/timeout).
+//  - liveScore: the current honest in-progress value for whichever attempt
+//    is active right now (Sudoku/Memory only -- their score can rise AND
+//    fall within one attempt, e.g. a decaying speed bonus, so this is NOT
+//    maxed against its own past ticks the way bestFinalScore is).
+// The displayed/ranked score is always max(bestFinalScore, liveScore), so an
+// in-progress peek never permanently overrides -- or gets confused with -- a
+// worse but already-confirmed result from giving up or timing out.
 function liveStandings(game, limit = 10) {
   return [...tournamentLiveScores[game].values()]
+    .map((e) => ({ name: e.name, score: Math.max(e.bestFinalScore, e.liveScore) }))
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
-    .slice(0, limit)
-    .map((e) => ({ name: e.name, score: e.score }));
+    .slice(0, limit);
 }
 
 function tournamentSnapshot(game) {
@@ -143,6 +167,16 @@ function tournamentSnapshot(game) {
 
 function broadcastTournamentTop(game) {
   io.emit('tournament:top-score', { game, ...tournamentSnapshot(game) });
+}
+
+// One-shot initial snapshot for a freshly-connecting socket -- without this,
+// a client that opens (or refreshes) the Live Top Score page after the last
+// tournament:question-done for a round would see nothing at all, since
+// tournament:top-score only fires on a NEW score change, not on connect.
+function allTournamentSnapshots() {
+  const result = {};
+  TOURNAMENT_GAMES.forEach((g) => { result[g] = tournamentSnapshot(g); });
+  return result;
 }
 
 // game -> { phase: 'lobby' | 'active', questionIndex, totalQuestions } -- the
@@ -156,7 +190,13 @@ function broadcastTournamentTop(game) {
 // Tournament mode any more. Reset to a fresh lobby whenever the admin starts
 // a new tournament round.
 function freshTournamentRound(game) {
-  const totalQuestions = game === 'scramble' ? TOURNAMENT_SCRAMBLE_ROUND_LENGTH : TOURNAMENT_PROVERB_ROUNDS;
+  // Sudoku/Memory have no staged "questions" to advance through -- a single
+  // continuous attempt, so totalQuestions is just 1 (admin:tournament-next
+  // is never valid/needed for them, same as after Proverb/Scramble's last
+  // question).
+  let totalQuestions = 1;
+  if (game === 'scramble') totalQuestions = TOURNAMENT_SCRAMBLE_ROUND_LENGTH;
+  else if (game === 'proverb') totalQuestions = TOURNAMENT_PROVERB_ROUNDS;
   return { phase: 'lobby', questionIndex: -1, totalQuestions };
 }
 const tournamentRound = {};
@@ -413,6 +453,7 @@ io.on('connection', (socket) => {
   socket.emit('leaderboard', leaderboardSnapshot());
   socket.emit('game-window-all', allGameWindowsSnapshot());
   socket.emit('tournament:round-state-all', allRoundStates());
+  socket.emit('tournament:top-score-all', allTournamentSnapshots());
 
   socket.on('admin:login', ({ password }, callback) => {
     const ok = typeof password === 'string' && password === ADMIN_PASSWORD;
@@ -426,6 +467,14 @@ io.on('connection', (socket) => {
         state: ok ? allGameWindowsSnapshot() : undefined,
         playerCount: ok ? players.size : undefined,
         flags: ok ? cheatFlags.slice(-50).reverse() : undefined,
+        // Bundled directly into the response (rather than relying on the
+        // connection-time broadcasts) since a listener for those only gets
+        // attached AFTER login succeeds -- by then the one-shot connection
+        // broadcast has already fired and would otherwise be missed,
+        // leaving e.g. the Live Top Score page showing nothing until the
+        // next live score change.
+        roundStates: ok ? allRoundStates() : undefined,
+        topScores: ok ? allTournamentSnapshots() : undefined,
       });
     }
   });
@@ -532,6 +581,33 @@ io.on('connection', (socket) => {
     if (typeof callback === 'function') callback({ ok: true, attemptsUsed: player.attempts[game], attemptsMax: max });
   });
 
+  // Reserves one of a player's TOURNAMENT_MAX_ATTEMPTS retries within the
+  // CURRENT tournament round (Sudoku/Memory only -- see TOURNAMENT_RETRY_GAMES).
+  // Separate from game:start-attempt's lifetime Solo+Tournament cap above:
+  // this only gates retries inside an already-active Tournament round, and
+  // resets on admin:new-tournament-round, not per-player ever.
+  socket.on('tournament:request-attempt', ({ playerId, game }, callback) => {
+    if (typeof playerId !== 'string' || !playerId || !TOURNAMENT_RETRY_GAMES.includes(game)) {
+      if (typeof callback === 'function') callback({ ok: false, error: 'invalid-game' });
+      return;
+    }
+    if (tournamentRound[game].phase !== 'active') {
+      if (typeof callback === 'function') callback({ ok: false, error: 'not-active' });
+      return;
+    }
+    const used = tournamentAttempts[game].get(playerId) || 0;
+    if (used >= TOURNAMENT_MAX_ATTEMPTS) {
+      if (typeof callback === 'function') {
+        callback({ ok: false, error: 'exhausted', attemptsUsed: used, attemptsMax: TOURNAMENT_MAX_ATTEMPTS });
+      }
+      return;
+    }
+    tournamentAttempts[game].set(playerId, used + 1);
+    if (typeof callback === 'function') {
+      callback({ ok: true, attemptsUsed: used + 1, attemptsMax: TOURNAMENT_MAX_ATTEMPTS });
+    }
+  });
+
   // Anti-cheat signal from a game page (tab-switch disqualification, brute-force
   // guess pattern, implausible solve speed, ...). Never blocks play server-side —
   // it's surfaced to the admin panel for a human to judge.
@@ -598,20 +674,33 @@ io.on('connection', (socket) => {
   // out their own clock (see tournament:question-over below). A stale report
   // -- the round having since moved on, or the wrong questionIndex -- is
   // ignored, since it can't mean anything for the CURRENT question.
-  socket.on('tournament:question-done', ({ playerId, name, game, questionIndex, score }) => {
+  // `final` marks this report as a CONFIRMED completed attempt (Scramble/
+  // Proverb: every report, since each is a question actually resolving;
+  // Sudoku/Memory: only finish/give-up/timeout, not the periodic in-progress
+  // ticks from updateLiveScore()) -- see liveStandings() above for why that
+  // distinction matters.
+  socket.on('tournament:question-done', ({ playerId, name, game, questionIndex, score, final }) => {
     if (typeof playerId !== 'string' || !playerId) return;
     if (!TOURNAMENT_GAMES.includes(game)) return;
     const round = tournamentRound[game];
     if (round.phase !== 'active' || questionIndex !== round.questionIndex) return;
+    const incoming = clampScore(score, maxScoreFor(game, 'tournament'));
+    const existing = tournamentLiveScores[game].get(playerId) || { bestFinalScore: 0, liveScore: 0 };
     tournamentLiveScores[game].set(playerId, {
       name: sanitizeName(name),
-      score: clampScore(score, maxScoreFor(game, 'tournament')),
+      bestFinalScore: final ? Math.max(existing.bestFinalScore, incoming) : existing.bestFinalScore,
+      // Reset the transient once an attempt concludes -- a fresh retry's own
+      // ticks will repopulate it, so it never carries over a now-irrelevant
+      // in-progress value from the attempt that just ended.
+      liveScore: final ? 0 : incoming,
       updatedAt: Date.now(),
     });
     broadcastTournamentTop(game);
-    tournamentQuestionDone[game].add(playerId);
-    if (tournamentQuestionDone[game].size >= tournamentParticipants[game].size) {
-      io.emit('tournament:question-over', { game, questionIndex });
+    if (final) {
+      tournamentQuestionDone[game].add(playerId);
+      if (tournamentQuestionDone[game].size >= tournamentParticipants[game].size) {
+        io.emit('tournament:question-over', { game, questionIndex });
+      }
     }
   });
 
@@ -637,6 +726,7 @@ io.on('connection', (socket) => {
     tournamentParticipants[game] = new Map();
     tournamentQuestionDone[game] = new Set();
     tournamentRound[game] = freshTournamentRound(game);
+    if (TOURNAMENT_RETRY_GAMES.includes(game)) tournamentAttempts[game] = new Map();
     broadcastTournamentTop(game);
     broadcastRoundState(game);
     if (typeof callback === 'function') callback({ ok: true });

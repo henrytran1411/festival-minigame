@@ -369,7 +369,7 @@ if (me) {
       revealAnswer();
       if (currentMode === 'tournament') {
         totalTimeUsed += ROUND_SECONDS;
-        Festival.submitTournamentQuestionDone(socket, 'proverb', index, score);
+        Festival.submitTournamentQuestionDone(socket, 'proverb', index, score, true);
       }
       advance(3000);
     }
@@ -436,10 +436,10 @@ if (me) {
       flash('Correct!', 'good');
       if (fromOption) {
         revealAnswer();
-        if (currentMode === 'tournament') Festival.submitTournamentQuestionDone(socket, 'proverb', index, score);
+        if (currentMode === 'tournament') Festival.submitTournamentQuestionDone(socket, 'proverb', index, score, true);
         advance(2000);
       } else {
-        if (currentMode === 'tournament') Festival.submitTournamentQuestionDone(socket, 'proverb', index, score);
+        if (currentMode === 'tournament') Festival.submitTournamentQuestionDone(socket, 'proverb', index, score, true);
         advance(600);
       }
     } else if (fromOption) {
@@ -450,7 +450,7 @@ if (me) {
       revealAnswer();
       if (currentMode === 'tournament') {
         totalTimeUsed += (performance.now() - roundStartTime) / 1000;
-        Festival.submitTournamentQuestionDone(socket, 'proverb', index, score);
+        Festival.submitTournamentQuestionDone(socket, 'proverb', index, score, true);
       }
       advance(3000);
     } else {
@@ -565,7 +565,7 @@ if (me) {
       // only known once the whole run ends. Push the bonus-inclusive final
       // score into the live standings too, so the live top score converges
       // to the real total instead of looking permanently short by up to 300.
-      Festival.submitTournamentQuestionDone(socket, 'proverb', index, finalScore);
+      Festival.submitTournamentQuestionDone(socket, 'proverb', index, finalScore, true);
     }
   }
 

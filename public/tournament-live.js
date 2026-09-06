@@ -30,7 +30,13 @@ function attemptLogin(password) {
     if (res && res.ok) {
       localStorage.setItem(PASSWORD_KEY, password);
       showPage();
-      buildGameCards();
+      // Built from the login response itself, not the connection-time
+      // broadcasts -- those fire before buildGameCards() has attached any
+      // listeners (it only runs after login succeeds), so relying on them
+      // would miss the initial state and show nothing until the next live
+      // change (e.g. a Sudoku/Memory board no one has touched since the
+      // last score update).
+      buildGameCards(res.roundStates || {}, res.topScores || {});
     } else {
       localStorage.removeItem(PASSWORD_KEY);
       showLogin('Wrong password.');
@@ -47,12 +53,25 @@ passwordInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') loginBtn.click();
 });
 
-// One card per tournament-capable game (Scramble, Proverb) -- content-shared
-// Tournament games only (window.FESTIVAL_GAMES's `tournament: true` flag),
-// same set as server.js's TOURNAMENT_GAMES.
-function buildGameCards() {
+function renderRoundStatus(statusEl, roundState) {
+  if (roundState.phase === 'lobby') {
+    statusEl.textContent = `🏟 Lobby — ${roundState.playerCount} joined`;
+  } else if (roundState.totalQuestions > 1) {
+    statusEl.textContent = `▶️ Question ${roundState.questionIndex + 1} of ${roundState.totalQuestions} — ${roundState.playerCount} joined`;
+  } else {
+    // Sudoku/Memory: no staged questions -- everyone's just playing their
+    // own puzzle/board at their own pace.
+    statusEl.textContent = `▶️ In progress — ${roundState.playerCount} joined`;
+  }
+}
+
+// One card per Tournament-capable game (all 4) -- window.FESTIVAL_GAMES's
+// `hasTournamentMode: true` flag, same set as server.js's TOURNAMENT_GAMES.
+// `initialRoundStates`/`initialTopScores` (game -> snapshot) come straight
+// from the admin:login response -- see attemptLogin() for why.
+function buildGameCards(initialRoundStates, initialTopScores) {
   tlGridEl.innerHTML = '';
-  window.FESTIVAL_GAMES.filter((g) => g.tournament).forEach((g) => {
+  window.FESTIVAL_GAMES.filter((g) => g.hasTournamentMode).forEach((g) => {
     const card = document.createElement('div');
     card.className = 'card tl-card';
     card.innerHTML = `
@@ -76,7 +95,11 @@ function buildGameCards() {
     // Toggling back to hidden is instant, so the admin can re-arm suspense
     // for the next question. `top` is always the latest live standings,
     // whether currently shown blind or revealed.
-    const state = { top: [], revealed: false, revealedCount: 0, timer: null };
+    const initialTop = initialTopScores[g.key];
+    const state = { top: (initialTop && initialTop.top) || [], revealed: false, revealedCount: 0, timer: null };
+
+    const initialRound = initialRoundStates[g.key];
+    if (initialRound) renderRoundStatus(statusEl, initialRound);
 
     function renderList() {
       const rows = state.top.slice(0, 10);
@@ -159,13 +182,7 @@ function buildGameCards() {
       }, 500);
     });
 
-    Festival.watchTournamentRoundState(socket, g.key, (roundState) => {
-      if (roundState.phase === 'lobby') {
-        statusEl.textContent = `🏟 Lobby — ${roundState.playerCount} joined`;
-      } else {
-        statusEl.textContent = `▶️ Question ${roundState.questionIndex + 1} of ${roundState.totalQuestions} — ${roundState.playerCount} joined`;
-      }
-    });
+    Festival.watchTournamentRoundState(socket, g.key, (roundState) => renderRoundStatus(statusEl, roundState));
 
     Festival.watchTournamentTopScore(socket, g.key, (standings) => {
       state.top = standings.top;
@@ -173,6 +190,7 @@ function buildGameCards() {
       updateRevealButton();
     });
 
+    renderList();
     updateRevealButton();
   });
 }

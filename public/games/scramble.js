@@ -372,7 +372,7 @@ if (me) {
         noHintStreak = 0;
         if (currentMode === 'tournament') {
           totalTimeUsed += ROUND_SECONDS;
-          Festival.submitTournamentQuestionDone(socket, 'scramble', index, score);
+          Festival.submitTournamentQuestionDone(socket, 'scramble', index, score, true);
         }
       }
       advance(900);
@@ -426,7 +426,7 @@ if (me) {
         answeredCorrectly = true;
         answerInput.disabled = true;
         submitBtn.disabled = true;
-        Festival.submitTournamentQuestionDone(socket, 'scramble', index, score);
+        Festival.submitTournamentQuestionDone(socket, 'scramble', index, score, true);
       } else {
         clearInterval(roundTimerHandle);
         advance(400);
@@ -450,7 +450,7 @@ if (me) {
         flash('Out of guesses', 'bad');
         const elapsedSeconds = (performance.now() - wordStartTime) / 1000;
         totalTimeUsed += elapsedSeconds;
-        Festival.submitTournamentQuestionDone(socket, 'scramble', index, score);
+        Festival.submitTournamentQuestionDone(socket, 'scramble', index, score, true);
       } else {
         flash('Not quite, try again', 'bad');
         answerInput.value = '';
@@ -544,7 +544,7 @@ if (me) {
       // only known once the whole run ends. Push the bonus-inclusive final
       // score into the live standings too, so the live top score converges
       // to the real total instead of looking permanently short by up to 300.
-      Festival.submitTournamentQuestionDone(socket, 'scramble', index, finalScore);
+      Festival.submitTournamentQuestionDone(socket, 'scramble', index, finalScore, true);
     }
   }
 

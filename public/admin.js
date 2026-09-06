@@ -117,13 +117,12 @@ function buildGameCards() {
       ${g.hasTournamentMode ? `
       <div class="admin-actions">
         <button data-role="toggle-tournament" class="secondary">🏆 Hide Tournament Mode</button>
-        ${g.tournament ? '<button data-role="new-tournament-round" class="secondary">🎲 New Tournament Round</button>' : ''}
-      </div>` : ''}
-      ${g.tournament ? `
+        <button data-role="new-tournament-round" class="secondary">🎲 New Tournament Round</button>
+      </div>
       <div class="admin-status" data-role="round-status" style="color: var(--muted); font-size: 12px;"></div>
       <div class="admin-actions">
         <button data-role="tournament-start" class="secondary">▶️ Start Tournament</button>
-        <button data-role="tournament-next" class="secondary" disabled>⏭ Next Question</button>
+        ${g.tournament ? '<button data-role="tournament-next" class="secondary" disabled>⏭ Next Question</button>' : ''}
       </div>` : ''}
     `;
     card.querySelector('[data-role="open"]').addEventListener('click', () => {
@@ -150,10 +149,10 @@ function buildGameCards() {
         });
       });
     }
-    if (g.tournament) {
+    if (g.hasTournamentMode) {
       card.querySelector('[data-role="new-tournament-round"]').addEventListener('click', () => {
         socket.emit('admin:new-tournament-round', { game: g.key }, (res) => {
-          if (res && res.ok) showResetNote(g.key, null, '🎲 New tournament round ready — new Tournament joins get fresh content.');
+          if (res && res.ok) showResetNote(g.key, null, '🎲 New tournament round ready — resets the lobby for new Tournament joins.');
         });
       });
       card.querySelector('[data-role="tournament-start"]').addEventListener('click', () => {
@@ -161,11 +160,14 @@ function buildGameCards() {
           if (!res || !res.ok) alert('Could not start the tournament: ' + ((res && res.error) || 'unknown error'));
         });
       });
-      card.querySelector('[data-role="tournament-next"]').addEventListener('click', () => {
-        socket.emit('admin:tournament-next', { game: g.key }, (res) => {
-          if (!res || !res.ok) alert('Could not advance the tournament: ' + ((res && res.error) || 'unknown error'));
+      const nextBtn = card.querySelector('[data-role="tournament-next"]');
+      if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+          socket.emit('admin:tournament-next', { game: g.key }, (res) => {
+            if (!res || !res.ok) alert('Could not advance the tournament: ' + ((res && res.error) || 'unknown error'));
+          });
         });
-      });
+      }
     }
     card.querySelector('[data-role="reset-attempts"]').addEventListener('click', () => {
       socket.emit('admin:reset-attempts', { game: g.key }, (res) => {
@@ -217,22 +219,30 @@ function renderTournamentRound(game) {
   if (!card) return;
   const statusEl = card.querySelector('[data-role="round-status"]');
   const startBtn = card.querySelector('[data-role="tournament-start"]');
-  const nextBtn = card.querySelector('[data-role="tournament-next"]');
-  if (!statusEl || !startBtn || !nextBtn) return;
+  const nextBtn = card.querySelector('[data-role="tournament-next"]'); // absent for Sudoku/Memory -- single-stage
+  if (!statusEl || !startBtn) return;
   const state = tournamentRoundStates[game];
   if (!state) return;
 
   if (state.phase === 'lobby') {
     statusEl.textContent = `🏟 Lobby — ${state.playerCount} player${state.playerCount === 1 ? '' : 's'} waiting to start`;
     startBtn.disabled = false;
-    nextBtn.disabled = true;
-    nextBtn.textContent = '⏭ Next Question';
+    if (nextBtn) {
+      nextBtn.disabled = true;
+      nextBtn.textContent = '⏭ Next Question';
+    }
   } else {
-    const isLast = state.questionIndex + 1 >= state.totalQuestions;
-    statusEl.textContent = `▶️ Question ${state.questionIndex + 1} of ${state.totalQuestions} in progress — ${state.playerCount} joined`;
     startBtn.disabled = true;
-    nextBtn.disabled = isLast;
-    nextBtn.textContent = isLast ? '⏭ Last Question' : '⏭ Next Question';
+    if (nextBtn) {
+      const isLast = state.questionIndex + 1 >= state.totalQuestions;
+      statusEl.textContent = `▶️ Question ${state.questionIndex + 1} of ${state.totalQuestions} in progress — ${state.playerCount} joined`;
+      nextBtn.disabled = isLast;
+      nextBtn.textContent = isLast ? '⏭ Last Question' : '⏭ Next Question';
+    } else {
+      // Sudoku/Memory: no staged questions -- players just play their own
+      // puzzle/board at their own pace once released from the lobby.
+      statusEl.textContent = `▶️ In progress — ${state.playerCount} joined`;
+    }
   }
 }
 

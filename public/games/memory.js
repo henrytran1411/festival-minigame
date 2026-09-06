@@ -65,11 +65,18 @@ if (me) {
   const movesEl = document.getElementById('moves');
   const liveScoreEl = document.getElementById('live-score');
   const modeScreen = document.getElementById('mode-screen');
+  const tournamentLobbyScreenEl = document.getElementById('tournament-lobby-screen');
+  const tournamentLobbyCountEl = document.getElementById('tournament-lobby-count');
+  const tournamentLobbyPlayersEl = document.getElementById('tournament-lobby-players');
   const playScreen = document.getElementById('play-screen');
   const resultScreen = document.getElementById('result-screen');
   const finalScoreEl = document.getElementById('final-score');
   const resultDetailEl = document.getElementById('result-detail');
   const modeBadgeEl = document.getElementById('mode-badge');
+  const attemptInfoEl = document.getElementById('attempt-info');
+  const exhaustedScreen = document.getElementById('exhausted-screen');
+  const exhaustedDetailEl = document.getElementById('exhausted-detail');
+  const exhaustedBackBtn = document.getElementById('exhausted-back-btn');
   const soloModeBtn = document.getElementById('solo-mode-btn');
   const tournamentModeBtn = document.getElementById('tournament-mode-btn');
   Festival.watchTournamentMode(socket, 'memory', (available) => {
@@ -77,6 +84,28 @@ if (me) {
     // While the admin has Tournament mode open, only Tournament is offered
     // -- Solo comes back once the admin hides Tournament again.
     soloModeBtn.style.display = available ? 'none' : '';
+  });
+
+  // Tournament round pacing, server-authoritative (see server.js's
+  // tournamentRound) -- shared with Proverb/Scramble's lobby mechanism, but
+  // Memory's board itself is never shared content (see the comment on
+  // `currentMode` below), so there's just one "question" (totalQuestions=1):
+  // once the admin starts the round, this player's own board begins right
+  // away, same as Solo, with no further admin action needed.
+  let roundState = null;
+  function renderLobby(state) {
+    tournamentLobbyCountEl.textContent = `👥 ${state.playerCount} joined`;
+    Festival.renderTournamentLobbyPlayers(tournamentLobbyPlayersEl, state.players);
+  }
+  Festival.watchTournamentRoundState(socket, 'memory', (state) => {
+    const wasLobby = roundState && roundState.phase === 'lobby';
+    roundState = state;
+    if (currentMode !== 'tournament' || tournamentLobbyScreenEl.classList.contains('hidden')) return;
+    renderLobby(state);
+    if (state.phase === 'active' && wasLobby) {
+      tournamentLobbyScreenEl.classList.add('hidden');
+      tryTournamentAttempt();
+    }
   });
 
   const meta = window.FESTIVAL_GAMES.find((g) => g.key === 'memory');
@@ -100,10 +129,15 @@ if (me) {
 
   let cards, cardEls, faceEls, badgeEls, flipped, matchedCount, moves, startTime, timerHandle, finished, busy;
   let cardOpenCounts, matchPoints;
+  let tournamentAttemptsUsed = 0, tournamentAttemptsMax = null;
+  let lastReportedLiveScore = null; // dedupe: updateLiveScore ticks every 500ms, the score doesn't
   // 'solo' | 'tournament' -- picked on the mode screen before each run.
   // Unlike Proverb/Scramble, Memory's Tournament board is NOT shared -- each
-  // player still gets their own random card shuffle, same as Solo. Picking
-  // Tournament only tags the run for the leaderboard.
+  // player still gets their own random card shuffle, same as Solo. Solo runs
+  // are unlimited, same as always; once inside an active Tournament round,
+  // "Play Again" instead retries with a fresh shuffle via a separate
+  // tournamentAttemptsUsed/Max pool (Festival.requestTournamentAttempt, up to
+  // TOURNAMENT_MAX_ATTEMPTS on the server) -- Solo stays completely unaffected.
   let currentMode = 'solo';
 
   function shuffle(arr) {
@@ -116,9 +150,38 @@ if (me) {
   }
 
   function showModeScreen() {
+    tournamentLobbyScreenEl.classList.add('hidden');
     playScreen.classList.add('hidden');
     resultScreen.classList.add('hidden');
+    exhaustedScreen.classList.add('hidden');
     modeScreen.classList.remove('hidden');
+  }
+
+  // Tournament-only: reserves one of this round's separate retry attempts
+  // (see the `currentMode` comment above) instead of just starting freely.
+  async function tryTournamentAttempt() {
+    const res = await Festival.requestTournamentAttempt(socket, 'memory');
+    if (!res?.ok) {
+      if (res && res.error === 'exhausted') {
+        showExhausted();
+      } else {
+        // Round no longer active (e.g. admin started a new one) -- nothing
+        // left to retry into, so send them back to pick a mode again.
+        showModeScreen();
+      }
+      return;
+    }
+    tournamentAttemptsUsed = res.attemptsUsed;
+    tournamentAttemptsMax = res.attemptsMax;
+    startGame();
+  }
+
+  function showExhausted() {
+    playScreen.classList.add('hidden');
+    resultScreen.classList.add('hidden');
+    modeScreen.classList.add('hidden');
+    exhaustedDetailEl.textContent = `You've used all ${tournamentAttemptsMax} of your Tournament attempts for this round. You can still choose Solo if you'd like to keep playing.`;
+    exhaustedScreen.classList.remove('hidden');
   }
 
   function startGame() {
@@ -130,11 +193,20 @@ if (me) {
     matchPoints = 0;
     finished = false;
     busy = false;
+    lastReportedLiveScore = null;
     startTime = performance.now();
     movesEl.textContent = '0';
     timerEl.textContent = Festival.formatCountdown(GAME_TIME_LIMIT_SECONDS * 1000);
     modeBadgeEl.textContent = currentMode === 'tournament' ? '🏆 Tournament' : '';
+    if (currentMode === 'tournament') {
+      attemptInfoEl.textContent = `🏆 ${tournamentAttemptsUsed}/${tournamentAttemptsMax}`;
+      attemptInfoEl.classList.remove('hidden');
+    } else {
+      attemptInfoEl.classList.add('hidden');
+    }
     modeScreen.classList.add('hidden');
+    tournamentLobbyScreenEl.classList.add('hidden');
+    exhaustedScreen.classList.add('hidden');
     resultScreen.classList.add('hidden');
     playScreen.classList.remove('hidden');
     buildGrid();
@@ -156,7 +228,20 @@ if (me) {
 
   function updateLiveScore() {
     const seconds = Math.floor((performance.now() - startTime) / 1000);
-    liveScoreEl.textContent = String(computeScore(seconds));
+    const score = computeScore(seconds);
+    liveScoreEl.textContent = String(score);
+    if (currentMode === 'tournament') {
+      // No staged "questions" here (see tournamentRound comment above), so
+      // questionIndex is always 0 -- this just keeps the admin's Live Top
+      // Score page updated with this player's current in-progress score.
+      // Only emit when it actually changed -- this ticks every 500ms for the
+      // whole game, but the score itself only moves on a match or every
+      // couple of seconds of time/moves-bonus tier decay.
+      if (score !== lastReportedLiveScore) {
+        lastReportedLiveScore = score;
+        Festival.submitTournamentQuestionDone(socket, 'memory', 0, score, false);
+      }
+    }
   }
 
   function buildGrid() {
@@ -242,7 +327,8 @@ if (me) {
     resultDetailEl.textContent = detail;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
-    Festival.submitScore(socket, 'memory', score, detail);
+    Festival.submitScore(socket, 'memory', score, detail, currentMode);
+    if (currentMode === 'tournament') Festival.submitTournamentQuestionDone(socket, 'memory', 0, score, true);
   }
 
   function finishGame() {
@@ -256,7 +342,8 @@ if (me) {
     resultDetailEl.textContent = detail;
     playScreen.classList.add('hidden');
     resultScreen.classList.remove('hidden');
-    Festival.submitScore(socket, 'memory', score, detail);
+    Festival.submitScore(socket, 'memory', score, detail, currentMode);
+    if (currentMode === 'tournament') Festival.submitTournamentQuestionDone(socket, 'memory', 0, score, true);
   }
 
   soloModeBtn.addEventListener('click', () => {
@@ -264,16 +351,39 @@ if (me) {
     startGame();
   });
   tournamentModeBtn.addEventListener('click', () => {
-    currentMode = 'tournament';
-    startGame();
+    tournamentModeBtn.disabled = true;
+    const { id: playerId, name } = Festival.getPlayer();
+    socket.emit('tournament:join', { playerId, name, game: 'memory' }, (res) => {
+      tournamentModeBtn.disabled = false;
+      if (!res || !res.ok) {
+        if (res && res.error === 'round-in-progress') {
+          alert('A Tournament round is already in progress. Please wait for the admin to start a new round.');
+        } else {
+          alert('Could not join the tournament: ' + ((res && res.error) || 'unknown error'));
+        }
+        return;
+      }
+      currentMode = 'tournament';
+      roundState = res.round;
+      modeScreen.classList.add('hidden');
+      renderLobby(res.round);
+      tournamentLobbyScreenEl.classList.remove('hidden');
+    });
   });
 
   const gate = Festival.gateGame(socket, 'memory', showModeScreen);
   document.getElementById('play-again-btn').addEventListener('click', () => {
+    // Still an active Tournament participant -- retry with a fresh shuffle
+    // (up to TOURNAMENT_MAX_ATTEMPTS) instead of leaving the round entirely.
+    if (currentMode === 'tournament' && roundState && roundState.phase === 'active') {
+      tryTournamentAttempt();
+      return;
+    }
     if (gate.isOpen()) {
       showModeScreen();
     } else {
       gate.block();
     }
   });
+  exhaustedBackBtn.addEventListener('click', showModeScreen);
 }
