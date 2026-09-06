@@ -1,0 +1,3002 @@
+[
+  {
+    "question": "14 - 6 bằng mấy?",
+    "right": "8",
+    "wrong": "10",
+    "order": 0
+  },
+  {
+    "question": "22 - 21 bằng mấy?",
+    "right": "1",
+    "wrong": "0",
+    "order": 0
+  },
+  {
+    "question": "25 - 15 bằng mấy?",
+    "right": "10",
+    "wrong": "9",
+    "order": 1
+  },
+  {
+    "question": "26 - 14 bằng mấy?",
+    "right": "12",
+    "wrong": "10",
+    "order": 0
+  },
+  {
+    "question": "6 x 9 bằng mấy?",
+    "right": "54",
+    "wrong": "58",
+    "order": 0
+  },
+  {
+    "question": "Thủ đô của Việt Nam là thành phố nào?",
+    "right": "Hà Nội",
+    "wrong": "Thành phố Hồ Chí Minh",
+    "order": 0
+  },
+  {
+    "question": "2 x 5 bằng mấy?",
+    "right": "10",
+    "wrong": "11",
+    "order": 0
+  },
+  {
+    "question": "Đơn vị tiền tệ của Việt Nam gọi là gì?",
+    "right": "Đồng",
+    "wrong": "Đô la",
+    "order": 0
+  },
+  {
+    "question": "11 - 8 bằng mấy?",
+    "right": "3",
+    "wrong": "0",
+    "order": 0
+  },
+  {
+    "question": "8 x 9 bằng mấy?",
+    "right": "72",
+    "wrong": "73",
+    "order": 0
+  },
+  {
+    "question": "Con mèo kêu như thế nào?",
+    "right": "Meo meo",
+    "wrong": "Gâu gâu",
+    "order": 0
+  },
+  {
+    "question": "Than có màu gì?",
+    "right": "Đen",
+    "wrong": "Trắng",
+    "order": 0
+  },
+  {
+    "question": "Sữa có màu gì?",
+    "right": "Trắng",
+    "wrong": "Đỏ",
+    "order": 1
+  },
+  {
+    "question": "24 + 14 bằng mấy?",
+    "right": "38",
+    "wrong": "39",
+    "order": 0
+  },
+  {
+    "question": "10 + 6 bằng mấy?",
+    "right": "16",
+    "wrong": "20",
+    "order": 0
+  },
+  {
+    "question": "2 x 1 bằng mấy?",
+    "right": "2",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "Từ trái nghĩa với \"vui\" là gì?",
+    "right": "Buồn",
+    "wrong": "Giận",
+    "order": 0
+  },
+  {
+    "question": "10 - 2 bằng mấy?",
+    "right": "8",
+    "wrong": "7",
+    "order": 1
+  },
+  {
+    "question": "5 x 3 bằng mấy?",
+    "right": "15",
+    "wrong": "14",
+    "order": 1
+  },
+  {
+    "question": "Con chó kêu như thế nào?",
+    "right": "Gâu gâu",
+    "wrong": "Meo meo",
+    "order": 0
+  },
+  {
+    "question": "7 x 7 bằng mấy?",
+    "right": "49",
+    "wrong": "50",
+    "order": 0
+  },
+  {
+    "question": "14 + 29 bằng mấy?",
+    "right": "43",
+    "wrong": "45",
+    "order": 1
+  },
+  {
+    "question": "Một nửa của 10 là bao nhiêu?",
+    "right": "5",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "2 x 4 bằng mấy?",
+    "right": "8",
+    "wrong": "3",
+    "order": 0
+  },
+  {
+    "question": "1 - 1 bằng mấy?",
+    "right": "0",
+    "wrong": "5",
+    "order": 0
+  },
+  {
+    "question": "Loài côn trùng nào làm ra mật ong?",
+    "right": "Ong",
+    "wrong": "Kiến",
+    "order": 1
+  },
+  {
+    "question": "8 x 4 bằng mấy?",
+    "right": "32",
+    "wrong": "29",
+    "order": 0
+  },
+  {
+    "question": "Cơ quan nào bơm máu đi khắp cơ thể?",
+    "right": "Tim",
+    "wrong": "Phổi",
+    "order": 1
+  },
+  {
+    "question": "22 + 28 bằng mấy?",
+    "right": "50",
+    "wrong": "53",
+    "order": 1
+  },
+  {
+    "question": "6 x 8 bằng mấy?",
+    "right": "48",
+    "wrong": "45",
+    "order": 0
+  },
+  {
+    "question": "25 - 4 bằng mấy?",
+    "right": "21",
+    "wrong": "20",
+    "order": 1
+  },
+  {
+    "question": "20 + 28 bằng mấy?",
+    "right": "48",
+    "wrong": "46",
+    "order": 1
+  },
+  {
+    "question": "Nguồn sáng tự nhiên nào giúp ta nhìn thấy ban ngày?",
+    "right": "Mặt Trời",
+    "wrong": "Mặt Trăng",
+    "order": 1
+  },
+  {
+    "question": "24 - 15 bằng mấy?",
+    "right": "9",
+    "wrong": "11",
+    "order": 0
+  },
+  {
+    "question": "3 x 4 bằng mấy?",
+    "right": "12",
+    "wrong": "8",
+    "order": 0
+  },
+  {
+    "question": "Mưa đông lại rơi xuống khi trời lạnh gọi là gì?",
+    "right": "Tuyết",
+    "wrong": "Sương mù",
+    "order": 0
+  },
+  {
+    "question": "Con vật nào nhảy bằng hai chân sau khỏe mạnh?",
+    "right": "Chuột túi",
+    "wrong": "Cá",
+    "order": 0
+  },
+  {
+    "question": "22 + 29 bằng mấy?",
+    "right": "51",
+    "wrong": "49",
+    "order": 1
+  },
+  {
+    "question": "1 x 5 bằng mấy?",
+    "right": "5",
+    "wrong": "0",
+    "order": 0
+  },
+  {
+    "question": "8 x 7 bằng mấy?",
+    "right": "56",
+    "wrong": "57",
+    "order": 1
+  },
+  {
+    "question": "23 + 9 bằng mấy?",
+    "right": "32",
+    "wrong": "30",
+    "order": 1
+  },
+  {
+    "question": "3 - 3 bằng mấy?",
+    "right": "0",
+    "wrong": "4",
+    "order": 0
+  },
+  {
+    "question": "22 + 26 bằng mấy?",
+    "right": "48",
+    "wrong": "43",
+    "order": 0
+  },
+  {
+    "question": "25 + 25 bằng mấy?",
+    "right": "50",
+    "wrong": "54",
+    "order": 1
+  },
+  {
+    "question": "19 + 9 bằng mấy?",
+    "right": "28",
+    "wrong": "24",
+    "order": 0
+  },
+  {
+    "question": "13 + 6 bằng mấy?",
+    "right": "19",
+    "wrong": "15",
+    "order": 0
+  },
+  {
+    "question": "28 - 15 bằng mấy?",
+    "right": "13",
+    "wrong": "17",
+    "order": 1
+  },
+  {
+    "question": "6 x 7 bằng mấy?",
+    "right": "42",
+    "wrong": "41",
+    "order": 1
+  },
+  {
+    "question": "Tháng đầu tiên trong năm là tháng nào?",
+    "right": "Tháng Một",
+    "wrong": "Tháng Mười Hai",
+    "order": 0
+  },
+  {
+    "question": "Con vật nào được gọi là \"bạn tốt nhất của con người\"?",
+    "right": "Chó",
+    "wrong": "Mèo",
+    "order": 0
+  },
+  {
+    "question": "21 + 2 bằng mấy?",
+    "right": "23",
+    "wrong": "24",
+    "order": 0
+  },
+  {
+    "question": "5 x 8 bằng mấy?",
+    "right": "40",
+    "wrong": "38",
+    "order": 0
+  },
+  {
+    "question": "15 - 9 bằng mấy?",
+    "right": "6",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "9 - 3 bằng mấy?",
+    "right": "6",
+    "wrong": "8",
+    "order": 0
+  },
+  {
+    "question": "29 + 22 bằng mấy?",
+    "right": "51",
+    "wrong": "52",
+    "order": 1
+  },
+  {
+    "question": "22 + 8 bằng mấy?",
+    "right": "30",
+    "wrong": "26",
+    "order": 1
+  },
+  {
+    "question": "10 - 3 bằng mấy?",
+    "right": "7",
+    "wrong": "8",
+    "order": 1
+  },
+  {
+    "question": "10 + 11 bằng mấy?",
+    "right": "21",
+    "wrong": "19",
+    "order": 1
+  },
+  {
+    "question": "3 x 6 bằng mấy?",
+    "right": "18",
+    "wrong": "19",
+    "order": 0
+  },
+  {
+    "question": "6 - 3 bằng mấy?",
+    "right": "3",
+    "wrong": "1",
+    "order": 1
+  },
+  {
+    "question": "5 + 6 bằng mấy?",
+    "right": "11",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "20 - 19 bằng mấy?",
+    "right": "1",
+    "wrong": "6",
+    "order": 0
+  },
+  {
+    "question": "27 - 9 bằng mấy?",
+    "right": "18",
+    "wrong": "23",
+    "order": 0
+  },
+  {
+    "question": "Con chó có mấy chân?",
+    "right": "4",
+    "wrong": "2",
+    "order": 1
+  },
+  {
+    "question": "Mặt trời lặn ở hướng nào?",
+    "right": "Tây",
+    "wrong": "Đông",
+    "order": 1
+  },
+  {
+    "question": "28 + 28 bằng mấy?",
+    "right": "56",
+    "wrong": "61",
+    "order": 1
+  },
+  {
+    "question": "16 - 9 bằng mấy?",
+    "right": "7",
+    "wrong": "4",
+    "order": 0
+  },
+  {
+    "question": "1 + 3 bằng mấy?",
+    "right": "4",
+    "wrong": "5",
+    "order": 0
+  },
+  {
+    "question": "Từ trái nghĩa với \"to\" là gì?",
+    "right": "Nhỏ",
+    "wrong": "Cao",
+    "order": 1
+  },
+  {
+    "question": "4 - 2 bằng mấy?",
+    "right": "2",
+    "wrong": "5",
+    "order": 1
+  },
+  {
+    "question": "Đá là dạng đông đặc của chất gì?",
+    "right": "Nước",
+    "wrong": "Sữa",
+    "order": 1
+  },
+  {
+    "question": "Mùa nào thường nóng nhất?",
+    "right": "Mùa hè",
+    "wrong": "Mùa đông",
+    "order": 0
+  },
+  {
+    "question": "21 + 7 bằng mấy?",
+    "right": "28",
+    "wrong": "25",
+    "order": 1
+  },
+  {
+    "question": "7 x 5 bằng mấy?",
+    "right": "35",
+    "wrong": "30",
+    "order": 0
+  },
+  {
+    "question": "5 x 5 bằng mấy?",
+    "right": "25",
+    "wrong": "28",
+    "order": 0
+  },
+  {
+    "question": "12 + 24 bằng mấy?",
+    "right": "36",
+    "wrong": "33",
+    "order": 1
+  },
+  {
+    "question": "3 - 2 bằng mấy?",
+    "right": "1",
+    "wrong": "2",
+    "order": 1
+  },
+  {
+    "question": "9 - 1 bằng mấy?",
+    "right": "8",
+    "wrong": "10",
+    "order": 0
+  },
+  {
+    "question": "20 + 3 bằng mấy?",
+    "right": "23",
+    "wrong": "20",
+    "order": 0
+  },
+  {
+    "question": "Cà rốt có màu gì?",
+    "right": "Cam",
+    "wrong": "Xanh lá cây",
+    "order": 1
+  },
+  {
+    "question": "28 - 7 bằng mấy?",
+    "right": "21",
+    "wrong": "18",
+    "order": 1
+  },
+  {
+    "question": "14 + 5 bằng mấy?",
+    "right": "19",
+    "wrong": "15",
+    "order": 0
+  },
+  {
+    "question": "2 x 2 bằng mấy?",
+    "right": "4",
+    "wrong": "3",
+    "order": 0
+  },
+  {
+    "question": "26 + 8 bằng mấy?",
+    "right": "34",
+    "wrong": "36",
+    "order": 0
+  },
+  {
+    "question": "7 x 9 bằng mấy?",
+    "right": "63",
+    "wrong": "61",
+    "order": 0
+  },
+  {
+    "question": "15 - 12 bằng mấy?",
+    "right": "3",
+    "wrong": "2",
+    "order": 0
+  },
+  {
+    "question": "26 - 13 bằng mấy?",
+    "right": "13",
+    "wrong": "18",
+    "order": 0
+  },
+  {
+    "question": "12 + 11 bằng mấy?",
+    "right": "23",
+    "wrong": "20",
+    "order": 1
+  },
+  {
+    "question": "26 + 3 bằng mấy?",
+    "right": "29",
+    "wrong": "30",
+    "order": 0
+  },
+  {
+    "question": "11 + 1 bằng mấy?",
+    "right": "12",
+    "wrong": "17",
+    "order": 1
+  },
+  {
+    "question": "Chuối chín có màu gì?",
+    "right": "Vàng",
+    "wrong": "Tím",
+    "order": 0
+  },
+  {
+    "question": "Một năm có bao nhiêu tháng?",
+    "right": "12",
+    "wrong": "10",
+    "order": 1
+  },
+  {
+    "question": "13 - 10 bằng mấy?",
+    "right": "3",
+    "wrong": "6",
+    "order": 0
+  },
+  {
+    "question": "13 - 3 bằng mấy?",
+    "right": "10",
+    "wrong": "11",
+    "order": 1
+  },
+  {
+    "question": "Nước sôi sẽ biến thành gì?",
+    "right": "Hơi nước",
+    "wrong": "Đá",
+    "order": 1
+  },
+  {
+    "question": "16 - 10 bằng mấy?",
+    "right": "6",
+    "wrong": "2",
+    "order": 1
+  },
+  {
+    "question": "Một ngày có bao nhiêu giờ?",
+    "right": "24",
+    "wrong": "12",
+    "order": 0
+  },
+  {
+    "question": "30 + 21 bằng mấy?",
+    "right": "51",
+    "wrong": "55",
+    "order": 1
+  },
+  {
+    "question": "Hình vuông có mấy cạnh?",
+    "right": "4",
+    "wrong": "3",
+    "order": 1
+  },
+  {
+    "question": "9 - 6 bằng mấy?",
+    "right": "3",
+    "wrong": "0",
+    "order": 0
+  },
+  {
+    "question": "8 x 1 bằng mấy?",
+    "right": "8",
+    "wrong": "11",
+    "order": 1
+  },
+  {
+    "question": "Ngôi sao trên cờ Việt Nam có mấy cánh?",
+    "right": "5",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "13 - 2 bằng mấy?",
+    "right": "11",
+    "wrong": "16",
+    "order": 1
+  },
+  {
+    "question": "7 - 2 bằng mấy?",
+    "right": "5",
+    "wrong": "3",
+    "order": 1
+  },
+  {
+    "question": "1 x 6 bằng mấy?",
+    "right": "6",
+    "wrong": "9",
+    "order": 0
+  },
+  {
+    "question": "22 - 5 bằng mấy?",
+    "right": "17",
+    "wrong": "15",
+    "order": 1
+  },
+  {
+    "question": "9 + 24 bằng mấy?",
+    "right": "33",
+    "wrong": "38",
+    "order": 1
+  },
+  {
+    "question": "10 - 7 bằng mấy?",
+    "right": "3",
+    "wrong": "0",
+    "order": 0
+  },
+  {
+    "question": "15 + 30 bằng mấy?",
+    "right": "45",
+    "wrong": "44",
+    "order": 0
+  },
+  {
+    "question": "11 + 15 bằng mấy?",
+    "right": "26",
+    "wrong": "30",
+    "order": 1
+  },
+  {
+    "question": "Món bánh mì kẹp nổi tiếng của Việt Nam gọi là gì?",
+    "right": "Bánh mì",
+    "wrong": "Phở",
+    "order": 1
+  },
+  {
+    "question": "Nền cờ Việt Nam có màu gì?",
+    "right": "Đỏ",
+    "wrong": "Xanh",
+    "order": 1
+  },
+  {
+    "question": "24 + 29 bằng mấy?",
+    "right": "53",
+    "wrong": "51",
+    "order": 0
+  },
+  {
+    "question": "19 + 28 bằng mấy?",
+    "right": "47",
+    "wrong": "49",
+    "order": 0
+  },
+  {
+    "question": "7 - 5 bằng mấy?",
+    "right": "2",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "Hình có 4 cạnh bằng nhau và 4 góc vuông gọi là hình gì?",
+    "right": "Hình vuông",
+    "wrong": "Hình chữ nhật",
+    "order": 0
+  },
+  {
+    "question": "Mưa rơi xuống từ đâu trên bầu trời?",
+    "right": "Mây",
+    "wrong": "Mặt đất",
+    "order": 1
+  },
+  {
+    "question": "26 + 14 bằng mấy?",
+    "right": "40",
+    "wrong": "42",
+    "order": 1
+  },
+  {
+    "question": "23 + 29 bằng mấy?",
+    "right": "52",
+    "wrong": "51",
+    "order": 0
+  },
+  {
+    "question": "7 + 12 bằng mấy?",
+    "right": "19",
+    "wrong": "15",
+    "order": 1
+  },
+  {
+    "question": "Loại bánh chưng vuông làm bằng gạo nếp thường ăn dịp Tết gọi là gì?",
+    "right": "Bánh chưng",
+    "wrong": "Bánh trung thu",
+    "order": 0
+  },
+  {
+    "question": "10 - 9 bằng mấy?",
+    "right": "1",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "5 x 2 bằng mấy?",
+    "right": "10",
+    "wrong": "13",
+    "order": 0
+  },
+  {
+    "question": "1 + 4 bằng mấy?",
+    "right": "5",
+    "wrong": "8",
+    "order": 1
+  },
+  {
+    "question": "30 - 20 bằng mấy?",
+    "right": "10",
+    "wrong": "7",
+    "order": 0
+  },
+  {
+    "question": "2 - 1 bằng mấy?",
+    "right": "1",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "30 - 3 bằng mấy?",
+    "right": "27",
+    "wrong": "32",
+    "order": 0
+  },
+  {
+    "question": "26 - 17 bằng mấy?",
+    "right": "9",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "5 x 4 bằng mấy?",
+    "right": "20",
+    "wrong": "24",
+    "order": 0
+  },
+  {
+    "question": "23 - 20 bằng mấy?",
+    "right": "3",
+    "wrong": "7",
+    "order": 1
+  },
+  {
+    "question": "1 x 4 bằng mấy?",
+    "right": "4",
+    "wrong": "2",
+    "order": 1
+  },
+  {
+    "question": "28 + 25 bằng mấy?",
+    "right": "53",
+    "wrong": "51",
+    "order": 0
+  },
+  {
+    "question": "Khuôn mặt người có mấy mắt?",
+    "right": "2",
+    "wrong": "1",
+    "order": 0
+  },
+  {
+    "question": "2 x 3 bằng mấy?",
+    "right": "6",
+    "wrong": "8",
+    "order": 0
+  },
+  {
+    "question": "6 - 2 bằng mấy?",
+    "right": "4",
+    "wrong": "6",
+    "order": 0
+  },
+  {
+    "question": "Quả dâu tây có màu gì?",
+    "right": "Đỏ",
+    "wrong": "Xanh lá cây",
+    "order": 0
+  },
+  {
+    "question": "27 - 16 bằng mấy?",
+    "right": "11",
+    "wrong": "9",
+    "order": 1
+  },
+  {
+    "question": "8 + 21 bằng mấy?",
+    "right": "29",
+    "wrong": "31",
+    "order": 1
+  },
+  {
+    "question": "6 x 2 bằng mấy?",
+    "right": "12",
+    "wrong": "9",
+    "order": 0
+  },
+  {
+    "question": "1 + 8 bằng mấy?",
+    "right": "9",
+    "wrong": "7",
+    "order": 0
+  },
+  {
+    "question": "4 - 3 bằng mấy?",
+    "right": "1",
+    "wrong": "2",
+    "order": 0
+  },
+  {
+    "question": "7 x 6 bằng mấy?",
+    "right": "42",
+    "wrong": "40",
+    "order": 0
+  },
+  {
+    "question": "28 - 24 bằng mấy?",
+    "right": "4",
+    "wrong": "5",
+    "order": 1
+  },
+  {
+    "question": "19 - 13 bằng mấy?",
+    "right": "6",
+    "wrong": "9",
+    "order": 1
+  },
+  {
+    "question": "8 - 6 bằng mấy?",
+    "right": "2",
+    "wrong": "7",
+    "order": 0
+  },
+  {
+    "question": "Bộ phận nào dùng để nghe?",
+    "right": "Tai",
+    "wrong": "Mắt",
+    "order": 1
+  },
+  {
+    "question": "29 + 27 bằng mấy?",
+    "right": "56",
+    "wrong": "60",
+    "order": 0
+  },
+  {
+    "question": "18 - 4 bằng mấy?",
+    "right": "14",
+    "wrong": "15",
+    "order": 1
+  },
+  {
+    "question": "Số có một chữ số lớn nhất là số nào?",
+    "right": "9",
+    "wrong": "10",
+    "order": 0
+  },
+  {
+    "question": "24 - 9 bằng mấy?",
+    "right": "15",
+    "wrong": "10",
+    "order": 1
+  },
+  {
+    "question": "Con gà trống gáy vào buổi sáng thế nào?",
+    "right": "Ò ó o",
+    "wrong": "Meo meo",
+    "order": 1
+  },
+  {
+    "question": "2 x 7 bằng mấy?",
+    "right": "14",
+    "wrong": "15",
+    "order": 1
+  },
+  {
+    "question": "5 x 9 bằng mấy?",
+    "right": "45",
+    "wrong": "47",
+    "order": 1
+  },
+  {
+    "question": "8 - 2 bằng mấy?",
+    "right": "6",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "20 - 14 bằng mấy?",
+    "right": "6",
+    "wrong": "10",
+    "order": 0
+  },
+  {
+    "question": "24 - 4 bằng mấy?",
+    "right": "20",
+    "wrong": "23",
+    "order": 1
+  },
+  {
+    "question": "19 + 26 bằng mấy?",
+    "right": "45",
+    "wrong": "47",
+    "order": 0
+  },
+  {
+    "question": "7 x 8 bằng mấy?",
+    "right": "56",
+    "wrong": "61",
+    "order": 1
+  },
+  {
+    "question": "4 - 1 bằng mấy?",
+    "right": "3",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "Tuyết có màu gì?",
+    "right": "Trắng",
+    "wrong": "Đen",
+    "order": 0
+  },
+  {
+    "question": "Từ trái nghĩa với \"lên\" là gì?",
+    "right": "Xuống",
+    "wrong": "Ngang",
+    "order": 0
+  },
+  {
+    "question": "27 + 16 bằng mấy?",
+    "right": "43",
+    "wrong": "42",
+    "order": 0
+  },
+  {
+    "question": "5 + 25 bằng mấy?",
+    "right": "30",
+    "wrong": "28",
+    "order": 1
+  },
+  {
+    "question": "26 + 20 bằng mấy?",
+    "right": "46",
+    "wrong": "49",
+    "order": 1
+  },
+  {
+    "question": "15 + 8 bằng mấy?",
+    "right": "23",
+    "wrong": "24",
+    "order": 1
+  },
+  {
+    "question": "18 - 17 bằng mấy?",
+    "right": "1",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "9 - 5 bằng mấy?",
+    "right": "4",
+    "wrong": "7",
+    "order": 1
+  },
+  {
+    "question": "6 x 3 bằng mấy?",
+    "right": "18",
+    "wrong": "14",
+    "order": 0
+  },
+  {
+    "question": "26 + 30 bằng mấy?",
+    "right": "56",
+    "wrong": "61",
+    "order": 0
+  },
+  {
+    "question": "4 x 6 bằng mấy?",
+    "right": "24",
+    "wrong": "20",
+    "order": 1
+  },
+  {
+    "question": "28 - 18 bằng mấy?",
+    "right": "10",
+    "wrong": "6",
+    "order": 0
+  },
+  {
+    "question": "Bầu trời trong xanh ban ngày có màu gì?",
+    "right": "Xanh da trời",
+    "wrong": "Xanh lá cây",
+    "order": 1
+  },
+  {
+    "question": "1 x 8 bằng mấy?",
+    "right": "8",
+    "wrong": "10",
+    "order": 1
+  },
+  {
+    "question": "4 x 1 bằng mấy?",
+    "right": "4",
+    "wrong": "7",
+    "order": 1
+  },
+  {
+    "question": "26 + 22 bằng mấy?",
+    "right": "48",
+    "wrong": "52",
+    "order": 1
+  },
+  {
+    "question": "6 + 3 bằng mấy?",
+    "right": "9",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "27 + 22 bằng mấy?",
+    "right": "49",
+    "wrong": "44",
+    "order": 1
+  },
+  {
+    "question": "14 - 2 bằng mấy?",
+    "right": "12",
+    "wrong": "7",
+    "order": 0
+  },
+  {
+    "question": "26 - 6 bằng mấy?",
+    "right": "20",
+    "wrong": "19",
+    "order": 0
+  },
+  {
+    "question": "17 + 7 bằng mấy?",
+    "right": "24",
+    "wrong": "26",
+    "order": 1
+  },
+  {
+    "question": "Ngoài ánh sáng và đất, cây cần thêm gì nữa để lớn lên?",
+    "right": "Nước",
+    "wrong": "Muối",
+    "order": 1
+  },
+  {
+    "question": "16 - 8 bằng mấy?",
+    "right": "8",
+    "wrong": "10",
+    "order": 0
+  },
+  {
+    "question": "5 - 1 bằng mấy?",
+    "right": "4",
+    "wrong": "5",
+    "order": 1
+  },
+  {
+    "question": "25 - 6 bằng mấy?",
+    "right": "19",
+    "wrong": "18",
+    "order": 1
+  },
+  {
+    "question": "Một bàn tay có mấy ngón?",
+    "right": "5",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "16 - 12 bằng mấy?",
+    "right": "4",
+    "wrong": "9",
+    "order": 0
+  },
+  {
+    "question": "Thành phố nào đông dân nhất Việt Nam?",
+    "right": "Thành phố Hồ Chí Minh",
+    "wrong": "Hà Nội",
+    "order": 1
+  },
+  {
+    "question": "Số 7 là số chẵn hay lẻ?",
+    "right": "Lẻ",
+    "wrong": "Chẵn",
+    "order": 0
+  },
+  {
+    "question": "4 x 9 bằng mấy?",
+    "right": "36",
+    "wrong": "33",
+    "order": 0
+  },
+  {
+    "question": "9 x 2 bằng mấy?",
+    "right": "18",
+    "wrong": "16",
+    "order": 1
+  },
+  {
+    "question": "21 + 5 bằng mấy?",
+    "right": "26",
+    "wrong": "22",
+    "order": 1
+  },
+  {
+    "question": "1 x 9 bằng mấy?",
+    "right": "9",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "29 - 9 bằng mấy?",
+    "right": "20",
+    "wrong": "16",
+    "order": 0
+  },
+  {
+    "question": "7 + 29 bằng mấy?",
+    "right": "36",
+    "wrong": "39",
+    "order": 0
+  },
+  {
+    "question": "12 + 19 bằng mấy?",
+    "right": "31",
+    "wrong": "28",
+    "order": 0
+  },
+  {
+    "question": "30 + 6 bằng mấy?",
+    "right": "36",
+    "wrong": "38",
+    "order": 1
+  },
+  {
+    "question": "3 - 1 bằng mấy?",
+    "right": "2",
+    "wrong": "7",
+    "order": 0
+  },
+  {
+    "question": "Con vật nào có cái vòi dài trên mặt?",
+    "right": "Voi",
+    "wrong": "Hổ",
+    "order": 0
+  },
+  {
+    "question": "3 + 21 bằng mấy?",
+    "right": "24",
+    "wrong": "23",
+    "order": 0
+  },
+  {
+    "question": "30 - 13 bằng mấy?",
+    "right": "17",
+    "wrong": "20",
+    "order": 1
+  },
+  {
+    "question": "8 x 8 bằng mấy?",
+    "right": "64",
+    "wrong": "62",
+    "order": 1
+  },
+  {
+    "question": "3 + 13 bằng mấy?",
+    "right": "16",
+    "wrong": "14",
+    "order": 1
+  },
+  {
+    "question": "4 + 16 bằng mấy?",
+    "right": "20",
+    "wrong": "15",
+    "order": 1
+  },
+  {
+    "question": "8 + 2 bằng mấy?",
+    "right": "10",
+    "wrong": "15",
+    "order": 0
+  },
+  {
+    "question": "5 - 5 bằng mấy?",
+    "right": "0",
+    "wrong": "2",
+    "order": 0
+  },
+  {
+    "question": "18 + 25 bằng mấy?",
+    "right": "43",
+    "wrong": "48",
+    "order": 1
+  },
+  {
+    "question": "2 + 23 bằng mấy?",
+    "right": "25",
+    "wrong": "20",
+    "order": 0
+  },
+  {
+    "question": "3 x 9 bằng mấy?",
+    "right": "27",
+    "wrong": "25",
+    "order": 1
+  },
+  {
+    "question": "Côn trùng có mấy chân?",
+    "right": "6",
+    "wrong": "8",
+    "order": 0
+  },
+  {
+    "question": "8 x 2 bằng mấy?",
+    "right": "16",
+    "wrong": "21",
+    "order": 0
+  },
+  {
+    "question": "12 - 9 bằng mấy?",
+    "right": "3",
+    "wrong": "7",
+    "order": 0
+  },
+  {
+    "question": "8 - 3 bằng mấy?",
+    "right": "5",
+    "wrong": "9",
+    "order": 0
+  },
+  {
+    "question": "21 - 10 bằng mấy?",
+    "right": "11",
+    "wrong": "7",
+    "order": 1
+  },
+  {
+    "question": "19 - 4 bằng mấy?",
+    "right": "15",
+    "wrong": "14",
+    "order": 1
+  },
+  {
+    "question": "13 + 27 bằng mấy?",
+    "right": "40",
+    "wrong": "39",
+    "order": 0
+  },
+  {
+    "question": "30 + 5 bằng mấy?",
+    "right": "35",
+    "wrong": "30",
+    "order": 0
+  },
+  {
+    "question": "18 + 9 bằng mấy?",
+    "right": "27",
+    "wrong": "29",
+    "order": 1
+  },
+  {
+    "question": "14 - 8 bằng mấy?",
+    "right": "6",
+    "wrong": "9",
+    "order": 0
+  },
+  {
+    "question": "Ngôi sao trên cờ Việt Nam có màu gì?",
+    "right": "Vàng",
+    "wrong": "Trắng",
+    "order": 0
+  },
+  {
+    "question": "1 x 3 bằng mấy?",
+    "right": "3",
+    "wrong": "1",
+    "order": 0
+  },
+  {
+    "question": "14 + 20 bằng mấy?",
+    "right": "34",
+    "wrong": "31",
+    "order": 0
+  },
+  {
+    "question": "2 + 6 bằng mấy?",
+    "right": "8",
+    "wrong": "12",
+    "order": 1
+  },
+  {
+    "question": "20 - 3 bằng mấy?",
+    "right": "17",
+    "wrong": "22",
+    "order": 1
+  },
+  {
+    "question": "6 x 6 bằng mấy?",
+    "right": "36",
+    "wrong": "37",
+    "order": 0
+  },
+  {
+    "question": "10 + 12 bằng mấy?",
+    "right": "22",
+    "wrong": "19",
+    "order": 0
+  },
+  {
+    "question": "19 - 12 bằng mấy?",
+    "right": "7",
+    "wrong": "6",
+    "order": 0
+  },
+  {
+    "question": "26 + 19 bằng mấy?",
+    "right": "45",
+    "wrong": "47",
+    "order": 1
+  },
+  {
+    "question": "2 + 21 bằng mấy?",
+    "right": "23",
+    "wrong": "18",
+    "order": 0
+  },
+  {
+    "question": "Cỏ có màu gì?",
+    "right": "Xanh lá cây",
+    "wrong": "Đỏ",
+    "order": 0
+  },
+  {
+    "question": "29 - 17 bằng mấy?",
+    "right": "12",
+    "wrong": "17",
+    "order": 1
+  },
+  {
+    "question": "20 + 19 bằng mấy?",
+    "right": "39",
+    "wrong": "41",
+    "order": 1
+  },
+  {
+    "question": "3 x 5 bằng mấy?",
+    "right": "15",
+    "wrong": "16",
+    "order": 0
+  },
+  {
+    "question": "Mùa nào đến ngay sau mùa đông?",
+    "right": "Mùa xuân",
+    "wrong": "Mùa hè",
+    "order": 1
+  },
+  {
+    "question": "24 - 2 bằng mấy?",
+    "right": "22",
+    "wrong": "24",
+    "order": 0
+  },
+  {
+    "question": "24 - 16 bằng mấy?",
+    "right": "8",
+    "wrong": "3",
+    "order": 0
+  },
+  {
+    "question": "16 + 8 bằng mấy?",
+    "right": "24",
+    "wrong": "29",
+    "order": 0
+  },
+  {
+    "question": "14 + 18 bằng mấy?",
+    "right": "32",
+    "wrong": "35",
+    "order": 1
+  },
+  {
+    "question": "21 - 7 bằng mấy?",
+    "right": "14",
+    "wrong": "9",
+    "order": 0
+  },
+  {
+    "question": "16 - 4 bằng mấy?",
+    "right": "12",
+    "wrong": "13",
+    "order": 0
+  },
+  {
+    "question": "23 - 18 bằng mấy?",
+    "right": "5",
+    "wrong": "10",
+    "order": 0
+  },
+  {
+    "question": "3 x 8 bằng mấy?",
+    "right": "24",
+    "wrong": "23",
+    "order": 0
+  },
+  {
+    "question": "12 + 15 bằng mấy?",
+    "right": "27",
+    "wrong": "23",
+    "order": 0
+  },
+  {
+    "question": "29 - 22 bằng mấy?",
+    "right": "7",
+    "wrong": "8",
+    "order": 0
+  },
+  {
+    "question": "27 - 4 bằng mấy?",
+    "right": "23",
+    "wrong": "22",
+    "order": 0
+  },
+  {
+    "question": "26 - 15 bằng mấy?",
+    "right": "11",
+    "wrong": "15",
+    "order": 1
+  },
+  {
+    "question": "9 + 22 bằng mấy?",
+    "right": "31",
+    "wrong": "26",
+    "order": 1
+  },
+  {
+    "question": "2 + 20 bằng mấy?",
+    "right": "22",
+    "wrong": "24",
+    "order": 1
+  },
+  {
+    "question": "27 - 23 bằng mấy?",
+    "right": "4",
+    "wrong": "9",
+    "order": 1
+  },
+  {
+    "question": "Tháng cuối cùng trong năm là tháng nào?",
+    "right": "Tháng Mười Hai",
+    "wrong": "Tháng Một",
+    "order": 0
+  },
+  {
+    "question": "17 - 7 bằng mấy?",
+    "right": "10",
+    "wrong": "6",
+    "order": 0
+  },
+  {
+    "question": "Mùa nào thường lạnh nhất?",
+    "right": "Mùa đông",
+    "wrong": "Mùa hè",
+    "order": 0
+  },
+  {
+    "question": "20 - 17 bằng mấy?",
+    "right": "3",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "Loại quả nào ở Việt Nam gọi là \"thanh long\"?",
+    "right": "Thanh long",
+    "wrong": "Xoài",
+    "order": 1
+  },
+  {
+    "question": "16 - 3 bằng mấy?",
+    "right": "13",
+    "wrong": "11",
+    "order": 1
+  },
+  {
+    "question": "2 x 6 bằng mấy?",
+    "right": "12",
+    "wrong": "14",
+    "order": 0
+  },
+  {
+    "question": "6 + 18 bằng mấy?",
+    "right": "24",
+    "wrong": "26",
+    "order": 1
+  },
+  {
+    "question": "6 - 6 bằng mấy?",
+    "right": "0",
+    "wrong": "2",
+    "order": 1
+  },
+  {
+    "question": "12 + 26 bằng mấy?",
+    "right": "38",
+    "wrong": "40",
+    "order": 0
+  },
+  {
+    "question": "18 - 18 bằng mấy?",
+    "right": "0",
+    "wrong": "1",
+    "order": 1
+  },
+  {
+    "question": "30 - 11 bằng mấy?",
+    "right": "19",
+    "wrong": "16",
+    "order": 1
+  },
+  {
+    "question": "10 + 10 bằng mấy?",
+    "right": "20",
+    "wrong": "24",
+    "order": 1
+  },
+  {
+    "question": "Sô-cô-la có màu gì?",
+    "right": "Nâu",
+    "wrong": "Trắng",
+    "order": 1
+  },
+  {
+    "question": "Ngày nào đến ngay trước Chủ Nhật?",
+    "right": "Thứ Bảy",
+    "wrong": "Thứ Hai",
+    "order": 1
+  },
+  {
+    "question": "26 + 9 bằng mấy?",
+    "right": "35",
+    "wrong": "40",
+    "order": 0
+  },
+  {
+    "question": "6 + 24 bằng mấy?",
+    "right": "30",
+    "wrong": "28",
+    "order": 0
+  },
+  {
+    "question": "27 + 9 bằng mấy?",
+    "right": "36",
+    "wrong": "31",
+    "order": 1
+  },
+  {
+    "question": "Con nhện có mấy chân?",
+    "right": "8",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "27 + 25 bằng mấy?",
+    "right": "52",
+    "wrong": "51",
+    "order": 0
+  },
+  {
+    "question": "16 + 11 bằng mấy?",
+    "right": "27",
+    "wrong": "25",
+    "order": 1
+  },
+  {
+    "question": "12 + 4 bằng mấy?",
+    "right": "16",
+    "wrong": "15",
+    "order": 0
+  },
+  {
+    "question": "29 - 10 bằng mấy?",
+    "right": "19",
+    "wrong": "22",
+    "order": 0
+  },
+  {
+    "question": "21 + 10 bằng mấy?",
+    "right": "31",
+    "wrong": "28",
+    "order": 0
+  },
+  {
+    "question": "Một phút có bao nhiêu giây?",
+    "right": "60",
+    "wrong": "30",
+    "order": 1
+  },
+  {
+    "question": "17 - 12 bằng mấy?",
+    "right": "5",
+    "wrong": "7",
+    "order": 1
+  },
+  {
+    "question": "Máu có màu gì?",
+    "right": "Đỏ",
+    "wrong": "Vàng",
+    "order": 1
+  },
+  {
+    "question": "8 + 15 bằng mấy?",
+    "right": "23",
+    "wrong": "27",
+    "order": 1
+  },
+  {
+    "question": "29 + 9 bằng mấy?",
+    "right": "38",
+    "wrong": "43",
+    "order": 0
+  },
+  {
+    "question": "17 + 22 bằng mấy?",
+    "right": "39",
+    "wrong": "43",
+    "order": 0
+  },
+  {
+    "question": "Từ trái nghĩa với \"đầy\" là gì?",
+    "right": "Rỗng",
+    "wrong": "Nặng",
+    "order": 1
+  },
+  {
+    "question": "5 x 7 bằng mấy?",
+    "right": "35",
+    "wrong": "38",
+    "order": 1
+  },
+  {
+    "question": "1 x 1 bằng mấy?",
+    "right": "1",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "6 x 5 bằng mấy?",
+    "right": "30",
+    "wrong": "27",
+    "order": 1
+  },
+  {
+    "question": "14 - 13 bằng mấy?",
+    "right": "1",
+    "wrong": "2",
+    "order": 1
+  },
+  {
+    "question": "28 - 25 bằng mấy?",
+    "right": "3",
+    "wrong": "6",
+    "order": 0
+  },
+  {
+    "question": "8 x 6 bằng mấy?",
+    "right": "48",
+    "wrong": "43",
+    "order": 0
+  },
+  {
+    "question": "Con vật nào chạy nhanh nhất trên cạn?",
+    "right": "Báo săn",
+    "wrong": "Rùa",
+    "order": 1
+  },
+  {
+    "question": "26 + 6 bằng mấy?",
+    "right": "32",
+    "wrong": "37",
+    "order": 1
+  },
+  {
+    "question": "Mặt trời mọc ở hướng nào?",
+    "right": "Đông",
+    "wrong": "Tây",
+    "order": 0
+  },
+  {
+    "question": "26 - 18 bằng mấy?",
+    "right": "8",
+    "wrong": "12",
+    "order": 1
+  },
+  {
+    "question": "12 - 12 bằng mấy?",
+    "right": "0",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "Số 4 là số chẵn hay lẻ?",
+    "right": "Chẵn",
+    "wrong": "Lẻ",
+    "order": 0
+  },
+  {
+    "question": "Hình chữ nhật có mấy cạnh?",
+    "right": "4",
+    "wrong": "5",
+    "order": 1
+  },
+  {
+    "question": "1 + 30 bằng mấy?",
+    "right": "31",
+    "wrong": "27",
+    "order": 1
+  },
+  {
+    "question": "Con vật nào nổi tiếng vì di chuyển rất chậm?",
+    "right": "Rùa",
+    "wrong": "Ngựa",
+    "order": 1
+  },
+  {
+    "question": "7 x 3 bằng mấy?",
+    "right": "21",
+    "wrong": "22",
+    "order": 0
+  },
+  {
+    "question": "Nước đóng băng sẽ biến thành gì?",
+    "right": "Đá",
+    "wrong": "Hơi nước",
+    "order": 1
+  },
+  {
+    "question": "9 - 4 bằng mấy?",
+    "right": "5",
+    "wrong": "7",
+    "order": 1
+  },
+  {
+    "question": "23 + 28 bằng mấy?",
+    "right": "51",
+    "wrong": "56",
+    "order": 0
+  },
+  {
+    "question": "Món súp bún nổi tiếng của Việt Nam gọi là gì?",
+    "right": "Phở",
+    "wrong": "Sushi",
+    "order": 0
+  },
+  {
+    "question": "Tết Nguyên Đán của Việt Nam còn gọi là gì?",
+    "right": "Tết",
+    "wrong": "Giáng sinh",
+    "order": 1
+  },
+  {
+    "question": "29 + 20 bằng mấy?",
+    "right": "49",
+    "wrong": "44",
+    "order": 1
+  },
+  {
+    "question": "Cơ thể người có mấy chân?",
+    "right": "2",
+    "wrong": "4",
+    "order": 0
+  },
+  {
+    "question": "10 - 5 bằng mấy?",
+    "right": "5",
+    "wrong": "10",
+    "order": 1
+  },
+  {
+    "question": "8 - 4 bằng mấy?",
+    "right": "4",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "9 + 23 bằng mấy?",
+    "right": "32",
+    "wrong": "35",
+    "order": 0
+  },
+  {
+    "question": "5 x 6 bằng mấy?",
+    "right": "30",
+    "wrong": "33",
+    "order": 0
+  },
+  {
+    "question": "5 - 4 bằng mấy?",
+    "right": "1",
+    "wrong": "5",
+    "order": 0
+  },
+  {
+    "question": "22 - 8 bằng mấy?",
+    "right": "14",
+    "wrong": "13",
+    "order": 1
+  },
+  {
+    "question": "16 + 27 bằng mấy?",
+    "right": "43",
+    "wrong": "47",
+    "order": 1
+  },
+  {
+    "question": "16 - 7 bằng mấy?",
+    "right": "9",
+    "wrong": "10",
+    "order": 1
+  },
+  {
+    "question": "23 - 17 bằng mấy?",
+    "right": "6",
+    "wrong": "5",
+    "order": 1
+  },
+  {
+    "question": "22 - 9 bằng mấy?",
+    "right": "13",
+    "wrong": "14",
+    "order": 0
+  },
+  {
+    "question": "5 x 1 bằng mấy?",
+    "right": "5",
+    "wrong": "9",
+    "order": 0
+  },
+  {
+    "question": "28 + 5 bằng mấy?",
+    "right": "33",
+    "wrong": "31",
+    "order": 0
+  },
+  {
+    "question": "29 + 14 bằng mấy?",
+    "right": "43",
+    "wrong": "44",
+    "order": 0
+  },
+  {
+    "question": "4 x 4 bằng mấy?",
+    "right": "16",
+    "wrong": "15",
+    "order": 0
+  },
+  {
+    "question": "4 - 4 bằng mấy?",
+    "right": "0",
+    "wrong": "2",
+    "order": 1
+  },
+  {
+    "question": "2 x 8 bằng mấy?",
+    "right": "16",
+    "wrong": "12",
+    "order": 1
+  },
+  {
+    "question": "19 + 17 bằng mấy?",
+    "right": "36",
+    "wrong": "41",
+    "order": 0
+  },
+  {
+    "question": "20 + 17 bằng mấy?",
+    "right": "37",
+    "wrong": "42",
+    "order": 0
+  },
+  {
+    "question": "18 - 10 bằng mấy?",
+    "right": "8",
+    "wrong": "6",
+    "order": 0
+  },
+  {
+    "question": "16 + 1 bằng mấy?",
+    "right": "17",
+    "wrong": "12",
+    "order": 0
+  },
+  {
+    "question": "Một tuần có bao nhiêu ngày?",
+    "right": "7",
+    "wrong": "5",
+    "order": 0
+  },
+  {
+    "question": "2 + 4 bằng mấy?",
+    "right": "6",
+    "wrong": "10",
+    "order": 1
+  },
+  {
+    "question": "Gấp đôi của 6 là bao nhiêu?",
+    "right": "12",
+    "wrong": "10",
+    "order": 0
+  },
+  {
+    "question": "4 x 5 bằng mấy?",
+    "right": "20",
+    "wrong": "17",
+    "order": 1
+  },
+  {
+    "question": "4 x 3 bằng mấy?",
+    "right": "12",
+    "wrong": "14",
+    "order": 0
+  },
+  {
+    "question": "16 - 11 bằng mấy?",
+    "right": "5",
+    "wrong": "0",
+    "order": 0
+  },
+  {
+    "question": "Từ trái nghĩa với \"mở\" là gì?",
+    "right": "Đóng",
+    "wrong": "Mới",
+    "order": 0
+  },
+  {
+    "question": "Hình tròn có mấy góc?",
+    "right": "0",
+    "wrong": "1",
+    "order": 0
+  },
+  {
+    "question": "12 - 11 bằng mấy?",
+    "right": "1",
+    "wrong": "2",
+    "order": 1
+  },
+  {
+    "question": "23 - 22 bằng mấy?",
+    "right": "1",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "2 + 16 bằng mấy?",
+    "right": "18",
+    "wrong": "19",
+    "order": 0
+  },
+  {
+    "question": "30 - 29 bằng mấy?",
+    "right": "1",
+    "wrong": "5",
+    "order": 1
+  },
+  {
+    "question": "8 x 3 bằng mấy?",
+    "right": "24",
+    "wrong": "21",
+    "order": 1
+  },
+  {
+    "question": "30 + 24 bằng mấy?",
+    "right": "54",
+    "wrong": "56",
+    "order": 0
+  },
+  {
+    "question": "19 + 24 bằng mấy?",
+    "right": "43",
+    "wrong": "48",
+    "order": 1
+  },
+  {
+    "question": "17 + 21 bằng mấy?",
+    "right": "38",
+    "wrong": "35",
+    "order": 0
+  },
+  {
+    "question": "11 + 19 bằng mấy?",
+    "right": "30",
+    "wrong": "35",
+    "order": 1
+  },
+  {
+    "question": "29 - 28 bằng mấy?",
+    "right": "1",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "Một giờ có bao nhiêu phút?",
+    "right": "60",
+    "wrong": "100",
+    "order": 1
+  },
+  {
+    "question": "Từ trái nghĩa với \"nhanh\" là gì?",
+    "right": "Chậm",
+    "wrong": "Mau",
+    "order": 0
+  },
+  {
+    "question": "14 - 1 bằng mấy?",
+    "right": "13",
+    "wrong": "15",
+    "order": 1
+  },
+  {
+    "question": "25 + 9 bằng mấy?",
+    "right": "34",
+    "wrong": "29",
+    "order": 0
+  },
+  {
+    "question": "3 + 5 bằng mấy?",
+    "right": "8",
+    "wrong": "12",
+    "order": 0
+  },
+  {
+    "question": "Chó con còn được gọi là gì?",
+    "right": "Chó con",
+    "wrong": "Mèo con",
+    "order": 1
+  },
+  {
+    "question": "Con gà có mấy chân?",
+    "right": "2",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "12 + 12 bằng mấy?",
+    "right": "24",
+    "wrong": "25",
+    "order": 0
+  },
+  {
+    "question": "3 + 25 bằng mấy?",
+    "right": "28",
+    "wrong": "27",
+    "order": 0
+  },
+  {
+    "question": "Từ trái nghĩa với \"đúng\" là gì?",
+    "right": "Sai",
+    "wrong": "Có thể",
+    "order": 1
+  },
+  {
+    "question": "4 + 20 bằng mấy?",
+    "right": "24",
+    "wrong": "26",
+    "order": 1
+  },
+  {
+    "question": "30 + 28 bằng mấy?",
+    "right": "58",
+    "wrong": "57",
+    "order": 1
+  },
+  {
+    "question": "30 + 27 bằng mấy?",
+    "right": "57",
+    "wrong": "52",
+    "order": 1
+  },
+  {
+    "question": "14 + 7 bằng mấy?",
+    "right": "21",
+    "wrong": "16",
+    "order": 0
+  },
+  {
+    "question": "3 x 3 bằng mấy?",
+    "right": "9",
+    "wrong": "12",
+    "order": 0
+  },
+  {
+    "question": "7 x 2 bằng mấy?",
+    "right": "14",
+    "wrong": "11",
+    "order": 0
+  },
+  {
+    "question": "21 + 4 bằng mấy?",
+    "right": "25",
+    "wrong": "24",
+    "order": 0
+  },
+  {
+    "question": "24 - 22 bằng mấy?",
+    "right": "2",
+    "wrong": "0",
+    "order": 1
+  },
+  {
+    "question": "Tiền may mắn mừng tuổi ngày Tết gọi là gì?",
+    "right": "Lì xì",
+    "wrong": "Quà sinh nhật",
+    "order": 0
+  },
+  {
+    "question": "28 + 1 bằng mấy?",
+    "right": "29",
+    "wrong": "24",
+    "order": 0
+  },
+  {
+    "question": "16 + 16 bằng mấy?",
+    "right": "32",
+    "wrong": "37",
+    "order": 0
+  },
+  {
+    "question": "23 - 14 bằng mấy?",
+    "right": "9",
+    "wrong": "8",
+    "order": 0
+  },
+  {
+    "question": "16 - 13 bằng mấy?",
+    "right": "3",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "5 + 18 bằng mấy?",
+    "right": "23",
+    "wrong": "18",
+    "order": 0
+  },
+  {
+    "question": "9 x 9 bằng mấy?",
+    "right": "81",
+    "wrong": "79",
+    "order": 1
+  },
+  {
+    "question": "2 x 9 bằng mấy?",
+    "right": "18",
+    "wrong": "17",
+    "order": 1
+  },
+  {
+    "question": "Ngày nào đến ngay sau thứ Hai?",
+    "right": "Thứ Ba",
+    "wrong": "Thứ Sáu",
+    "order": 0
+  },
+  {
+    "question": "19 - 18 bằng mấy?",
+    "right": "1",
+    "wrong": "2",
+    "order": 0
+  },
+  {
+    "question": "13 + 26 bằng mấy?",
+    "right": "39",
+    "wrong": "37",
+    "order": 1
+  },
+  {
+    "question": "13 - 6 bằng mấy?",
+    "right": "7",
+    "wrong": "8",
+    "order": 1
+  },
+  {
+    "question": "Số nào đứng ngay sau số 9?",
+    "right": "10",
+    "wrong": "11",
+    "order": 1
+  },
+  {
+    "question": "30 - 2 bằng mấy?",
+    "right": "28",
+    "wrong": "31",
+    "order": 0
+  },
+  {
+    "question": "3 x 7 bằng mấy?",
+    "right": "21",
+    "wrong": "23",
+    "order": 1
+  },
+  {
+    "question": "29 + 17 bằng mấy?",
+    "right": "46",
+    "wrong": "41",
+    "order": 0
+  },
+  {
+    "question": "19 - 19 bằng mấy?",
+    "right": "0",
+    "wrong": "2",
+    "order": 0
+  },
+  {
+    "question": "16 - 14 bằng mấy?",
+    "right": "2",
+    "wrong": "5",
+    "order": 0
+  },
+  {
+    "question": "Một cuối tuần có bao nhiêu ngày?",
+    "right": "2",
+    "wrong": "3",
+    "order": 0
+  },
+  {
+    "question": "21 - 12 bằng mấy?",
+    "right": "9",
+    "wrong": "6",
+    "order": 0
+  },
+  {
+    "question": "17 + 27 bằng mấy?",
+    "right": "44",
+    "wrong": "49",
+    "order": 1
+  },
+  {
+    "question": "9 x 3 bằng mấy?",
+    "right": "27",
+    "wrong": "24",
+    "order": 1
+  },
+  {
+    "question": "8 - 7 bằng mấy?",
+    "right": "1",
+    "wrong": "6",
+    "order": 0
+  },
+  {
+    "question": "11 - 10 bằng mấy?",
+    "right": "1",
+    "wrong": "6",
+    "order": 0
+  },
+  {
+    "question": "18 - 2 bằng mấy?",
+    "right": "16",
+    "wrong": "14",
+    "order": 0
+  },
+  {
+    "question": "9 - 2 bằng mấy?",
+    "right": "7",
+    "wrong": "8",
+    "order": 1
+  },
+  {
+    "question": "16 + 28 bằng mấy?",
+    "right": "44",
+    "wrong": "46",
+    "order": 0
+  },
+  {
+    "question": "21 - 4 bằng mấy?",
+    "right": "17",
+    "wrong": "21",
+    "order": 1
+  },
+  {
+    "question": "4 x 2 bằng mấy?",
+    "right": "8",
+    "wrong": "10",
+    "order": 0
+  },
+  {
+    "question": "23 - 7 bằng mấy?",
+    "right": "16",
+    "wrong": "19",
+    "order": 1
+  },
+  {
+    "question": "3 x 1 bằng mấy?",
+    "right": "3",
+    "wrong": "2",
+    "order": 0
+  },
+  {
+    "question": "Con vật nào được gọi là \"chúa tể rừng xanh\"?",
+    "right": "Sư tử",
+    "wrong": "Thỏ",
+    "order": 1
+  },
+  {
+    "question": "6 x 4 bằng mấy?",
+    "right": "24",
+    "wrong": "27",
+    "order": 1
+  },
+  {
+    "question": "7 + 25 bằng mấy?",
+    "right": "32",
+    "wrong": "31",
+    "order": 1
+  },
+  {
+    "question": "9 x 7 bằng mấy?",
+    "right": "63",
+    "wrong": "60",
+    "order": 0
+  },
+  {
+    "question": "Số nào đứng ngay trước số 5?",
+    "right": "4",
+    "wrong": "6",
+    "order": 0
+  },
+  {
+    "question": "13 + 17 bằng mấy?",
+    "right": "30",
+    "wrong": "33",
+    "order": 0
+  },
+  {
+    "question": "18 - 9 bằng mấy?",
+    "right": "9",
+    "wrong": "5",
+    "order": 0
+  },
+  {
+    "question": "18 - 13 bằng mấy?",
+    "right": "5",
+    "wrong": "7",
+    "order": 0
+  },
+  {
+    "question": "12 - 3 bằng mấy?",
+    "right": "9",
+    "wrong": "13",
+    "order": 0
+  },
+  {
+    "question": "21 + 24 bằng mấy?",
+    "right": "45",
+    "wrong": "47",
+    "order": 0
+  },
+  {
+    "question": "10 - 4 bằng mấy?",
+    "right": "6",
+    "wrong": "8",
+    "order": 0
+  },
+  {
+    "question": "13 + 24 bằng mấy?",
+    "right": "37",
+    "wrong": "41",
+    "order": 0
+  },
+  {
+    "question": "Con vật nào là động vật trên cạn lớn nhất?",
+    "right": "Voi",
+    "wrong": "Chuột",
+    "order": 0
+  },
+  {
+    "question": "7 - 3 bằng mấy?",
+    "right": "4",
+    "wrong": "8",
+    "order": 0
+  },
+  {
+    "question": "Loài hoa nào thường được xem là biểu tượng của Việt Nam?",
+    "right": "Hoa sen",
+    "wrong": "Hoa hồng",
+    "order": 1
+  },
+  {
+    "question": "23 + 21 bằng mấy?",
+    "right": "44",
+    "wrong": "43",
+    "order": 0
+  },
+  {
+    "question": "Mặt trời thường được vẽ màu gì?",
+    "right": "Vàng",
+    "wrong": "Đen",
+    "order": 0
+  },
+  {
+    "question": "Trong năm nhuận, tháng Hai có bao nhiêu ngày?",
+    "right": "29",
+    "wrong": "28",
+    "order": 1
+  },
+  {
+    "question": "18 - 5 bằng mấy?",
+    "right": "13",
+    "wrong": "10",
+    "order": 0
+  },
+  {
+    "question": "19 - 14 bằng mấy?",
+    "right": "5",
+    "wrong": "10",
+    "order": 1
+  },
+  {
+    "question": "22 + 24 bằng mấy?",
+    "right": "46",
+    "wrong": "50",
+    "order": 0
+  },
+  {
+    "question": "3 + 20 bằng mấy?",
+    "right": "23",
+    "wrong": "26",
+    "order": 1
+  },
+  {
+    "question": "9 + 5 bằng mấy?",
+    "right": "14",
+    "wrong": "9",
+    "order": 0
+  },
+  {
+    "question": "10 + 8 bằng mấy?",
+    "right": "18",
+    "wrong": "19",
+    "order": 0
+  },
+  {
+    "question": "14 - 4 bằng mấy?",
+    "right": "10",
+    "wrong": "6",
+    "order": 1
+  },
+  {
+    "question": "12 + 6 bằng mấy?",
+    "right": "18",
+    "wrong": "14",
+    "order": 0
+  },
+  {
+    "question": "27 - 19 bằng mấy?",
+    "right": "8",
+    "wrong": "13",
+    "order": 0
+  },
+  {
+    "question": "29 + 6 bằng mấy?",
+    "right": "35",
+    "wrong": "40",
+    "order": 1
+  },
+  {
+    "question": "28 - 1 bằng mấy?",
+    "right": "27",
+    "wrong": "32",
+    "order": 1
+  },
+  {
+    "question": "14 + 21 bằng mấy?",
+    "right": "35",
+    "wrong": "39",
+    "order": 1
+  },
+  {
+    "question": "2 + 1 bằng mấy?",
+    "right": "3",
+    "wrong": "2",
+    "order": 0
+  },
+  {
+    "question": "1 x 2 bằng mấy?",
+    "right": "2",
+    "wrong": "0",
+    "order": 0
+  },
+  {
+    "question": "19 - 7 bằng mấy?",
+    "right": "12",
+    "wrong": "17",
+    "order": 1
+  },
+  {
+    "question": "21 + 6 bằng mấy?",
+    "right": "27",
+    "wrong": "30",
+    "order": 0
+  },
+  {
+    "question": "7 - 1 bằng mấy?",
+    "right": "6",
+    "wrong": "8",
+    "order": 0
+  },
+  {
+    "question": "15 - 2 bằng mấy?",
+    "right": "13",
+    "wrong": "10",
+    "order": 0
+  },
+  {
+    "question": "3 + 17 bằng mấy?",
+    "right": "20",
+    "wrong": "24",
+    "order": 0
+  },
+  {
+    "question": "Từ trái nghĩa với \"già\" là gì?",
+    "right": "Trẻ",
+    "wrong": "Mới",
+    "order": 1
+  },
+  {
+    "question": "9 - 7 bằng mấy?",
+    "right": "2",
+    "wrong": "5",
+    "order": 0
+  },
+  {
+    "question": "9 x 4 bằng mấy?",
+    "right": "36",
+    "wrong": "40",
+    "order": 0
+  },
+  {
+    "question": "13 + 15 bằng mấy?",
+    "right": "28",
+    "wrong": "30",
+    "order": 0
+  },
+  {
+    "question": "3 + 19 bằng mấy?",
+    "right": "22",
+    "wrong": "17",
+    "order": 1
+  },
+  {
+    "question": "3 x 2 bằng mấy?",
+    "right": "6",
+    "wrong": "9",
+    "order": 1
+  },
+  {
+    "question": "Mẹ của mẹ mình gọi là gì?",
+    "right": "Bà",
+    "wrong": "Ông",
+    "order": 1
+  },
+  {
+    "question": "Đầu người có mấy tai?",
+    "right": "2",
+    "wrong": "1",
+    "order": 1
+  },
+  {
+    "question": "6 x 1 bằng mấy?",
+    "right": "6",
+    "wrong": "9",
+    "order": 1
+  },
+  {
+    "question": "12 - 8 bằng mấy?",
+    "right": "4",
+    "wrong": "3",
+    "order": 1
+  },
+  {
+    "question": "21 - 11 bằng mấy?",
+    "right": "10",
+    "wrong": "9",
+    "order": 1
+  },
+  {
+    "question": "25 - 8 bằng mấy?",
+    "right": "17",
+    "wrong": "20",
+    "order": 0
+  },
+  {
+    "question": "21 + 22 bằng mấy?",
+    "right": "43",
+    "wrong": "39",
+    "order": 0
+  },
+  {
+    "question": "19 - 6 bằng mấy?",
+    "right": "13",
+    "wrong": "16",
+    "order": 1
+  },
+  {
+    "question": "23 + 25 bằng mấy?",
+    "right": "48",
+    "wrong": "52",
+    "order": 0
+  },
+  {
+    "question": "28 - 3 bằng mấy?",
+    "right": "25",
+    "wrong": "20",
+    "order": 0
+  },
+  {
+    "question": "27 - 5 bằng mấy?",
+    "right": "22",
+    "wrong": "19",
+    "order": 0
+  },
+  {
+    "question": "15 - 5 bằng mấy?",
+    "right": "10",
+    "wrong": "8",
+    "order": 1
+  },
+  {
+    "question": "Trộn màu xanh dương và vàng ra màu gì?",
+    "right": "Xanh lá cây",
+    "wrong": "Tím",
+    "order": 1
+  },
+  {
+    "question": "Loại bánh nào thường ăn vào dịp Tết Trung Thu?",
+    "right": "Bánh trung thu",
+    "wrong": "Bánh chưng",
+    "order": 0
+  },
+  {
+    "question": "6 - 5 bằng mấy?",
+    "right": "1",
+    "wrong": "2",
+    "order": 0
+  },
+  {
+    "question": "Hai bàn tay có tổng cộng mấy ngón?",
+    "right": "10",
+    "wrong": "8",
+    "order": 0
+  },
+  {
+    "question": "11 - 4 bằng mấy?",
+    "right": "7",
+    "wrong": "8",
+    "order": 0
+  },
+  {
+    "question": "24 + 10 bằng mấy?",
+    "right": "34",
+    "wrong": "36",
+    "order": 0
+  },
+  {
+    "question": "1 x 7 bằng mấy?",
+    "right": "7",
+    "wrong": "2",
+    "order": 0
+  },
+  {
+    "question": "Việt Nam nằm ở châu lục nào?",
+    "right": "Châu Á",
+    "wrong": "Châu Âu",
+    "order": 1
+  },
+  {
+    "question": "9 x 8 bằng mấy?",
+    "right": "72",
+    "wrong": "76",
+    "order": 1
+  },
+  {
+    "question": "12 - 6 bằng mấy?",
+    "right": "6",
+    "wrong": "11",
+    "order": 0
+  },
+  {
+    "question": "4 x 7 bằng mấy?",
+    "right": "28",
+    "wrong": "31",
+    "order": 1
+  },
+  {
+    "question": "4 x 8 bằng mấy?",
+    "right": "32",
+    "wrong": "29",
+    "order": 1
+  },
+  {
+    "question": "Con vật nào thở dưới nước bằng mang?",
+    "right": "Cá",
+    "wrong": "Chó",
+    "order": 1
+  },
+  {
+    "question": "17 - 4 bằng mấy?",
+    "right": "13",
+    "wrong": "18",
+    "order": 0
+  },
+  {
+    "question": "13 - 7 bằng mấy?",
+    "right": "6",
+    "wrong": "8",
+    "order": 1
+  },
+  {
+    "question": "Con vật nào nổi tiếng vì có cổ rất dài?",
+    "right": "Hươu cao cổ",
+    "wrong": "Lợn",
+    "order": 1
+  },
+  {
+    "question": "Chiếc nón hình chóp truyền thống của Việt Nam gọi là gì?",
+    "right": "Nón lá",
+    "wrong": "Mũ bảo hiểm",
+    "order": 0
+  },
+  {
+    "question": "12 - 5 bằng mấy?",
+    "right": "7",
+    "wrong": "5",
+    "order": 1
+  },
+  {
+    "question": "8 x 5 bằng mấy?",
+    "right": "40",
+    "wrong": "38",
+    "order": 1
+  },
+  {
+    "question": "10 - 8 bằng mấy?",
+    "right": "2",
+    "wrong": "1",
+    "order": 1
+  },
+  {
+    "question": "18 + 10 bằng mấy?",
+    "right": "28",
+    "wrong": "23",
+    "order": 0
+  },
+  {
+    "question": "8 + 1 bằng mấy?",
+    "right": "9",
+    "wrong": "14",
+    "order": 1
+  },
+  {
+    "question": "17 + 9 bằng mấy?",
+    "right": "26",
+    "wrong": "24",
+    "order": 1
+  },
+  {
+    "question": "Trang phục truyền thống của Việt Nam gọi là gì?",
+    "right": "Áo dài",
+    "wrong": "Kimono",
+    "order": 0
+  },
+  {
+    "question": "11 - 5 bằng mấy?",
+    "right": "6",
+    "wrong": "9",
+    "order": 0
+  },
+  {
+    "question": "3 + 7 bằng mấy?",
+    "right": "10",
+    "wrong": "5",
+    "order": 0
+  },
+  {
+    "question": "30 + 3 bằng mấy?",
+    "right": "33",
+    "wrong": "34",
+    "order": 0
+  },
+  {
+    "question": "20 + 8 bằng mấy?",
+    "right": "28",
+    "wrong": "27",
+    "order": 1
+  },
+  {
+    "question": "1 + 18 bằng mấy?",
+    "right": "19",
+    "wrong": "20",
+    "order": 0
+  },
+  {
+    "question": "Từ trái nghĩa với \"ngày\" là gì?",
+    "right": "Đêm",
+    "wrong": "Sáng",
+    "order": 1
+  },
+  {
+    "question": "22 - 20 bằng mấy?",
+    "right": "2",
+    "wrong": "3",
+    "order": 0
+  },
+  {
+    "question": "1 + 16 bằng mấy?",
+    "right": "17",
+    "wrong": "18",
+    "order": 1
+  },
+  {
+    "question": "Con cái khác của cha mẹ mình (ngoài mình ra) gọi là gì?",
+    "right": "Anh chị em",
+    "wrong": "Bạn bè",
+    "order": 1
+  },
+  {
+    "question": "Hình tam giác có mấy cạnh?",
+    "right": "3",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "Từ trái nghĩa với \"nóng\" là gì?",
+    "right": "Lạnh",
+    "wrong": "Ấm",
+    "order": 1
+  },
+  {
+    "question": "22 + 2 bằng mấy?",
+    "right": "24",
+    "wrong": "20",
+    "order": 1
+  },
+  {
+    "question": "27 + 1 bằng mấy?",
+    "right": "28",
+    "wrong": "27",
+    "order": 1
+  },
+  {
+    "question": "7 x 1 bằng mấy?",
+    "right": "7",
+    "wrong": "9",
+    "order": 0
+  },
+  {
+    "question": "4 + 8 bằng mấy?",
+    "right": "12",
+    "wrong": "16",
+    "order": 0
+  },
+  {
+    "question": "24 + 9 bằng mấy?",
+    "right": "33",
+    "wrong": "30",
+    "order": 1
+  },
+  {
+    "question": "13 - 1 bằng mấy?",
+    "right": "12",
+    "wrong": "13",
+    "order": 0
+  },
+  {
+    "question": "10 + 20 bằng mấy?",
+    "right": "30",
+    "wrong": "35",
+    "order": 1
+  },
+  {
+    "question": "Môn thể thao nào phổ biến nhất ở Việt Nam?",
+    "right": "Bóng đá",
+    "wrong": "Bóng chày",
+    "order": 0
+  },
+  {
+    "question": "Bộ phận nào dùng để nhìn?",
+    "right": "Mắt",
+    "wrong": "Tai",
+    "order": 1
+  },
+  {
+    "question": "11 + 9 bằng mấy?",
+    "right": "20",
+    "wrong": "15",
+    "order": 0
+  },
+  {
+    "question": "9 x 1 bằng mấy?",
+    "right": "9",
+    "wrong": "14",
+    "order": 1
+  },
+  {
+    "question": "30 + 11 bằng mấy?",
+    "right": "41",
+    "wrong": "43",
+    "order": 1
+  },
+  {
+    "question": "19 - 10 bằng mấy?",
+    "right": "9",
+    "wrong": "8",
+    "order": 0
+  },
+  {
+    "question": "27 + 4 bằng mấy?",
+    "right": "31",
+    "wrong": "29",
+    "order": 0
+  },
+  {
+    "question": "7 + 26 bằng mấy?",
+    "right": "33",
+    "wrong": "30",
+    "order": 0
+  },
+  {
+    "question": "21 + 27 bằng mấy?",
+    "right": "48",
+    "wrong": "46",
+    "order": 0
+  },
+  {
+    "question": "13 + 19 bằng mấy?",
+    "right": "32",
+    "wrong": "31",
+    "order": 0
+  },
+  {
+    "question": "14 - 14 bằng mấy?",
+    "right": "0",
+    "wrong": "4",
+    "order": 1
+  },
+  {
+    "question": "9 - 9 bằng mấy?",
+    "right": "0",
+    "wrong": "4",
+    "order": 0
+  },
+  {
+    "question": "1kg lông vũ và 1kg sắt, cái nào nặng hơn?",
+    "right": "Bằng nhau",
+    "wrong": "Sắt nặng hơn",
+    "order": 1
+  },
+  {
+    "question": "26 - 19 bằng mấy?",
+    "right": "7",
+    "wrong": "9",
+    "order": 0
+  }
+]
