@@ -58,8 +58,21 @@
 
     .crew-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 10px; }
     @media (min-width: 760px) { .crew-grid { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1100px) { .crew-grid { grid-template-columns: 1fr 1fr 1fr; } }
+    .boat-name-input {
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 15px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 8px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #1a1d24;
+      color: var(--text);
+    }
     .crew-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
-    .crew-card h3 { margin: 0 0 8px; text-align: center; font-size: 15px; }
     .seat-list { list-style: none; margin: 0; padding: 0; }
     .seat-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--border); font-size: 13px; }
     .seat-row:last-child { border-bottom: none; }
@@ -68,12 +81,64 @@
     .seat-row .seat-name.empty { color: var(--muted); font-weight: 400; font-style: italic; }
     .seat-row button { padding: 4px 10px; font-size: 12px; }
 
-    .race-track-wrap { margin: 8px 0 14px; }
-    .race-track { position: relative; height: 30px; background: #1a1d24; border: 1px solid var(--border); border-radius: 8px; margin-top: 4px; overflow: hidden; }
-    .race-track-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--accent), var(--gold)); transition: width 0.1s linear; }
-    .race-track-boat { position: absolute; top: 50%; transform: translate(-50%, -50%); font-size: 18px; transition: left 0.1s linear; }
-    .race-track-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
-    .race-track-label .mine { color: var(--gold); font-weight: 700; }
+    /* Horizontal race scene -- a themed river backdrop (same map art as
+       Battleship) with both boats racing left-to-right across it, instead
+       of two plain gradient-fill progress bars. */
+    .race-scene {
+      position: relative;
+      width: 100%;
+      min-height: 160px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      margin: 8px 0 14px;
+      background-color: #10222b;
+      background-size: cover;
+      background-position: center;
+      box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
+    }
+    .race-scene::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.15) 40%, rgba(0, 0, 0, 0.35));
+      pointer-events: none;
+    }
+    .race-scene-finish {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      right: 4%;
+      width: 6px;
+      background: repeating-linear-gradient(45deg, #fff 0 6px, #111 6px 12px);
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+    }
+    /* Lane top/height are set inline via JS (100% / boat count), so any
+       number of boats up to MAX_BOATS get an evenly-spaced lane. */
+    .race-scene-lane { position: absolute; left: 0; right: 0; }
+    .race-scene-boat {
+      position: absolute;
+      top: 50%;
+      left: 2%;
+      transform: translate(-10%, -50%);
+      font-size: 26px;
+      transition: left 0.1s linear;
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .race-scene-tag {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text);
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 6px;
+      padding: 1px 6px;
+      margin-top: 2px;
+      white-space: nowrap;
+    }
+    .race-scene-tag.mine { color: var(--gold); }
 
     .role-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-top: 12px; }
     .role-panel h3 { margin: 0 0 10px; text-align: center; }
@@ -153,6 +218,27 @@
         <label><input type="radio" name="team-size" value="6" checked /><span>6<br /><small style="font-weight:400; color:var(--muted);">1 Leader · 1 Drummer · 4 Rowers</small></span></label>
         <label><input type="radio" name="team-size" value="8" /><span>8<br /><small style="font-weight:400; color:var(--muted);">1 Leader · 1 Drummer · 6 Rowers</small></span></label>
       </div>
+      <p style="font-size:13px; color:var(--muted); margin-top:10px;">River theme (same maps as Battleship)</p>
+      <select id="map-theme-select">
+        <option value="bachdang">Sông Bạch Đằng</option>
+        <option value="benhai">Sông Bến Hải</option>
+        <option value="songgianh">Sông Gianh</option>
+        <option value="songhan">Sông Hàn</option>
+        <option value="songhuong">Sông Hương</option>
+        <option value="songhong">Sông Hồng</option>
+        <option value="songlam">Sông Lam</option>
+        <option value="songlo">Sông Lô</option>
+        <option value="thubon">Sông Thu Bồn</option>
+        <option value="songda">Sông Đà</option>
+        <option value="songday">Sông Đáy</option>
+        <option value="cuulong">Sông Cửu Long</option>
+        <option value="saigon">Sông Sài Gòn</option>
+        <option value="serepok">Sông Sêrêpôk</option>
+        <option value="vamco">Sông Vàm Cỏ</option>
+        <option value="dongnai">Sông Đồng Nai</option>
+        <option value="hoangsa">Hoàng Sa</option>
+        <option value="truongsa">Trường Sa</option>
+      </select>
       <p id="create-room-error" style="color:var(--bad); font-size:13px; display:none;"></p>
       <div class="boat-actions">
         <button id="create-room-btn">Create &amp; Join</button>
@@ -162,8 +248,11 @@
 
     <div id="waiting-screen" class="card hidden">
       <h2 style="margin-top:0; text-align:center;" id="waiting-room-title">Waiting Room</h2>
-      <p style="color:var(--muted); font-size:12px; text-align:center;">Claim a seat on either boat. No one else around? Add bots to fill every empty seat and test any role solo.</p>
+      <p style="color:var(--muted); font-size:12px; text-align:center;">Claim a seat on any boat — click a boat's name to rename it. No one else around? Add bots to fill every empty seat and test any role solo.</p>
       <div class="crew-grid" id="crew-grid"></div>
+      <div class="boat-actions">
+        <button class="secondary" id="add-boat-btn">+ Add Boat</button>
+      </div>
       <div class="boat-actions">
         <button class="secondary" id="add-bots-btn">🤖 Fill Empty Seats with Bots</button>
         <button id="start-btn" disabled>▶ Start Race</button>
@@ -175,10 +264,8 @@
     </div>
 
     <div id="race-screen" class="hidden">
-      <div class="race-track-wrap">
-        <div class="race-track-label"><span id="label-a">Boat A</span><span id="label-b">Boat B</span></div>
-        <div class="race-track" id="track-a"><div class="race-track-fill" id="fill-a"></div><div class="race-track-boat" id="marker-a">🚣</div></div>
-        <div class="race-track" id="track-b" style="margin-top:6px;"><div class="race-track-fill" id="fill-b"></div><div class="race-track-boat" id="marker-b">🚣</div></div>
+      <div class="race-scene" id="race-scene">
+        <div class="race-scene-finish"></div>
       </div>
       <div class="turn-result-strip" id="turn-results"></div>
 
@@ -227,9 +314,9 @@
 
     <div id="finished-screen" class="card result-card hidden">
       <div class="nien-winner" id="finish-title" style="text-align:center; font-size:20px; font-weight:800; margin:10px 0;"></div>
-      <p id="finish-detail" style="text-align:center; color:var(--muted);"></p>
+      <ol id="finish-results-list" class="leaderboard-list" style="max-width:360px; margin:0 auto;"></ol>
       <div class="actions">
-        <button id="new-race-btn">Back to Room</button>
+        <button class="danger" id="new-race-btn">Leave Room</button>
         <button class="secondary" onclick="window.location.href='../index.html'">Back to Hub</button>
       </div>
     </div>
@@ -256,7 +343,7 @@
       <div class="lang-en">
         <h2>How to Play Chèo Thuyền</h2>
         <ul>
-          <li>Each boat needs a full crew of 6 or 8: 1 <b>Leader</b>, 1 <b>Drummer</b>, and 4 or 6 <b>Rowers</b> — claim a seat on Boat A or Boat B in the waiting room, or add bots to fill whatever's left.</li>
+          <li>Each boat needs a full crew of 6 or 8: 1 <b>Leader</b>, 1 <b>Drummer</b>, and 4 or 6 <b>Rowers</b> — claim a seat on any boat in the waiting room (there are 2 by default; anyone can add more, up to 15, and rename any boat), or add bots to fill whatever's left.</li>
           <li><b>Leader:</b> you can see the boat's next couple of turns ahead of everyone else. You can call one flag (Trái/Phải/Thẳng) every 0.5s — call the correct one 5 times in a row to confirm it into the crew's queue (max 3 stacked up); a wrong call doesn't reset your streak to zero, just knocks it down by 1. Watch the "Streak x/5" label to track your progress.</li>
           <li><b>Drummer:</b> your screen shows the SAME rowing-cycle countdown as the Rowers. Tap (or press Space) during <b>Giơ mái chèo</b> for a big energy boost to the whole crew, during <b>Đập/Chèo nước</b> for a normal boost — but tapping during <b>Rút mái chèo</b> costs the crew a little energy instead, so hold off then.</li>
           <li><b>Rowers:</b> the crew rows together in a synchronized 5-second cycle — 1s to raise the paddle, 2s to hold the correct direction (Trái = left only, Phải = right only, Thẳng = both), 2s to recover. A live millisecond countdown tells you exactly when to hold and release. Hold the matching button(s) (or Space for Trái) during the 2s window, following whatever's at the front of the Leader's confirmed queue.</li>
@@ -268,7 +355,7 @@
       <div class="lang-vi">
         <h2>Cách chơi Chèo Thuyền</h2>
         <ul>
-          <li>Mỗi thuyền cần đủ 6 hoặc 8 người: 1 <b>Người Điều Hướng</b>, 1 <b>Người Đánh Trống</b>, và 4 hoặc 6 <b>Người Chèo Thuyền</b> — chọn một ghế ở Thuyền A hoặc Thuyền B trong phòng chờ, hoặc thêm bot để lấp đầy chỗ trống.</li>
+          <li>Mỗi thuyền cần đủ 6 hoặc 8 người: 1 <b>Người Điều Hướng</b>, 1 <b>Người Đánh Trống</b>, và 4 hoặc 6 <b>Người Chèo Thuyền</b> — chọn một ghế ở bất kỳ thuyền nào trong phòng chờ (mặc định có 2 thuyền; ai cũng có thể thêm thuyền, tối đa 15, và đổi tên bất kỳ thuyền nào), hoặc thêm bot để lấp đầy chỗ trống.</li>
           <li><b>Người Điều Hướng:</b> bạn thấy được vài khúc cua tiếp theo trước mọi người. Bạn có thể chọn 1 hướng mỗi 0,5 giây — chọn đúng 5 lần liên tiếp để xác nhận vào hàng chờ của đội (tối đa xếp chồng 3 lệnh); chọn sai không đưa chuỗi về 0 mà chỉ giảm 1. Theo dõi nhãn "Streak x/5" để biết tiến độ.</li>
           <li><b>Người Đánh Trống:</b> màn hình của bạn hiển thị CÙNG một bộ đếm ngược chu kỳ chèo như Người Chèo Thuyền. Gõ (hoặc nhấn Space) trong lúc <b>Giơ mái chèo</b> để tăng mạnh năng lượng cho cả đội, trong lúc <b>Đập/Chèo nước</b> để tăng bình thường — nhưng gõ trong lúc <b>Rút mái chèo</b> sẽ làm cả đội mất một chút năng lượng, nên hãy dừng lại lúc đó.</li>
           <li><b>Người Chèo Thuyền:</b> cả đội chèo cùng nhau theo chu kỳ đồng bộ 5 giây — 1 giây giơ mái chèo, 2 giây giữ đúng hướng (Trái = chỉ giữ trái, Phải = chỉ giữ phải, Thẳng = giữ cả hai), 2 giây hồi sức. Bộ đếm ngược tính bằng mili-giây cho bạn biết chính xác lúc nào nên giữ và lúc nào nên thả. Giữ đúng nút (hoặc Space cho hướng Trái) trong 2 giây đó, theo hướng đang ở đầu hàng chờ đã được Người Điều Hướng xác nhận.</li>

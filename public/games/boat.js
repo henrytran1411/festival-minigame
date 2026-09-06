@@ -5,6 +5,32 @@ if (me) {
   const LAST_ROOM_KEY = 'boat_last_room_id';
   const DIR_ARROWS = { trai: '⬅️', phai: '➡️', thang: '⬆️' };
 
+  // Same 18 river/island maps as Battleship, reused here purely as a race
+  // backdrop -- paths are relative to this page (public/games/), and
+  // Battleship's page lives at the same folder depth, so these resolve to
+  // the identical files on disk (public/games/battleship/theme/*).
+  const THEME_IMAGES = {
+    bachdang: 'battleship/theme/S%C3%B4ng%20B%E1%BA%A1ch%20%C4%90%E1%BA%B1ng.png',
+    benhai: 'battleship/theme/S%C3%B4ng%20B%E1%BA%BFn%20H%E1%BA%A3i.png',
+    songgianh: 'battleship/theme/S%C3%B4ng%20Gianh.png',
+    songhan: 'battleship/theme/S%C3%B4ng%20H%C3%A0n.png',
+    songhuong: 'battleship/theme/S%C3%B4ng%20H%C6%B0%C6%A1ng.png',
+    songhong: 'battleship/theme/S%C3%B4ng%20H%E1%BB%93ng.png',
+    songlam: 'battleship/theme/S%C3%B4ng%20Lam.png',
+    songlo: 'battleship/theme/S%C3%B4ng%20L%C3%B4.png',
+    thubon: 'battleship/theme/S%C3%B4ng%20Thu%20B%E1%BB%93n.png',
+    songda: 'battleship/theme/S%C3%B4ng%20%C4%90%C3%A0.png',
+    songday: 'battleship/theme/S%C3%B4ng%20%C4%90%C3%A1y.png',
+    cuulong: 'battleship/theme/S%C3%B4ng%20C%E1%BB%ADu%20Long.png',
+    saigon: 'battleship/theme/S%C3%B4ng%20S%C3%A0i%20G%C3%B2n.jpg',
+    serepok: 'battleship/theme/S%C3%B4ng%20S%C3%AAr%C3%AAp%C3%B4k.png',
+    vamco: 'battleship/theme/S%C3%B4ng%20V%C3%A0m%20C%E1%BB%8F.png',
+    dongnai: 'battleship/theme/S%C3%B4ng%20%C4%90%E1%BB%93ng%20Nai.png',
+    hoangsa: 'battleship/theme/Ho%C3%A0ng%20Sa.png',
+    truongsa: 'battleship/theme/Tr%C6%B0%E1%BB%9Dng%20sa.png',
+  };
+  const DEFAULT_THEME = 'bachdang';
+
   const lobbyScreen = document.getElementById('lobby-screen');
   const createRoomScreen = document.getElementById('create-room-screen');
   const waitingScreen = document.getElementById('waiting-screen');
@@ -18,6 +44,7 @@ if (me) {
   const createRoomBtn = document.getElementById('create-room-btn');
   const roomNameInput = document.getElementById('room-name-input');
   const roomPasswordInput = document.getElementById('room-password-input');
+  const mapThemeSelect = document.getElementById('map-theme-select');
   const createRoomErrorEl = document.getElementById('create-room-error');
 
   const passwordModal = document.getElementById('password-modal');
@@ -29,18 +56,19 @@ if (me) {
 
   const waitingRoomTitleEl = document.getElementById('waiting-room-title');
   const crewGridEl = document.getElementById('crew-grid');
+  const addBoatBtn = document.getElementById('add-boat-btn');
   const addBotsBtn = document.getElementById('add-bots-btn');
   const startBtn = document.getElementById('start-btn');
   const waitingLogEl = document.getElementById('waiting-log');
   const leaveWaitingBtn = document.getElementById('leave-waiting-btn');
 
-  const fillAEl = document.getElementById('fill-a');
-  const fillBEl = document.getElementById('fill-b');
-  const markerAEl = document.getElementById('marker-a');
-  const markerBEl = document.getElementById('marker-b');
-  const labelAEl = document.getElementById('label-a');
-  const labelBEl = document.getElementById('label-b');
+  const raceSceneEl = document.getElementById('race-scene');
   const turnResultsEl = document.getElementById('turn-results');
+  // boatKey -> { laneEl, markerEl, tagEl }, rebuilt only when the set of
+  // boats actually changes (see ensureRaceLanes) -- everything else just
+  // updates marker `left`/tag text on the existing elements each tick.
+  let raceLanes = {};
+  let raceLanesSignature = null;
 
   const leaderPanelEl = document.getElementById('leader-panel');
   const upcomingDirEl = document.getElementById('upcoming-dir');
@@ -69,7 +97,7 @@ if (me) {
 
   const raceLogEl = document.getElementById('race-log');
   const finishTitleEl = document.getElementById('finish-title');
-  const finishDetailEl = document.getElementById('finish-detail');
+  const finishResultsListEl = document.getElementById('finish-results-list');
   const newRaceBtn = document.getElementById('new-race-btn');
   const leaveRaceBtn = document.getElementById('leave-race-btn');
 
@@ -122,7 +150,7 @@ if (me) {
       name.textContent = room.name;
       const meta = document.createElement('div');
       meta.className = 'room-meta' + (room.status === 'racing' ? ' racing' : '');
-      meta.textContent = `${statusLabel(room.status)} · ${room.playerCount} joined · ${room.slotsFilled}/${room.slotsTotal} seats filled`;
+      meta.textContent = `${statusLabel(room.status)} · ${room.boatCount} boat${room.boatCount === 1 ? '' : 's'} · ${room.playerCount} joined · ${room.slotsFilled}/${room.slotsTotal} seats filled · 🗺 ${room.mapThemeLabel}`;
       info.append(name, meta);
       const joinBtn = document.createElement('button');
       joinBtn.className = 'secondary';
@@ -162,13 +190,26 @@ if (me) {
   function renderWaiting(state) {
     waitingRoomTitleEl.textContent = state.roomName || 'Waiting Room';
     crewGridEl.innerHTML = '';
-    ['A', 'B'].forEach((key) => {
+    state.boatOrder.forEach((key) => {
       const boat = state.boats[key];
       const card = document.createElement('div');
       card.className = 'crew-card';
-      const h3 = document.createElement('h3');
-      h3.textContent = `🚣 Boat ${key}`;
-      card.appendChild(h3);
+
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'boat-name-input';
+      nameInput.maxLength = 24;
+      nameInput.value = boat.name;
+      nameInput.title = 'Click to rename this boat';
+      nameInput.addEventListener('change', () => {
+        const value = nameInput.value.trim();
+        if (!value || value === boat.name) { nameInput.value = boat.name; return; }
+        socket.emit('boat:renameBoat', { boatKey: key, name: value }, (res) => {
+          if (!res || !res.ok) nameInput.value = boat.name;
+        });
+      });
+      card.appendChild(nameInput);
+
       const ul = document.createElement('ul');
       ul.className = 'seat-list';
       ul.appendChild(seatRow('🚩 Leader', nameFor(state, boat.leaderId), true, () => {
@@ -185,9 +226,14 @@ if (me) {
       card.appendChild(ul);
       crewGridEl.appendChild(card);
     });
-    // Every seat on both boats must be claimed (by a real player or a bot)
+
+    const atMax = state.boatOrder.length >= state.maxBoats;
+    addBoatBtn.disabled = atMax;
+    addBoatBtn.textContent = atMax ? `Max ${state.maxBoats} boats reached` : `+ Add Boat (${state.boatOrder.length}/${state.maxBoats})`;
+
+    // Every seat on every boat must be claimed (by a real player or a bot)
     // before a race can start.
-    const allFilled = ['A', 'B'].every((k) => {
+    const allFilled = state.boatOrder.length > 0 && state.boatOrder.every((k) => {
       const b = state.boats[k];
       return b.leaderId && b.drummerId && b.rowerIds.every(Boolean);
     });
@@ -201,10 +247,54 @@ if (me) {
     // enough feedback for "someone beat you to that seat".
   }
 
-  function renderTrack(elFill, elMarker, boat) {
-    const pct = Math.min(100, (boat.progress / boat.length) * 100);
-    elFill.style.width = pct + '%';
-    elMarker.style.left = pct + '%';
+  let lastRaceSceneTheme = null;
+  function applyRaceSceneTheme(themeKey) {
+    if (themeKey === lastRaceSceneTheme) return;
+    lastRaceSceneTheme = themeKey;
+    const imageUrl = THEME_IMAGES[themeKey] || THEME_IMAGES[DEFAULT_THEME];
+    raceSceneEl.style.backgroundImage = `url("${imageUrl}")`;
+  }
+
+  // Builds one lane + marker per boat (only when the actual set of boats
+  // changes, e.g. entering a fresh race) -- an evenly-sized horizontal
+  // strip per boat, however many there are (up to MAX_BOATS).
+  function ensureRaceLanes(state) {
+    const signature = state.boatOrder.join(',');
+    if (signature === raceLanesSignature) return;
+    raceLanesSignature = signature;
+    raceLanes = {};
+    raceSceneEl.querySelectorAll('.race-scene-lane').forEach((el) => el.remove());
+    const laneHeightPct = 100 / state.boatOrder.length;
+    state.boatOrder.forEach((key, i) => {
+      const laneEl = document.createElement('div');
+      laneEl.className = 'race-scene-lane';
+      laneEl.style.top = (i * laneHeightPct) + '%';
+      laneEl.style.height = laneHeightPct + '%';
+      const markerEl = document.createElement('div');
+      markerEl.className = 'race-scene-boat';
+      markerEl.textContent = '🚣';
+      const tagEl = document.createElement('span');
+      tagEl.className = 'race-scene-tag';
+      markerEl.appendChild(tagEl);
+      laneEl.appendChild(markerEl);
+      raceSceneEl.appendChild(laneEl);
+      raceLanes[key] = { laneEl, markerEl, tagEl };
+    });
+    // Taller scenes as more boats join -- each lane keeps a sane minimum
+    // height instead of squeezing to near-nothing at 15 boats.
+    raceSceneEl.style.height = Math.max(160, state.boatOrder.length * 40) + 'px';
+  }
+
+  // Boats travel left-to-right across their lane -- 2% keeps the marker
+  // fully inside the frame at the start, 90% stops it just short of the
+  // finish-line stripe (which sits at right:4%, i.e. ~96% from the left).
+  function renderTrack(key, boat, isMine) {
+    const lane = raceLanes[key];
+    if (!lane) return;
+    const pct = Math.min(1, boat.progress / boat.length);
+    lane.markerEl.style.left = (2 + pct * 88) + '%';
+    lane.tagEl.textContent = boat.name + (isMine ? ' (you)' : '');
+    lane.tagEl.className = 'race-scene-tag' + (isMine ? ' mine' : '');
   }
 
   function myRole(state) {
@@ -215,12 +305,10 @@ if (me) {
   }
 
   function renderRace(state) {
-    labelAEl.textContent = 'Boat A' + (myBoatKey(state) === 'A' ? ' (you)' : '');
-    labelBEl.textContent = 'Boat B' + (myBoatKey(state) === 'B' ? ' (you)' : '');
-    labelAEl.className = myBoatKey(state) === 'A' ? 'mine' : '';
-    labelBEl.className = myBoatKey(state) === 'B' ? 'mine' : '';
-    renderTrack(fillAEl, markerAEl, state.boats.A);
-    renderTrack(fillBEl, markerBEl, state.boats.B);
+    applyRaceSceneTheme(state.mapTheme);
+    ensureRaceLanes(state);
+    const mine = myBoatKey(state);
+    state.boatOrder.forEach((key) => renderTrack(key, state.boats[key], key === mine));
 
     const role = myRole(state);
     const boatKey = myBoatKey(state);
@@ -329,10 +417,27 @@ if (me) {
     const boatKey = myBoatKey(state);
     const boat = boatKey ? state.boats[boatKey] : null;
     const wonMine = boat && boat.finishRank === 1;
-    finishTitleEl.textContent = boatKey ? (wonMine ? `🏆 Boat ${boatKey} wins!` : `Boat ${boatKey} finished #${boat.finishRank}`) : '🏁 Race finished!';
-    const aRank = state.boats.A.finishRank;
-    const bRank = state.boats.B.finishRank;
-    finishDetailEl.textContent = `Boat A: rank #${aRank || '?'} · Boat B: rank #${bRank || '?'}`;
+    finishTitleEl.textContent = boat
+      ? (wonMine ? `🏆 ${boat.name} wins!` : `${boat.name} finished #${boat.finishRank || '?'}`)
+      : '🏁 Race finished!';
+
+    const ranked = [...state.boatOrder]
+      .map((key) => ({ key, boat: state.boats[key] }))
+      .sort((a, b) => (a.boat.finishRank || 999) - (b.boat.finishRank || 999));
+
+    finishResultsListEl.innerHTML = '';
+    ranked.forEach(({ key, boat: b }) => {
+      const li = document.createElement('li');
+      if (key === boatKey) li.classList.add('me');
+      const rank = document.createElement('span');
+      rank.className = 'rank ' + (b.finishRank === 1 ? 'gold' : b.finishRank === 2 ? 'silver' : b.finishRank === 3 ? 'bronze' : '');
+      rank.textContent = b.finishRank ? String(b.finishRank) : '?';
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = b.name;
+      li.append(rank, name);
+      finishResultsListEl.appendChild(li);
+    });
   }
 
   function render() {
@@ -424,7 +529,8 @@ if (me) {
       return;
     }
     const teamSize = Number(document.querySelector('input[name="team-size"]:checked').value);
-    socket.emit('boat:createRoom', { roomName, password, playerId: me.id, name: me.name, teamSize }, (res) => {
+    const mapTheme = mapThemeSelect.value;
+    socket.emit('boat:createRoom', { roomName, password, playerId: me.id, name: me.name, teamSize, mapTheme }, (res) => {
       if (res && res.ok) {
         enterRoom(res.roomId);
       } else {
@@ -434,6 +540,9 @@ if (me) {
     });
   });
 
+  addBoatBtn.addEventListener('click', () => {
+    socket.emit('boat:addBoat', {}, () => {});
+  });
   addBotsBtn.addEventListener('click', () => {
     socket.emit('boat:addBots', {}, () => {});
   });
@@ -447,10 +556,10 @@ if (me) {
     socket.emit('boat:leave', {}, () => backToLobby());
   });
   newRaceBtn.addEventListener('click', () => {
-    // The room resets back to 'waiting' server-side isn't automatic here --
-    // simplest correct behavior is just returning to the hub-level lobby to
-    // start or join a fresh room.
-    backToLobby();
+    // The room doesn't reset back to 'waiting' server-side after a race --
+    // this just leaves it (freeing your seat) and returns to the room list,
+    // same as leaving from the waiting room or mid-race.
+    socket.emit('boat:leave', {}, () => backToLobby());
   });
 
   // -- Leader: flag buttons ------------------------------------------------

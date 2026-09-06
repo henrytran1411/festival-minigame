@@ -14,13 +14,25 @@
 //   - Rowers (4 or 6): row in a synchronized 5s cycle (1s raise / 2s active
 //     window / 2s cooldown), holding Left/Right/Both to match whatever
 //     direction is currently at the front of the Leader's confirmed queue.
-// Two boats (A and B) race the SAME randomly-generated turn sequence at
-// once — first to the finish line wins. `boat:addBots` fills any empty
-// role/slot so a solo player can try any one role immediately.
+// A room starts with 2 boats but the host (or anyone in the waiting room)
+// can add more, up to MAX_BOATS, and rename any of them -- every boat races
+// the SAME randomly-generated turn sequence at once, first to the finish
+// line wins. `boat:addBots` fills any empty role/slot so a solo player can
+// try any one role immediately.
+//
+// The host picks a river theme at room-creation time (purely cosmetic, a
+// background image behind the horizontal race scene) -- reuses the exact
+// same 18 map keys/labels Battleship already defines, so there's only one
+// list of Vietnamese river/island names to maintain.
+
+const { MAP_THEMES, DEFAULT_MAP_THEME } = require('./battleship-server.js');
 
 const TICK_MS = 100; // 10Hz — plenty smooth for 5s rowing cycles.
 const TEAM_SIZES = [6, 8];
 const DEFAULT_TEAM_SIZE = 6;
+const STARTING_BOAT_COUNT = 2;
+const MAX_BOATS = 15;
+const MAX_BOAT_NAME_LENGTH = 24;
 
 // Rowing cycle phases (spec: 5s total = 1s + 2s + 2s).
 const RAISE_MS = 1000;
@@ -83,8 +95,13 @@ function freshRowerState() {
   return { energy: ENERGY_MAX, stunnedUntil: 0, held: { left: false, right: false }, heldCorrectMs: 0, lastResult: null };
 }
 
-function freshBoatState(rowerSlots) {
+function sanitizeBoatName(name) {
+  return String(name || '').trim().slice(0, MAX_BOAT_NAME_LENGTH);
+}
+
+function freshBoatState(rowerSlots, name) {
   return {
+    name,
     leaderId: null,
     drummerId: null,
     rowerIds: new Array(rowerSlots).fill(null),
@@ -109,20 +126,24 @@ function freshBoatState(rowerSlots) {
 }
 
 class BoatRoom {
-  constructor(id, name, password, teamSize) {
+  constructor(id, name, password, teamSize, mapTheme) {
     this.id = id;
     this.name = name;
     this.password = password;
     this.teamSize = TEAM_SIZES.includes(Number(teamSize)) ? Number(teamSize) : DEFAULT_TEAM_SIZE;
     this.rowerSlots = rowerSlotsFor(this.teamSize);
+    this.mapTheme = MAP_THEMES[mapTheme] ? mapTheme : DEFAULT_MAP_THEME;
     this.status = 'waiting'; // 'waiting' | 'racing' | 'finished'
     this.players = []; // { id, name, connected, socketId, isBot }
     this.botCounter = 0;
     this.track = generateTrack();
-    this.boats = { A: freshBoatState(this.rowerSlots), B: freshBoatState(this.rowerSlots) };
+    this.boats = {};
+    this.boatOrder = []; // ordered boat keys -- rendering/ranking order
+    this.boatCounter = 0;
     this.raceStartedAt = null;
     this.log = [];
     this.tickTimer = null;
+    for (let i = 0; i < STARTING_BOAT_COUNT; i += 1) this.addBoat();
   }
 
   pushLog(message) {
@@ -130,16 +151,40 @@ class BoatRoom {
     if (this.log.length > 30) this.log.shift();
   }
 
+  addBoat(customName) {
+    if (this.boatOrder.length >= MAX_BOATS) return { ok: false, error: 'max-boats' };
+    this.boatCounter += 1;
+    const key = `boat_${this.boatCounter}`;
+    const name = sanitizeBoatName(customName) || `Boat ${this.boatOrder.length + 1}`;
+    this.boats[key] = freshBoatState(this.rowerSlots, name);
+    this.boatOrder.push(key);
+    this.pushLog(`🚣 ${name} added to the race.`);
+    return { ok: true, boatKey: key };
+  }
+
+  renameBoat(boatKey, newName) {
+    const boat = this.boats[boatKey];
+    if (!boat) return { ok: false, error: 'invalid-boat' };
+    const clean = sanitizeBoatName(newName);
+    if (!clean) return { ok: false, error: 'invalid-name' };
+    boat.name = clean;
+    return { ok: true };
+  }
+
   findPlayer(playerId) {
     return playerId ? this.players.find((p) => p.id === playerId) : undefined;
   }
 
+  // Bots never disconnect (they have no real socket) so they must be
+  // ignored here -- otherwise a room with any bot in it could never be
+  // cleaned up, even once every real human player has left for good.
   isEmpty() {
-    return this.players.length === 0 || this.players.every((p) => !p.connected);
+    const humans = this.players.filter((p) => !p.isBot);
+    return humans.length === 0 || humans.every((p) => !p.connected);
   }
 
   summary() {
-    const filled = ['A', 'B'].reduce((sum, k) => {
+    const filled = this.boatOrder.reduce((sum, k) => {
       const b = this.boats[k];
       return sum + (b.leaderId ? 1 : 0) + (b.drummerId ? 1 : 0) + b.rowerIds.filter(Boolean).length;
     }, 0);
@@ -148,15 +193,18 @@ class BoatRoom {
       name: this.name,
       status: this.status,
       teamSize: this.teamSize,
+      boatCount: this.boatOrder.length,
+      mapTheme: this.mapTheme,
+      mapThemeLabel: MAP_THEMES[this.mapTheme],
       playerCount: this.players.filter((p) => p.connected).length,
       slotsFilled: filled,
-      slotsTotal: this.teamSize * 2,
+      slotsTotal: this.teamSize * this.boatOrder.length,
     };
   }
 
   // Finds which boat (and role/slot) a player currently occupies, if any.
   locate(playerId) {
-    for (const key of ['A', 'B']) {
+    for (const key of this.boatOrder) {
       const boat = this.boats[key];
       if (boat.leaderId === playerId) return { boatKey: key, role: 'leader' };
       if (boat.drummerId === playerId) return { boatKey: key, role: 'drummer' };
@@ -198,7 +246,7 @@ class BoatRoom {
   }
 
   allSlotsFilled() {
-    return ['A', 'B'].every((k) => {
+    return this.boatOrder.length > 0 && this.boatOrder.every((k) => {
       const b = this.boats[k];
       return b.leaderId && b.drummerId && b.rowerIds.every(Boolean);
     });
@@ -206,7 +254,7 @@ class BoatRoom {
 
   addBots() {
     const fillIds = [];
-    ['A', 'B'].forEach((k) => {
+    this.boatOrder.forEach((k) => {
       const boat = this.boats[k];
       const claim = () => {
         this.botCounter += 1;
@@ -284,7 +332,7 @@ class BoatRoom {
 
   driveBots() {
     const now = Date.now();
-    ['A', 'B'].forEach((k) => {
+    this.boatOrder.forEach((k) => {
       const boat = this.boats[k];
       if (boat.finishedAt) return;
 
@@ -429,31 +477,30 @@ class BoatRoom {
 
   tick() {
     this.driveBots();
-    this.tickBoat('A');
-    this.tickBoat('B');
+    this.boatOrder.forEach((k) => this.tickBoat(k));
 
-    const aDone = Boolean(this.boats.A.finishedAt);
-    const bDone = Boolean(this.boats.B.finishedAt);
+    const allDone = this.boatOrder.every((k) => this.boats[k].finishedAt);
     const timedOut = Boolean(this.raceStartedAt) && Date.now() - this.raceStartedAt > MAX_RACE_MS;
 
     // Ranks are only ever assigned once, right when the race actually
-    // concludes (both boats finished, or the safety timeout hits) --
+    // concludes (every boat finished, or the safety timeout hits) --
     // assigning a rank early (the moment just one boat finishes) would
-    // block the other boat from ever getting ranked once IT finishes too.
-    if ((aDone && bDone) || timedOut) {
-      if (!this.boats.A.finishRank && !this.boats.B.finishRank) {
-        const order = ['A', 'B'].sort((x, y) => {
+    // block the others from ever getting ranked once THEY finish too.
+    if (allDone || timedOut) {
+      const alreadyRanked = this.boatOrder.some((k) => this.boats[k].finishRank);
+      if (!alreadyRanked) {
+        const order = [...this.boatOrder].sort((x, y) => {
           const bx = this.boats[x];
           const by = this.boats[y];
           // Finished boats rank ahead of unfinished ones (timeout case);
           // among finished boats, earlier finishedAt wins; among unfinished
-          // boats (both timed out without finishing), further progress wins.
+          // boats (all timed out without finishing), further progress wins.
           if (Boolean(bx.finishedAt) !== Boolean(by.finishedAt)) return bx.finishedAt ? -1 : 1;
           if (bx.finishedAt && by.finishedAt) return bx.finishedAt - by.finishedAt;
           return by.progress - bx.progress;
         });
         order.forEach((key, i) => { this.boats[key].finishRank = i + 1; });
-        this.pushLog(`🏁 Race finished! ${order[0] === 'A' ? 'Boat A' : 'Boat B'} wins!`);
+        this.pushLog(`🏁 Race finished! ${this.boats[order[0]].name} wins!`);
       }
       this.status = 'finished';
     }
@@ -479,6 +526,7 @@ class BoatRoom {
     const boat = this.boats[boatKey];
     const nameFor = (id) => (this.findPlayer(id) || {}).name || null;
     const base = {
+      name: boat.name,
       progress: Math.round(boat.progress),
       length: this.track.length,
       speed: Math.round(boat.speed * 10) / 10,
@@ -514,16 +562,26 @@ class BoatRoom {
       status: this.status,
       teamSize: this.teamSize,
       rowerSlots: this.rowerSlots,
+      mapTheme: this.mapTheme,
+      mapThemeLabel: MAP_THEMES[this.mapTheme],
       raceStartedAt: this.raceStartedAt,
       rowPhaseDurations: { raise: RAISE_MS, active: ACTIVE_MS, cooldown: COOLDOWN_MS },
       leaderSignalCooldownMs: LEADER_SIGNAL_COOLDOWN_MS,
       leaderStreakTarget: LEADER_STREAK_TARGET,
       drumTapCooldownMs: DRUM_TAP_COOLDOWN_MS,
       drumTapEffects: { raise: DRUM_TAP_ENERGY_RAISE, active: DRUM_TAP_ENERGY_ACTIVE, cooldown: -DRUM_TAP_ENERGY_COOLDOWN_PENALTY, waiting: 0 },
-      boats: {
-        A: { leaderId: this.boats.A.leaderId, drummerId: this.boats.A.drummerId, rowerIds: this.boats.A.rowerIds, ...this.boatView('A', forPlayerId, loc && loc.boatKey === 'A' ? loc.role : null) },
-        B: { leaderId: this.boats.B.leaderId, drummerId: this.boats.B.drummerId, rowerIds: this.boats.B.rowerIds, ...this.boatView('B', forPlayerId, loc && loc.boatKey === 'B' ? loc.role : null) },
-      },
+      maxBoats: MAX_BOATS,
+      boatOrder: this.boatOrder,
+      boats: this.boatOrder.reduce((acc, key) => {
+        const boat = this.boats[key];
+        acc[key] = {
+          leaderId: boat.leaderId,
+          drummerId: boat.drummerId,
+          rowerIds: boat.rowerIds,
+          ...this.boatView(key, forPlayerId, loc && loc.boatKey === key ? loc.role : null),
+        };
+        return acc;
+      }, {}),
       players: this.players.map((p) => ({ id: p.id, name: p.name, connected: p.connected, isBot: Boolean(p.isBot) })),
       log: this.log,
       yourId: forPlayerId || null,
@@ -563,7 +621,7 @@ function attachBoat(io) {
       if (typeof callback === 'function') callback({ ok: true, rooms: roomList() });
     });
 
-    socket.on('boat:createRoom', ({ roomName, password, playerId, name, teamSize }, callback) => {
+    socket.on('boat:createRoom', ({ roomName, password, playerId, name, teamSize, mapTheme }, callback) => {
       const cleanRoomName = String(roomName || '').trim().slice(0, 30);
       const cleanPassword = String(password || '');
       if (!cleanRoomName) { if (typeof callback === 'function') callback({ ok: false, error: 'invalid-name' }); return; }
@@ -573,7 +631,7 @@ function attachBoat(io) {
       if (nameTaken) { if (typeof callback === 'function') callback({ ok: false, error: 'name-taken' }); return; }
 
       roomCounter += 1;
-      const room = new BoatRoom(`room_${roomCounter}`, cleanRoomName, cleanPassword, teamSize);
+      const room = new BoatRoom(`room_${roomCounter}`, cleanRoomName, cleanPassword, teamSize, mapTheme);
       const clean = String(name || 'Player').trim().slice(0, 20) || 'Player';
       room.players.push({ id: playerId, name: clean, connected: true, socketId: socket.id, isBot: false });
       room.pushLog(`${clean} created the room.`);
@@ -620,6 +678,24 @@ function attachBoat(io) {
       const room = myRoom();
       if (!room) { if (typeof callback === 'function') callback({ ok: false, error: 'no-room' }); return; }
       const result = room.selectRole(socket.playerId, boat, role, slotIndex);
+      if (typeof callback === 'function') callback(result);
+      if (result.ok) { room.broadcast(nsp); broadcastRoomList(); }
+    });
+
+    socket.on('boat:addBoat', ({ name }, callback) => {
+      const room = myRoom();
+      if (!room) { if (typeof callback === 'function') callback({ ok: false, error: 'no-room' }); return; }
+      if (room.status !== 'waiting') { if (typeof callback === 'function') callback({ ok: false, error: 'already-started' }); return; }
+      const result = room.addBoat(name);
+      if (typeof callback === 'function') callback(result);
+      if (result.ok) { room.broadcast(nsp); broadcastRoomList(); }
+    });
+
+    socket.on('boat:renameBoat', ({ boatKey, name }, callback) => {
+      const room = myRoom();
+      if (!room) { if (typeof callback === 'function') callback({ ok: false, error: 'no-room' }); return; }
+      if (room.status !== 'waiting') { if (typeof callback === 'function') callback({ ok: false, error: 'already-started' }); return; }
+      const result = room.renameBoat(boatKey, name);
       if (typeof callback === 'function') callback(result);
       if (result.ok) { room.broadcast(nsp); broadcastRoomList(); }
     });
@@ -674,23 +750,28 @@ function attachBoat(io) {
       room.boats[loc.boatKey].rowers[loc.slotIndex].held[side] = Boolean(pressed);
     });
 
-    function handleLeave() {
+    // Shared by 'boat:leave' (client expects an ack callback) and
+    // 'disconnect' (fires with just a reason string, no callback) --
+    // callback is only invoked when one was actually given.
+    function handleLeave(payload, callback) {
       const room = myRoom();
-      if (!room) return;
-      const player = room.findPlayer(socket.playerId);
-      if (player) {
-        if (room.status === 'waiting') {
-          room.clearAssignment(socket.playerId);
-          room.players = room.players.filter((p) => p.id !== socket.playerId);
-          room.pushLog(`${player.name} left the room.`);
-        } else if (player.socketId === socket.id) {
-          player.connected = false;
+      if (room) {
+        const player = room.findPlayer(socket.playerId);
+        if (player) {
+          if (room.status === 'waiting') {
+            room.clearAssignment(socket.playerId);
+            room.players = room.players.filter((p) => p.id !== socket.playerId);
+            room.pushLog(`${player.name} left the room.`);
+          } else if (player.socketId === socket.id) {
+            player.connected = false;
+          }
+          room.broadcast(nsp);
         }
-        room.broadcast(nsp);
+        deleteRoomIfEmpty(room);
+        broadcastRoomList();
       }
-      deleteRoomIfEmpty(room);
-      broadcastRoomList();
       socket.roomId = null;
+      if (typeof callback === 'function') callback({ ok: true });
     }
 
     socket.on('boat:leave', handleLeave);
@@ -710,5 +791,7 @@ module.exports.QUEUE_MAX = QUEUE_MAX;
 module.exports.LEADER_SIGNAL_COOLDOWN_MS = LEADER_SIGNAL_COOLDOWN_MS;
 module.exports.LEADER_STREAK_TARGET = LEADER_STREAK_TARGET;
 module.exports.DRUM_TAP_COOLDOWN_MS = DRUM_TAP_COOLDOWN_MS;
+module.exports.MAX_BOATS = MAX_BOATS;
+module.exports.STARTING_BOAT_COUNT = STARTING_BOAT_COUNT;
 module.exports.generateTrack = generateTrack;
 module.exports.rowerSlotsFor = rowerSlotsFor;
